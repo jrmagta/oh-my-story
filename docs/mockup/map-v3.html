@@ -1,0 +1,198 @@
+<!doctype html><html lang="en" data-theme="blink-dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>oh-my-story — map mock-up v3</title>
+<script>try{var t=localStorage.getItem('oms-theme');document.documentElement.dataset.theme=t||(matchMedia('(prefers-color-scheme: light)').matches?'blink-light':'blink-dark')}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,800&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/daisyui@5.7.50/daisyui.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.5"></script>
+<style>
+/* Brand constants, identical in both themes */
+:root{--red:#BA3636;--amber:#FCB131;--green:#549334;--ink:#000;--grey:#8A8A93}
+/* daisyUI themes. In the app these become two @plugin "daisyui/theme" blocks. */
+[data-theme=blink-dark]{color-scheme:dark;
+ --color-base-100:#1B1B1D;--color-base-200:#141416;--color-base-300:#2A2A2E;--color-base-content:#F2F2F2;
+ --muted:#A1A1AA;--line:#3A3A40;--card:#26262A;--card-line:#3A3A40;--cell:rgba(255,255,255,.035);--obj-bg:#F2F2F2;--obj-fg:#111;--panel:#141416}
+[data-theme=blink-light]{color-scheme:light;
+ --color-base-100:#FFFFFF;--color-base-200:#F2F2F2;--color-base-300:#E4E4E7;--color-base-content:#1B1B1D;
+ --muted:#5F5F68;--line:#D4D4D8;--card:#FFFFFF;--card-line:#1B1B1D;--cell:#F2F2F2;--obj-bg:#000;--obj-fg:#F2F2F2;--panel:#FFFFFF}
+[data-theme^=blink]{--color-primary:#FCB131;--color-primary-content:#000;--color-secondary:#549334;--color-secondary-content:#fff;
+ --color-accent:#BA3636;--color-accent-content:#fff;--color-neutral:#000;--color-neutral-content:#F2F2F2;
+ --color-info:#FCB131;--color-info-content:#000;--color-success:#549334;--color-success-content:#fff;
+ --color-warning:#FCB131;--color-warning-content:#000;--color-error:#BA3636;--color-error-content:#fff;
+ --radius-selector:0;--radius-field:0;--radius-box:0;--border:2px;--depth:0;--noise:0}
+body{font-family:Archivo,system-ui,sans-serif;background:var(--color-base-100);color:var(--color-base-content);font-size:14px;font-weight:600}
+.up,.btn,.rel .n,.mhead h1,.panel h2,.topnav a,.pill,.lbl,.st,.row dt{word-spacing:.14em}
+.up{text-transform:uppercase;font-weight:800;letter-spacing:-.005em}
+.btn{text-transform:uppercase;font-weight:800}
+.btn-ol{background:transparent;border:2px solid currentColor}
+/* nav: black in both themes, like the site */
+.topnav{background:#000;color:#F2F2F2;height:68px;display:flex;align-items:center;gap:28px;padding:0 28px}
+.logo{font-weight:800;font-style:italic;font-size:22px;display:flex;align-items:center;gap:6px;letter-spacing:-.02em}
+.logo i{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid #000;outline:2px solid currentColor}
+.topnav a{text-transform:uppercase;font-weight:800;font-size:15px}.topnav a.on{color:var(--amber)}
+.stripe{display:grid;grid-template-columns:16fr 49fr 35fr;height:10px}.stripe b:nth-child(1){background:var(--green)}.stripe b:nth-child(2){background:var(--amber)}.stripe b:nth-child(3){background:var(--red)}
+/* ringed circle motif */
+.ring{--c:var(--grey);display:inline-grid;place-items:center;border-radius:50%;background:var(--c);border:2px solid #000;outline:2px solid var(--c);color:#000;font-weight:800;flex:none}
+.ring.done{--c:var(--green);color:#fff}.ring.doing{--c:var(--amber)}.ring.blocked{--c:var(--red);color:#fff}.ring.todo{--c:var(--grey);color:#fff}
+.est{width:26px;height:26px;font-size:13px}
+/* map header */
+.mhead{background:var(--color-base-200);border-bottom:1px solid var(--line);padding:24px 28px 20px;display:flex;align-items:center;gap:28px;padding-right:388px}
+.mhead h1{font-size:44px;line-height:1;font-weight:800;text-transform:uppercase;letter-spacing:-.02em}
+.kicker{color:var(--muted);font-size:14px;margin-top:6px}
+.kpis{display:flex;gap:18px;margin-left:auto}
+.kpi{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;text-transform:uppercase;font-weight:800;color:var(--muted)}
+.kpi .ring{width:58px;height:58px;font-size:22px;outline-width:4px;border-width:3px}
+.toolbar{display:flex;gap:8px;align-items:center;padding:14px 28px;border-bottom:1px solid var(--line);padding-right:388px;flex-wrap:wrap}
+.toolbar .sp{flex:1}
+/* map grid */
+.scroll{overflow:auto;padding:22px 28px 40px;margin-right:360px}
+.grid8{display:grid;grid-template-columns:132px repeat(8,184px);column-gap:8px;row-gap:8px;width:max-content}
+.lbl{position:sticky;left:0;z-index:1;background:var(--color-base-100);align-self:center;font-size:12px;color:var(--muted);text-transform:uppercase;font-weight:800}
+.obj{background:var(--obj-bg);color:var(--obj-fg);padding:12px 16px;font-size:17px}
+.act{border:2px solid var(--color-base-content);padding:10px 14px}
+.act .p{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.step{border-bottom:2px solid var(--color-base-content);padding:8px 2px;font-weight:700}
+.pill{display:inline-block;border:1.5px solid currentColor;border-radius:999px;padding:0 8px;font-size:11px;font-weight:800;line-height:18px;text-transform:uppercase}
+.tag{display:inline-block;border:1px solid var(--line);padding:0 6px;font-size:11px;line-height:18px;color:var(--muted)}
+/* release: colour-blocked header band like the site's section bands */
+.rel{grid-column:1/-1;display:flex;align-items:center;gap:16px;padding:14px 18px;margin-top:22px;background:#000;color:#F2F2F2}
+.rel.green{background:var(--green);color:#fff}.rel.amber{background:var(--amber);color:#000}
+.rel .n{font-size:24px;font-weight:800;text-transform:uppercase;letter-spacing:-.01em}
+.rel .d{font-weight:700;opacity:.85}
+.rel .r{margin-left:auto;display:flex;align-items:center;gap:14px;font-weight:700}
+.rel .btn{color:inherit;border-color:currentColor}
+.meter{display:flex;width:120px;height:8px;background:rgba(0,0,0,.25)}.meter b{display:block;height:100%}
+.cell{min-height:68px;background:var(--cell);padding:6px;display:flex;flex-direction:column;gap:6px}
+.cell.drop{outline:3px dashed var(--amber);outline-offset:-3px;background:color-mix(in srgb,var(--amber) 12%,transparent)}
+.card{background:var(--card);border:1px solid var(--card-line);padding:9px 10px 8px;font-size:13px;font-weight:600;line-height:1.3}
+[data-theme=blink-light] .card{border-width:2px}
+.card .top{display:flex;gap:8px;align-items:flex-start}.card .top>span:first-child{flex:1}
+.card.sel{outline:3px solid var(--amber);outline-offset:1px}
+.meta{display:flex;gap:5px;margin-top:8px;align-items:center;flex-wrap:wrap}
+.st{font-size:11px;font-weight:800;text-transform:uppercase}
+.st.doing{color:#B7790C}[data-theme=blink-dark] .st.doing{color:var(--amber)}
+.st.done{color:var(--green)}[data-theme=blink-dark] .st.done{color:#7DBA5C}
+.st.blocked{color:var(--red)}[data-theme=blink-dark] .st.blocked{color:#E06A6A}
+.st.todo{color:var(--muted)}
+.blk{background:var(--red);color:#fff;font-size:11px;font-weight:800;padding:1px 6px;text-transform:uppercase}
+/* detail panel: rows with dividers, like the tour-dates list */
+.panel{position:fixed;right:0;top:78px;bottom:0;width:360px;background:var(--panel);border-left:1px solid var(--line);overflow:auto}
+.panel .hd{background:var(--red);color:#fff;padding:18px 20px}
+.panel .hd h2{font-size:24px;line-height:1.05;font-weight:800;text-transform:uppercase;margin-top:8px;letter-spacing:-.01em}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 20px;border-bottom:1px solid var(--line);font-weight:700}
+.row dt{text-transform:uppercase;font-size:12px;color:var(--muted);font-weight:800}
+.body{padding:16px 20px;line-height:1.5;border-bottom:1px solid var(--line);font-weight:500}
+.c{padding:12px 20px;border-bottom:1px solid var(--line);font-weight:500}.c b{display:block;text-transform:uppercase;font-size:12px;font-weight:800;margin-bottom:2px}
+.theme-btn{border:2px solid #F2F2F2;color:#F2F2F2;background:transparent;padding:6px 12px;font-weight:800;text-transform:uppercase;font-size:12px;cursor:pointer}
+</style></head><body>
+<header class="topnav"><div class="logo">oh-my-story <i style="color:var(--red);background:var(--red)"></i><i style="color:var(--amber);background:var(--amber)"></i><i style="color:var(--green);background:var(--green)"></i></div>
+<nav class="flex gap-7"><a class="on">Maps</a><a>Personas</a><a>Members</a><a>Settings</a></nav><div class="flex-1"></div>
+<div class="flex -space-x-1"><span class="ring" style="--c:var(--amber);width:30px;height:30px;font-size:11px;color:#000">JM</span><span class="ring" style="--c:var(--green);width:30px;height:30px;font-size:11px;color:#fff">AK</span><span class="ring" style="--c:var(--red);width:30px;height:30px;font-size:11px;color:#fff">RS</span></div>
+<button class="theme-btn" onclick="var t=document.documentElement.dataset.theme==='blink-dark'?'blink-light':'blink-dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('oms-theme',t)}catch(e){}">Light / Dark</button>
+<button class="btn btn-primary">Share</button></header>
+<div class="stripe"><b></b><b></b><b></b></div>
+<section class="mhead"><div><div class="up text-sm" style="color:var(--muted)">Acme Product › Story maps</div><h1>Onboarding</h1>
+<div class="kicker">4-level map · 2 objectives · 4 activities · 8 steps · 16 stories · 61 points</div></div>
+<div class="kpis">
+<div class="kpi"><span class="ring done">5</span>Done</div>
+<div class="kpi"><span class="ring doing">12</span>In progress</div>
+<div class="kpi"><span class="ring blocked">8</span>Blocked</div>
+<div class="kpi"><span class="ring todo">36</span>To do</div>
+</div></section>
+<div class="toolbar"><div class="join"><button class="btn btn-sm join-item btn-primary">Map</button><button class="btn btn-sm join-item btn-ol">Roadmap</button></div>
+<button class="btn btn-sm btn-ol">Filter</button><button class="btn btn-sm btn-secondary">Label: planning ✕</button><span class="sp"></span><button class="btn btn-sm btn-ol">Collapse</button><button class="btn btn-sm btn-ol">Focus release</button><button class="btn btn-sm btn-ol">Export</button></div>
+<div class="scroll"><div class="grid8">
+<div class="lbl">Objective</div>
+<div class="obj up" style="grid-column:span 4">Get started</div>
+<div class="obj up" style="grid-column:span 4">Map the product</div>
+<div class="lbl">Activity</div>
+<div class="act" style="grid-column:span 2"><b class="up" style="font-size:15px">Sign up</b><div class="p"><span class="pill">Admin</span></div></div>
+<div class="act" style="grid-column:span 2"><b class="up" style="font-size:15px">Set up workspace</b><div class="p"><span class="pill">Admin</span></div></div>
+<div class="act" style="grid-column:span 2"><b class="up" style="font-size:15px">Build backbone</b><div class="p"><span class="pill">Facilitator</span></div></div>
+<div class="act" style="grid-column:span 2"><b class="up" style="font-size:15px">Slice releases</b><div class="p"><span class="pill">Facilitator</span><span class="pill">Reviewer</span></div></div>
+<div class="lbl">Step</div>
+<div class="step">Create account</div>
+<div class="step">Verify email</div>
+<div class="step">Create workspace</div>
+<div class="step">Invite team</div>
+<div class="step">Add activities</div>
+<div class="step">Add steps</div>
+<div class="step">Create release</div>
+<div class="step">Place stories</div>
+<div class="rel green"><span class="n">Release 1 · MVP</span><span class="d">30 Jan 2027</span><span class="r">9 stories · 34 pts<span class="meter"><b style="width:15%;background:#fff"></b><b style="width:35%;background:var(--amber)"></b><b style="width:24%;background:var(--red)"></b></span><button class="btn btn-xs btn-ol">Focus</button></span></div><div class="lbl"></div>
+<div class="cell">
+<div class="card"><div class="top"><span>Register with email and password</span><span class="ring est done" title="Done · 3 pts">3</span></div><div class="meta"><span class="st done">Done</span><span class="tag">auth</span><span class="pill" style="font-size:10px">Admin</span></div></div>
+<div class="card"><div class="top"><span>Sign in with company SSO</span><span class="ring est doing" title="In progress · 5 pts">5</span></div><div class="meta"><span class="st doing">In progress</span><span class="tag">auth</span><span class="pill" style="font-size:10px">Admin</span></div></div>
+</div>
+<div class="cell">
+<div class="card"><div class="top"><span>Send verification email</span><span class="ring est done" title="Done · 2 pts">2</span></div><div class="meta"><span class="st done">Done</span><span class="tag">email</span></div></div>
+</div>
+<div class="cell">
+<div class="card"><div class="top"><span>Name and slug a workspace</span><span class="ring est doing" title="In progress · 2 pts">2</span></div><div class="meta"><span class="st doing">In progress</span><span class="pill" style="font-size:10px">Admin</span></div></div>
+</div>
+<div class="cell">
+<div class="card"><div class="top"><span>Invite by email with a role</span><span class="ring est todo" title="To do · 3 pts">3</span></div><div class="meta"><span class="st todo">To do</span><span class="tag">email</span><span class="pill" style="font-size:10px">Admin</span></div></div>
+</div>
+<div class="cell">
+<div class="card"><div class="top"><span>Add, rename and reorder activities</span><span class="ring est doing" title="In progress · 5 pts">5</span></div><div class="meta"><span class="st doing">In progress</span><span class="tag">map</span><span class="pill" style="font-size:10px">Facilitator</span></div></div>
+</div>
+<div class="cell">
+<div class="card"><div class="top"><span>Add steps under an activity</span><span class="ring est todo" title="To do · 3 pts">3</span></div><div class="meta"><span class="st todo">To do</span><span class="tag">map</span><span class="pill" style="font-size:10px">Facilitator</span></div></div>
+</div>
+<div class="cell">
+<div class="card"><div class="top"><span>Create and order release slices</span><span class="ring est todo" title="To do · 3 pts">3</span></div><div class="meta"><span class="st todo">To do</span><span class="tag">map</span><span class="pill" style="font-size:10px">Facilitator</span></div></div>
+</div>
+<div class="cell">
+<div class="card sel"><div class="top"><span>Drag a story between cells</span><span class="ring est blocked" title="Blocked · 8 pts">8</span></div><div class="meta"><span class="st blocked">Blocked</span><span class="tag">dnd</span><span class="pill" style="font-size:10px">Facilitator</span><span class="blk">Blocked by STORY-31</span></div></div>
+</div>
+<div class="rel amber"><span class="n">Release 2 · Planning</span><span class="d">14 Mar 2027</span><span class="r">5 stories · 18 pts<span class="meter"><b style="width:0%;background:var(--green)"></b><b style="width:0%;background:#000"></b><b style="width:0%;background:var(--red)"></b></span><button class="btn btn-xs btn-ol">Focus</button></span></div><div class="lbl"></div>
+<div class="cell">
+<div class="card"><div class="top"><span>Reset a forgotten password</span><span class="ring est todo" title="To do · 2 pts">2</span></div><div class="meta"><span class="st todo">To do</span><span class="tag">auth</span></div></div>
+</div>
+<div class="cell">
+</div>
+<div class="cell">
+</div>
+<div class="cell">
+<div class="card"><div class="top"><span>Comment-only reviewer role</span><span class="ring est todo" title="To do · 3 pts">3</span></div><div class="meta"><span class="st todo">To do</span><span class="tag">roles</span><span class="pill" style="font-size:10px">Reviewer</span></div></div>
+</div>
+<div class="cell">
+</div>
+<div class="cell">
+<div class="card"><div class="top"><span>Estimate roll-ups per release</span><span class="ring est todo" title="To do · 5 pts">5</span></div><div class="meta"><span class="st todo">To do</span><span class="tag">planning</span><span class="pill" style="font-size:10px">Facilitator</span></div></div>
+</div>
+<div class="cell drop">
+</div>
+<div class="cell">
+<div class="card"><div class="top"><span>Filter and highlight by label</span><span class="ring est todo" title="To do · 5 pts">5</span></div><div class="meta"><span class="st todo">To do</span><span class="tag">planning</span><span class="pill" style="font-size:10px">Facilitator</span></div></div>
+<div class="card"><div class="top"><span>Saved filtered views</span><span class="ring est todo" title="To do · 3 pts">3</span></div><div class="meta"><span class="st todo">To do</span><span class="tag">planning</span><span class="pill" style="font-size:10px">Facilitator</span></div></div>
+</div>
+<div class="rel plain"><span class="n">Unscheduled</span><span class="d">No date</span><span class="r">2 stories · 9 pts<span class="meter"><b style="width:0%;background:var(--green)"></b><b style="width:0%;background:var(--amber)"></b><b style="width:0%;background:var(--red)"></b></span><button class="btn btn-xs btn-ol">Focus</button></span></div><div class="lbl"></div>
+<div class="cell">
+</div>
+<div class="cell">
+<div class="card"><div class="top"><span>Resend verification link</span><span class="ring est todo" title="To do · 1 pts">1</span></div><div class="meta"><span class="st todo">To do</span><span class="tag">email</span></div></div>
+</div>
+<div class="cell">
+</div>
+<div class="cell">
+</div>
+<div class="cell">
+</div>
+<div class="cell">
+</div>
+<div class="cell">
+<div class="card"><div class="top"><span>Roadmap view</span><span class="ring est todo" title="To do · 8 pts">8</span></div><div class="meta"><span class="st todo">To do</span><span class="tag">roadmap</span><span class="pill" style="font-size:10px">Reviewer</span></div></div>
+</div>
+<div class="cell">
+</div>
+</div></div>
+<aside class="panel"><div class="hd"><span class="pill">STORY-24</span> <span class="pill">Blocked</span><h2>Drag a story between cells</h2></div>
+<dl><div class="row"><dt>Estimate</dt><dd class="flex items-center gap-2"><span class="ring est blocked">8</span>points</dd></div>
+<div class="row"><dt>Assignee</dt><dd>Alex K.</dd></div><div class="row"><dt>Placed in</dt><dd>Release 1 · Place stories</dd></div>
+<div class="row"><dt>Labels</dt><dd><span class="tag">dnd</span></dd></div><div class="row"><dt>Persona</dt><dd><span class="pill">Facilitator</span></dd></div>
+<div class="row"><dt>Blocked by</dt><dd><a class="underline" style="color:var(--red);font-weight:800">STORY-31</a></dd></div></dl>
+<div class="body">As a facilitator, I drag a story to another step or release so the map reflects the plan. The card keeps its rank within the cell.</div>
+<div class="c"><b>Riya S. · 2h ago</b>Can we pick a keyboard-accessible alternative for drag?</div><div class="c"><b>Alex K. · 1h ago</b>Yes, dnd-kit has a keyboard sensor. Adding it.</div>
+<div class="p-5 flex gap-2"><input class="input input-sm flex-1" placeholder="Add a comment…"><button class="btn btn-sm btn-primary">Post</button></div></aside>
+</body></html>

@@ -1,6 +1,6 @@
 # oh-my-story — development plan
 
-A self-hosted user story mapping tool. Feature set modelled on Avion; visual design inspired by leidos.com (Australia).
+A self-hosted user story mapping tool. Feature set modelled on Avion; visual design inspired by blink182.com.
 
 ## Decisions
 
@@ -10,28 +10,45 @@ A self-hosted user story mapping tool. Feature set modelled on Avion; visual des
 | Database | PostgreSQL 16 |
 | Realtime | v1. WebSocket fan-out driven by Postgres `LISTEN/NOTIFY`; presence; last-write-wins per field |
 | Auth | OIDC (Entra ID / Keycloak / Okta) + local accounts |
-| Frontend | React + TypeScript + Vite, TanStack Query, Zustand, React Router, dnd-kit, Tailwind with design tokens |
+| Frontend | React + TypeScript + Vite, TanStack Query, Zustand, React Router, dnd-kit, Tailwind CSS v4 + daisyUI v5 with two custom themes |
 | Dev deploy | docker-compose: app, Postgres, Keycloak, Mailpit |
 | Prod deploy | Helm chart: Deployment, Service, Ingress, HPA, migration Job; external Postgres or CloudNativePG |
 | Data model | `docs/DATA_MODEL.md`. UUIDv7 ids, fractional-index ranks, per-workspace roles, invite-only sign-up, workspace-wide story keys |
 | Target devices | Desktop browser first. Phone and tablet layouts are not optimised; the map scrolls sideways and may be view-only there |
 | Tests | Go tests against real Postgres, Playwright e2e |
 
-## Design tokens (from leidos.com CSS)
+## Design (from blink182.com)
+
+Mock-up of record: `docs/mockup/map-v3.html`. Earlier attempts kept for reference: `map-leidos.html`, `map-v2.html`.
+
+Brand colours, the same in both themes:
 
 | Token | Value | Use |
 |---|---|---|
-| indigo-900 | `#201747` | App shell, backbone row |
-| indigo-800 | `#251846` | Dark surfaces |
-| magenta-600 | `#850F89` | Primary action, selection |
-| magenta-500 | `#901588` | Hover |
-| violet-600 | `#4C3291` | Secondary |
-| lavender-300 | `#B9A5EE` | Releases, subtle accents |
-| teal-600 | `#00778B` | Personas, info |
-| crimson-600 | `#A61747` | Blocked, destructive |
-| grey-50 / 900 | `#F5F5F5` / `#262629` | Canvas / text |
+| red | `#BA3636` | Blocked, destructive, blocked-story panel header |
+| amber | `#FCB131` | Primary action, selection, in progress, alternate release band |
+| green | `#549334` | Done, secondary action, active filter, first release band |
+| ink | `#000000` | Nav bar, rings around circles, Unscheduled band |
+| grey | `#8A8A93` | To do |
 
-Type: Avenir Next is licensed; use self-hosted Nunito Sans unless a licence is available. Square corners, card modules, dark hero bands over light content.
+Two daisyUI themes, `blink-dark` and `blink-light`. The theme follows the system preference, and a toggle in the nav overrides it. Only surfaces change:
+
+| Surface | blink-dark | blink-light |
+|---|---|---|
+| Canvas | `#1B1B1D` | `#FFFFFF` |
+| Raised / header | `#141416` | `#F2F2F2` |
+| Card | `#26262A`, 1px `#3A3A40` border | `#FFFFFF`, 2px `#1B1B1D` border |
+| Text / muted | `#F2F2F2` / `#A1A1AA` | `#1B1B1D` / `#5F5F68` |
+| Objective bar | `#F2F2F2` on dark | `#000000` on light |
+
+Motifs:
+- **Ringed circle:** a colour disc with a black ring and an outer ring in the same colour. Used for story estimates (coloured by status), map status totals and avatars.
+- **Tricolour stripe** under the nav: green 16%, amber 49%, red 35%.
+- **Colour-blocked release bands** with large uppercase names.
+- Square corners everywhere except pills (personas, story keys). Buttons are uppercase, solid or 2px outline.
+- Status is never colour alone: every status also has a text label.
+
+Type: bold uppercase grotesk headings. The site uses Akzidenz-Grotesk Next, which is licensed; use self-hosted Archivo (OFL) at 600/700/800, with `word-spacing: .14em` on uppercase text.
 
 ## Features
 
