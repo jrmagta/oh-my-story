@@ -27,7 +27,7 @@ func TestHealthz(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer dead.Close()
-	srv := httptest.NewServer(httpapi.New(config.Config{BaseURL: "http://x"}, dead, &recorder{}, nil))
+	srv := httptest.NewServer(httpapi.New(config.Config{BaseURL: "http://x"}, dead, &recorder{}, nil, nil))
 	defer srv.Close()
 	res, err := http.Get(srv.URL + "/healthz")
 	if err != nil {
@@ -342,5 +342,28 @@ func TestWorkspaceValidation(t *testing.T) {
 	}
 	if r := owner.do("POST", "/api/workspaces", map[string]any{"name": "X", "slug": "x", "extra": 1}); r.status != 400 {
 		t.Errorf("unknown field: %d", r.status)
+	}
+}
+
+// Unknown /api paths stay JSON 404s; other GETs go to the web app, except /auth.
+func TestFallbackRoutes(t *testing.T) {
+	ui := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ui")) })
+	h := httpapi.New(config.Config{BaseURL: "http://localhost"}, nil, nil, nil, ui)
+	for _, c := range []struct {
+		method, path string
+		status       int
+		body         string
+	}{
+		{"GET", "/", 200, "ui"},
+		{"GET", "/w/acme/members", 200, "ui"},
+		{"GET", "/api/nope", 404, `"no such endpoint"`},
+		{"GET", "/auth/nope", 404, "404 page not found"},
+		{"POST", "/somewhere", 404, "404 page not found"},
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(c.method, c.path, nil))
+		if rec.Code != c.status || !strings.Contains(rec.Body.String(), c.body) {
+			t.Errorf("%s %s: %d %q", c.method, c.path, rec.Code, rec.Body.String())
+		}
 	}
 }

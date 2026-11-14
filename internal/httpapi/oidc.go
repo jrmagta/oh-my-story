@@ -8,6 +8,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -54,6 +56,19 @@ type oidcFlow struct {
 	State    string `json:"s"`
 	Nonce    string `json:"n"`
 	Verifier string `json:"v"`
+	Next     string `json:"x"` // where to send the browser afterwards
+}
+
+// localPath returns p if it is a path on this site, else "/". It keeps the
+// redirect after sign-in from becoming an open redirect.
+func localPath(p string) string {
+	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.HasPrefix(p, "/\\") {
+		return "/"
+	}
+	if u, err := url.Parse(p); err != nil || u.Scheme != "" || u.Host != "" {
+		return "/"
+	}
+	return p
 }
 
 func (s *Server) oidcLogin(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +82,7 @@ func (s *Server) oidcLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	f := oidcFlow{State: state, Nonce: nonce, Verifier: oauth2.GenerateVerifier()}
+	f := oidcFlow{State: state, Nonce: nonce, Verifier: oauth2.GenerateVerifier(), Next: localPath(r.URL.Query().Get("next"))}
 	b, _ := json.Marshal(f)
 	http.SetCookie(w, &http.Cookie{
 		Name: oidcCookie, Value: base64.RawURLEncoding.EncodeToString(b), Path: "/auth/oidc", MaxAge: 600,
@@ -81,11 +96,16 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	var f oidcFlow
 	fail := func(code string, err error) {
 		if err != nil {
 			slog.Warn("oidc callback", "code", code, "err", err)
 		}
-		http.Redirect(w, r, "/login?error="+code, http.StatusFound)
+		q := url.Values{"error": {code}}
+		if f.Next != "" && f.Next != "/" {
+			q.Set("next", f.Next)
+		}
+		http.Redirect(w, r, "/login?"+q.Encode(), http.StatusFound)
 	}
 
 	c, err := r.Cookie(oidcCookie)
@@ -94,7 +114,6 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		fail("sso_expired", nil)
 		return
 	}
-	var f oidcFlow
 	raw, err := base64.RawURLEncoding.DecodeString(c.Value)
 	if err != nil || json.Unmarshal(raw, &f) != nil || f.State == "" {
 		fail("sso_expired", err)
@@ -164,5 +183,5 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		fail("sso_failed", err)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, localPath(f.Next), http.StatusFound)
 }

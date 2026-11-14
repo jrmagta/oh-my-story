@@ -35,7 +35,9 @@ type Server struct {
 	oidc  *OIDC // nil when SSO is off
 }
 
-func New(cfg config.Config, pool *pgxpool.Pool, sender mail.Sender, oidc *OIDC) http.Handler {
+// New returns the server's handler. ui serves the web app for every other GET;
+// nil leaves those paths 404 (the API tests run without it).
+func New(cfg config.Config, pool *pgxpool.Pool, sender mail.Sender, oidc *OIDC, ui http.Handler) http.Handler {
 	s := &Server{cfg: cfg, pool: pool, store: store.New(pool), mail: sender, oidc: oidc}
 	mux := http.NewServeMux()
 
@@ -64,6 +66,17 @@ func New(cfg config.Config, pool *pgxpool.Pool, sender mail.Sender, oidc *OIDC) 
 	mux.HandleFunc("DELETE /api/workspaces/{slug}/invites/{id}", s.inWorkspace(role.ManageMembers, s.revokeInvite))
 	mux.HandleFunc("GET /api/invites/{token}", s.getInvite)
 	mux.HandleFunc("POST /api/invites/{token}/accept", s.acceptInvite)
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/api/"):
+			writeError(w, &apiError{http.StatusNotFound, "not_found", "no such endpoint"})
+		case ui != nil && (r.Method == http.MethodGet || r.Method == http.MethodHead) && !strings.HasPrefix(r.URL.Path, "/auth/"):
+			ui.ServeHTTP(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
 
 	return s.csrf(mux)
 }

@@ -47,8 +47,8 @@ Extra rules:
 | `POST /api/auth/logout` | session | → `204`, clears session |
 | `GET /api/me` | session | → `{user, workspaces: [{slug, name, role}]}` |
 | `GET /api/auth/providers` | none | → `{oidc: {enabled, name}}` |
-| `GET /auth/oidc/login` | none | browser redirect to the identity provider |
-| `GET /auth/oidc/callback` | none | browser redirect to `/` with a session, or to `/login?error=<code>`: `not_invited`, `account_disabled`, `sso_email_unverified`, `sso_denied`, `sso_expired`, `sso_state`, `sso_failed` |
+| `GET /auth/oidc/login?next=<path>` | none | browser redirect to the identity provider |
+| `GET /auth/oidc/callback` | none | browser redirect to `next` (a local path, default `/`) with a session, or to `/login?error=<code>&next=<path>`: `not_invited`, `account_disabled`, `sso_email_unverified`, `sso_denied`, `sso_expired`, `sso_state`, `sso_failed` |
 | `GET /api/workspaces` | session | → my workspaces |
 | `POST /api/workspaces` | session | `{name, slug}` → `201` workspace; caller becomes owner |
 | `GET /api/workspaces/{slug}` | viewer | → workspace incl. `myRole` |
@@ -64,6 +64,8 @@ Extra rules:
 | `POST /api/invites/{token}/accept` | optional | `{}` or `{displayName, password}` → `{workspace}`, may set session |
 
 Non-members get `not_found` for a workspace, so slugs do not leak.
+
+Any other `/api/` path is a JSON `not_found`. Any other GET serves the web app (`index.html` for page routes, with a strict Content-Security-Policy and `Referrer-Policy: no-referrer`, since invite links carry their token in the path).
 
 ## Validation
 

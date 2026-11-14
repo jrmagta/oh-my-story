@@ -2,7 +2,9 @@ GO ?= go
 COMPOSE ?= $(shell command -v docker >/dev/null 2>&1 && echo docker compose || echo podman compose) -f deploy/compose/docker-compose.yml
 DATABASE_URL ?= postgres://oms:oms@localhost:5432/oms?sslmode=disable
 
-.PHONY: up down ps db-up db-down test migrate run build
+E2E_DATABASE_URL ?= postgres://oms:oms@localhost:5432/oms_e2e?sslmode=disable
+
+.PHONY: up down ps db-up db-down test migrate run build web e2e
 
 # Full dev stack: postgres, migrate, app, keycloak, mailpit.
 up:
@@ -35,5 +37,20 @@ migrate:
 run:
 	OMS_DATABASE_URL='$(DATABASE_URL)' $(GO) run ./cmd/oh-my-story serve
 
-build:
+web/node_modules: web/package-lock.json
+	cd web && npm ci
+	@touch $@
+
+# The web app, built into web/dist for the binary to embed.
+web: web/node_modules
+	cd web && npm run build
+
+build: web
 	CGO_ENABLED=0 $(GO) build -o bin/oh-my-story ./cmd/oh-my-story
+
+# Browser tests: the built binary on localhost:18080 with a fresh database,
+# against the compose Keycloak and Mailpit (make up).
+e2e: build
+	$(COMPOSE) exec -T postgres psql -q -U oms -d oms -c 'DROP DATABASE IF EXISTS oms_e2e WITH (FORCE)' -c 'CREATE DATABASE oms_e2e'
+	OMS_DATABASE_URL='$(E2E_DATABASE_URL)' bin/oh-my-story migrate
+	cd web && E2E_DATABASE_URL='$(E2E_DATABASE_URL)' npx playwright test

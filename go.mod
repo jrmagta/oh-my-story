@@ -2,6 +2,9 @@ module github.com/jrmagta/oh-my-story
 
 go 1.26.0
 
+// npm packages sometimes ship .go files; keep them out of ./... patterns.
+ignore ./web/node_modules
+
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/google/uuid v1.6.0

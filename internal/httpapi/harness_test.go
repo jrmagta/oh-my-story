@@ -108,7 +108,7 @@ func newHarness(t *testing.T, opts harnessOpts) *harness {
 		}
 	}
 	rec := &recorder{}
-	srv.Config.Handler = httpapi.New(cfg, pool, rec, sso)
+	srv.Config.Handler = httpapi.New(cfg, pool, rec, sso, nil)
 	srv.Start()
 	t.Cleanup(srv.Close)
 	return &harness{t: t, base: base, mail: rec}

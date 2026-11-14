@@ -16,6 +16,7 @@ import (
 	"github.com/jrmagta/oh-my-story/internal/db"
 	"github.com/jrmagta/oh-my-story/internal/httpapi"
 	"github.com/jrmagta/oh-my-story/internal/mail"
+	"github.com/jrmagta/oh-my-story/web"
 )
 
 const usage = "usage: oh-my-story serve | migrate | healthcheck"
@@ -103,7 +104,7 @@ func serve(ctx context.Context, cfg config.Config) error {
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.New(cfg, pool, sender, sso),
+		Handler:           httpapi.New(cfg, pool, sender, sso, web.Handler(web.Dist())),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errc := make(chan error, 1)

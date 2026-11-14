@@ -1,0 +1,261 @@
+@import "tailwindcss";
+@import "@fontsource/archivo/600.css";
+@import "@fontsource/archivo/700.css";
+@import "@fontsource/archivo/800.css";
+@import "@fontsource/archivo/800-italic.css";
+
+/* Tokens: docs/PLAN.md, Design. Only surfaces differ between the themes. */
+@plugin "daisyui" {
+  themes: false;
+}
+
+@plugin "daisyui/theme" {
+  name: "blink-dark";
+  default: true;
+  prefersdark: true;
+  color-scheme: dark;
+  --color-base-100: #1B1B1D;
+  --color-base-200: #141416;
+  --color-base-300: #2A2A2E;
+  --color-base-content: #F2F2F2;
+  --color-primary: #FCB131;
+  --color-primary-content: #000000;
+  --color-secondary: #549334;
+  --color-secondary-content: #FFFFFF;
+  --color-accent: #BA3636;
+  --color-accent-content: #FFFFFF;
+  --color-neutral: #000000;
+  --color-neutral-content: #F2F2F2;
+  --color-info: #FCB131;
+  --color-info-content: #000000;
+  --color-success: #549334;
+  --color-success-content: #FFFFFF;
+  --color-warning: #FCB131;
+  --color-warning-content: #000000;
+  --color-error: #BA3636;
+  --color-error-content: #FFFFFF;
+  --radius-selector: 0rem;
+  --radius-field: 0rem;
+  --radius-box: 0rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 2px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "blink-light";
+  color-scheme: light;
+  --color-base-100: #FFFFFF;
+  --color-base-200: #F2F2F2;
+  --color-base-300: #E4E4E7;
+  --color-base-content: #1B1B1D;
+  --color-primary: #FCB131;
+  --color-primary-content: #000000;
+  --color-secondary: #549334;
+  --color-secondary-content: #FFFFFF;
+  --color-accent: #BA3636;
+  --color-accent-content: #FFFFFF;
+  --color-neutral: #000000;
+  --color-neutral-content: #F2F2F2;
+  --color-info: #FCB131;
+  --color-info-content: #000000;
+  --color-success: #549334;
+  --color-success-content: #FFFFFF;
+  --color-warning: #FCB131;
+  --color-warning-content: #000000;
+  --color-error: #BA3636;
+  --color-error-content: #FFFFFF;
+  --radius-selector: 0rem;
+  --radius-field: 0rem;
+  --radius-box: 0rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 2px;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* Surfaces daisyUI has no slot for. */
+[data-theme="blink-dark"] {
+  --oms-muted: #A1A1AA;
+  --oms-line: #3A3A40;
+  --oms-card: #26262A;
+  --oms-card-line: #3A3A40;
+  --oms-done-text: #7DBA5C;
+  --oms-blocked-text: #E06A6A;
+  --oms-field-line: #5A5A62;
+}
+[data-theme="blink-light"] {
+  --oms-muted: #5F5F68;
+  --oms-line: #D4D4D8;
+  --oms-card: #FFFFFF;
+  --oms-card-line: #1B1B1D;
+  --oms-done-text: #549334;
+  --oms-blocked-text: #BA3636;
+  --oms-field-line: #1B1B1D;
+}
+
+@theme inline {
+  --font-sans: "Archivo", system-ui, sans-serif;
+  --color-brand-red: #BA3636;
+  --color-brand-amber: #FCB131;
+  --color-brand-green: #549334;
+  --color-brand-grey: #8A8A93;
+  --color-muted: var(--oms-muted);
+  --color-line: var(--oms-line);
+  --color-card: var(--oms-card);
+  --color-card-line: var(--oms-card-line);
+  --color-done-text: var(--oms-done-text);
+  --color-blocked-text: var(--oms-blocked-text);
+}
+
+@layer base {
+  body {
+    @apply bg-base-100 text-base-content font-sans;
+    font-size: 15px;
+    font-weight: 600;
+  }
+}
+
+@layer components {
+  /* Bold uppercase grotesk; Archivo needs the extra word spacing in caps. */
+  .up {
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: -0.005em;
+    word-spacing: 0.14em;
+  }
+  /* Nav is black in both themes, like the site. */
+  .topnav {
+    background: #000;
+    color: #F2F2F2;
+    height: 68px;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    padding: 0 28px;
+  }
+  .topnav .navlink {
+    text-transform: uppercase;
+    font-weight: 800;
+    font-size: 15px;
+    word-spacing: 0.14em;
+  }
+  .topnav .navlink:hover,
+  .topnav .navlink[aria-current="page"] {
+    color: var(--color-brand-amber);
+  }
+  .logo {
+    font-weight: 800;
+    font-style: italic;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .logo i {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid #000;
+    outline: 2px solid currentColor;
+  }
+
+  /* Tricolour stripe under the nav: green 16, amber 49, red 35. */
+  .stripe {
+    display: grid;
+    grid-template-columns: 16fr 49fr 35fr;
+    height: 10px;
+  }
+  .stripe > b:nth-child(1) { background: var(--color-brand-green); }
+  .stripe > b:nth-child(2) { background: var(--color-brand-amber); }
+  .stripe > b:nth-child(3) { background: var(--color-brand-red); }
+
+  /* Ringed circle: colour disc, black ring, outer ring in the same colour. */
+  .ring-disc {
+    --c: var(--color-brand-grey);
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    border-radius: 50%;
+    background: var(--c);
+    border: 2px solid #000;
+    outline: 2px solid var(--c);
+    color: #000;
+    font-weight: 800;
+  }
+  .ring-disc.red { --c: var(--color-brand-red); color: #fff; }
+  .ring-disc.amber { --c: var(--color-brand-amber); color: #000; }
+  .ring-disc.green { --c: var(--color-brand-green); color: #fff; }
+
+  /* Page header band. */
+  .band {
+    @apply bg-base-200 border-b border-line;
+    padding: 28px 0 24px;
+  }
+  .band h1 {
+    font-size: 44px;
+    line-height: 1;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    word-spacing: 0.14em;
+  }
+
+  /* Rows with dividers, like the site's tour-dates list. */
+  .rows > li {
+    @apply border-b border-line;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 0;
+  }
+  .rows > li:first-child {
+    @apply border-t border-line;
+  }
+
+  .label-up {
+    @apply text-muted;
+    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 800;
+    word-spacing: 0.14em;
+  }
+}
+
+/* daisyUI's component rules come after ours in the components layer, so these
+   adjustments live in the utilities layer and work through daisyUI's variables. */
+@layer utilities {
+  .btn {
+    text-transform: uppercase;
+    font-weight: 800;
+    word-spacing: 0.14em;
+  }
+  /* 2px outline button that fills on hover. */
+  .btn-ol {
+    --btn-fg: var(--color-base-content);
+    --btn-bg: transparent;
+    --btn-border: var(--btn-fg);
+    --btn-shadow: none;
+    --btn-noise: none;
+  }
+  .btn-ol:hover:not(:disabled) {
+    --btn-bg: var(--btn-fg);
+    color: var(--color-base-100);
+  }
+  /* On the black nav, in either theme. */
+  .btn-ol.on-dark {
+    --btn-fg: #F2F2F2;
+  }
+  .btn-ol.on-dark:hover:not(:disabled) {
+    color: #000;
+  }
+  .input,
+  .select {
+    border-color: var(--oms-field-line);
+  }
+}
