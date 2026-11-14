@@ -1,5 +1,14 @@
 name: oh-my-story
 
+# Dev stack. Every credential here is a throwaway dev value.
+#   app       http://localhost:8080
+#   keycloak  http://localhost:8180  (admin / admin; realm "oms": alice / alice, bob / bob)
+#   mailpit   http://localhost:8025  (SMTP on localhost:1025)
+#   postgres  localhost:5432         (oms / oms)
+
+x-app-env: &app-env
+  OMS_DATABASE_URL: postgres://oms:oms@postgres:5432/oms?sslmode=disable
+
 services:
   postgres:
     image: docker.io/library/postgres:16-alpine
@@ -16,6 +25,68 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+
+  # One-shot, like the Helm migration Job: the app starts only after it succeeds.
+  migrate:
+    build:
+      context: ../..
+    image: localhost/oh-my-story:dev
+    command: ["migrate"]
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: ../..
+    image: localhost/oh-my-story:dev
+    command: ["serve"]
+    environment: *app-env
+    ports:
+      - "8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/oh-my-story", "healthcheck"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.2
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+      # Browsers reach Keycloak on localhost:8180 and the app reaches it on
+      # keycloak:8080. Tokens carry the public issuer either way.
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./keycloak/oms-realm.json:/opt/keycloak/data/import/oms-realm.json:ro
+    healthcheck:
+      # The image has no curl; ask the management port with bash.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 5s
+      timeout: 4s
+      retries: 60
+
+  mailpit:
+    image: docker.io/axllent/mailpit:v1.33.1
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
 
 volumes:
   pgdata:

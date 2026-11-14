@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,7 +17,7 @@ import (
 	"github.com/jrmagta/oh-my-story/internal/httpapi"
 )
 
-const usage = "usage: oh-my-story serve | migrate"
+const usage = "usage: oh-my-story serve | migrate | healthcheck"
 
 func main() {
 	if len(os.Args) != 2 {
@@ -41,6 +42,8 @@ func main() {
 		if err == nil {
 			slog.Info("migrations applied", "count", n)
 		}
+	case "healthcheck":
+		err = healthcheck(ctx, cfg)
 	default:
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
@@ -49,6 +52,33 @@ func main() {
 		slog.Error(os.Args[1], "err", err)
 		os.Exit(1)
 	}
+}
+
+// healthcheck asks the local server for /healthz. It exists because the
+// distroless runtime image has no curl for a container health check.
+func healthcheck(ctx context.Context, cfg config.Config) error {
+	host, port, err := net.SplitHostPort(cfg.HTTPAddr)
+	if err != nil {
+		return err
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+net.JoinHostPort(host, port)+"/healthz", nil)
+	if err != nil {
+		return err
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("/healthz returned %d", res.StatusCode)
+	}
+	return nil
 }
 
 func serve(ctx context.Context, cfg config.Config) error {

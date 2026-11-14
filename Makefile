@@ -2,7 +2,17 @@ GO ?= go
 COMPOSE ?= $(shell command -v docker >/dev/null 2>&1 && echo docker compose || echo podman compose) -f deploy/compose/docker-compose.yml
 DATABASE_URL ?= postgres://oms:oms@localhost:5432/oms?sslmode=disable
 
-.PHONY: db-up db-down test migrate run build
+.PHONY: up down ps db-up db-down test migrate run build
+
+# Full dev stack: postgres, migrate, app, keycloak, mailpit.
+up:
+	$(COMPOSE) up -d --build --wait
+
+down:
+	$(COMPOSE) down
+
+ps:
+	$(COMPOSE) ps
 
 db-up:
 	$(COMPOSE) up -d postgres
