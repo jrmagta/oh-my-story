@@ -1,0 +1,143 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>oh-my-story — map mock-up</title><style>
+:root{--indigo-900:#201747;--indigo-800:#251846;--magenta-600:#850F89;--magenta-500:#901588;--violet-600:#4C3291;--lavender-300:#B9A5EE;--teal-600:#00778B;--crimson-600:#A61747;--grey-50:#F5F5F5;--grey-900:#262629;--line:#d9d6e3;--col:176px;--gutter:168px}
+*{box-sizing:border-box;margin:0}
+body{font-family:"Nunito Sans","Avenir Next",system-ui,sans-serif;background:var(--grey-50);color:var(--grey-900);font-size:14px}
+header.shell{background:var(--indigo-900);color:#fff;display:flex;align-items:center;gap:24px;padding:0 24px;height:56px}
+.logo{font-weight:800;letter-spacing:.02em}.logo b{color:var(--lavender-300)}
+.crumb{opacity:.75}.spacer{flex:1}
+.presence{display:flex}.presence span{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;border:2px solid var(--indigo-900);margin-left:-6px;color:#fff}
+.btn{background:var(--magenta-600);color:#fff;border:0;padding:8px 16px;font:inherit;font-weight:700;cursor:pointer}.btn:hover{background:var(--magenta-500)}
+.hero{background:var(--indigo-800);color:#fff;padding:20px 24px 16px;display:flex;align-items:end;gap:24px;flex-wrap:wrap}
+.hero h1{font-size:26px;font-weight:800}.hero p{opacity:.7;margin-top:2px}
+.tools{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+.chip{border:1px solid rgba(255,255,255,.35);color:#fff;background:transparent;padding:5px 12px;font:inherit;font-size:13px}
+.chip.on{background:var(--lavender-300);color:var(--indigo-900);border-color:var(--lavender-300);font-weight:700}
+.scroll{overflow:auto;padding:24px}
+.grid{display:grid;grid-template-columns:var(--gutter) repeat(8,var(--col));gap:8px;width:max-content}
+.lbl{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--violet-600);align-self:center}
+.exp{background:var(--indigo-900);color:#fff;padding:12px 14px;font-weight:800;font-size:15px}
+.act{background:var(--violet-600);color:#fff;padding:10px 14px;font-weight:700}
+.act small{display:block;font-weight:400;opacity:.8;margin-top:4px}
+.act small i{font-style:normal;background:var(--teal-600);padding:1px 6px;margin-right:4px;display:inline-block;margin-top:2px}
+.step{background:#fff;border:1px solid var(--line);border-top:3px solid var(--violet-600);padding:8px 12px;font-weight:700}
+.relhead{grid-column:1/-1;display:flex;align-items:baseline;gap:12px;background:var(--lavender-300);color:var(--indigo-900);padding:8px 14px;font-weight:800;margin-top:12px}
+.relhead span{font-weight:600;font-size:12px;opacity:.8}.relhead em{margin-left:auto;font-style:normal;font-size:12px;font-weight:700}
+.cell{min-height:64px;background:rgba(32,23,71,.04);padding:6px;display:flex;flex-direction:column;gap:6px;outline:1px dashed transparent}
+.cell.drop{outline-color:var(--magenta-600);background:rgba(133,15,137,.08)}
+.card{background:#fff;border:1px solid var(--line);border-left:4px solid var(--grey-900);padding:8px 10px;font-size:13px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.card.todo{border-left-color:#9a98a6}.card.doing{border-left-color:var(--violet-600)}.card.done{border-left-color:var(--teal-600)}.card.blocked{border-left-color:var(--crimson-600)}
+.card.sel{outline:2px solid var(--magenta-600)}
+.meta{display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap;font-size:11px}
+.tag{padding:1px 6px;background:var(--grey-50);border:1px solid var(--line)}
+.st{font-weight:800;text-transform:uppercase;letter-spacing:.04em;font-size:10px}
+.st.todo{color:#6b6978}.st.doing{color:var(--violet-600)}.st.done{color:var(--teal-600)}.st.blocked{color:var(--crimson-600)}
+.pers{background:var(--teal-600);color:#fff;border-color:var(--teal-600)}
+.est{margin-left:auto;font-weight:800;background:var(--indigo-900);color:#fff;padding:1px 7px}
+.dep{color:var(--crimson-600);font-weight:800}
+.panel{position:fixed;right:0;top:56px;bottom:0;width:340px;background:#fff;border-left:1px solid var(--line);padding:20px;box-shadow:-8px 0 24px rgba(0,0,0,.12);overflow:auto}
+.panel h2{font-size:18px;margin:6px 0 12px}.panel dl{display:grid;grid-template-columns:90px 1fr;gap:8px 12px;font-size:13px}.panel dt{color:#6b6978}
+.panel hr{border:0;border-top:1px solid var(--line);margin:16px 0}.panel .c{font-size:13px;margin-bottom:10px}.panel .c b{display:block}
+.scroll{margin-right:340px}.hero{padding-right:364px}
+.lbl{position:sticky;left:0;z-index:1;background:var(--grey-50)}
+.logo{white-space:nowrap}
+@media(max-width:900px){.panel{display:none}.scroll{margin-right:0}.crumb{display:none}.hero{padding:16px}.tools{margin-left:0}}
+</style></head><body>
+<header class="shell"><div class="logo">oh-my<b>-story</b></div><div class="crumb">Acme Product › Story maps › Onboarding</div><div class="spacer"></div>
+<div class="presence"><span style="background:#850F89">JM</span><span style="background:#00778B">AK</span><span style="background:#A61747">RS</span></div><button class="btn">Share</button></header>
+<section class="hero"><div><h1>Onboarding</h1><p>4-level map · 2 objectives · 4 activities · 8 steps · 16 stories · 61 points</p></div>
+<div class="tools"><button class="chip on">Map</button><button class="chip">Roadmap</button><button class="chip">Filter</button><button class="chip on">Label: planning</button><button class="chip">Collapse</button><button class="chip">Focus release</button></div></section>
+<div class="scroll"><div class="grid">
+<div class="lbl">Objective</div>
+<div class="exp" style="grid-column:span 4">Get started</div>
+<div class="exp" style="grid-column:span 4">Map the product</div>
+<div class="lbl">Activity</div>
+<div class="act" style="grid-column:span 2">Sign up<small><i>Admin</i></small></div>
+<div class="act" style="grid-column:span 2">Set up workspace<small><i>Admin</i></small></div>
+<div class="act" style="grid-column:span 2">Build backbone<small><i>Facilitator</i></small></div>
+<div class="act" style="grid-column:span 2">Slice releases<small><i>Facilitator</i><i>Reviewer</i></small></div>
+<div class="lbl">Step</div>
+<div class="step">Create account</div>
+<div class="step">Verify email</div>
+<div class="step">Create workspace</div>
+<div class="step">Invite team</div>
+<div class="step">Add activities</div>
+<div class="step">Add steps</div>
+<div class="step">Create release</div>
+<div class="step">Place stories</div>
+<div class="relhead">Release 1 · MVP<span>target 30 Jan</span><em>9 stories · 34 pts</em></div>
+<div class="lbl"></div>
+<div class="cell">
+<div class="card done">Register with email and password<div class="meta"><span class="st done">Done</span><span class="tag">auth</span><span class="tag pers">Admin</span><span class="est">3</span></div></div>
+<div class="card doing">Sign in with company SSO<div class="meta"><span class="st doing">In progress</span><span class="tag">auth</span><span class="tag pers">Admin</span><span class="est">5</span></div></div>
+</div>
+<div class="cell">
+<div class="card done">Send verification email<div class="meta"><span class="st done">Done</span><span class="tag">email</span><span class="est">2</span></div></div>
+</div>
+<div class="cell">
+<div class="card doing">Name and slug a workspace<div class="meta"><span class="st doing">In progress</span><span class="tag pers">Admin</span><span class="est">2</span></div></div>
+</div>
+<div class="cell">
+<div class="card todo">Invite by email with a role<div class="meta"><span class="st todo">To do</span><span class="tag">email</span><span class="tag pers">Admin</span><span class="est">3</span></div></div>
+</div>
+<div class="cell">
+<div class="card doing">Add, rename and reorder activities<div class="meta"><span class="st doing">In progress</span><span class="tag">map</span><span class="tag pers">Facilitator</span><span class="est">5</span></div></div>
+</div>
+<div class="cell">
+<div class="card todo">Add steps under an activity<div class="meta"><span class="st todo">To do</span><span class="tag">map</span><span class="tag pers">Facilitator</span><span class="est">3</span></div></div>
+</div>
+<div class="cell">
+<div class="card todo">Create and order release slices<div class="meta"><span class="st todo">To do</span><span class="tag">map</span><span class="tag pers">Facilitator</span><span class="est">3</span></div></div>
+</div>
+<div class="cell">
+<div class="card blocked sel">Drag a story between cells<div class="meta"><span class="st blocked">Blocked</span><span class="tag">dnd</span><span class="tag pers">Facilitator</span><span class="dep" title="Blocked by STORY-31">Blocked by STORY-31</span><span class="est">8</span></div></div>
+</div>
+<div class="relhead">Release 2 · Planning<span>target 14 Mar</span><em>5 stories · 18 pts</em></div>
+<div class="lbl"></div>
+<div class="cell">
+<div class="card todo">Reset a forgotten password<div class="meta"><span class="st todo">To do</span><span class="tag">auth</span><span class="est">2</span></div></div>
+</div>
+<div class="cell">
+</div>
+<div class="cell">
+</div>
+<div class="cell">
+<div class="card todo">Comment-only reviewer role<div class="meta"><span class="st todo">To do</span><span class="tag">roles</span><span class="tag pers">Reviewer</span><span class="est">3</span></div></div>
+</div>
+<div class="cell">
+</div>
+<div class="cell">
+<div class="card todo">Estimate roll-ups per release<div class="meta"><span class="st todo">To do</span><span class="tag">planning</span><span class="tag pers">Facilitator</span><span class="est">5</span></div></div>
+</div>
+<div class="cell drop">
+</div>
+<div class="cell">
+<div class="card todo">Filter and highlight by label<div class="meta"><span class="st todo">To do</span><span class="tag">planning</span><span class="tag pers">Facilitator</span><span class="est">5</span></div></div>
+<div class="card todo">Saved filtered views<div class="meta"><span class="st todo">To do</span><span class="tag">planning</span><span class="tag pers">Facilitator</span><span class="est">3</span></div></div>
+</div>
+<div class="relhead">Unscheduled<span>no date</span><em>2 stories · 9 pts</em></div>
+<div class="lbl"></div>
+<div class="cell">
+</div>
+<div class="cell">
+<div class="card todo">Resend verification link<div class="meta"><span class="st todo">To do</span><span class="tag">email</span><span class="est">1</span></div></div>
+</div>
+<div class="cell">
+</div>
+<div class="cell">
+</div>
+<div class="cell">
+</div>
+<div class="cell">
+</div>
+<div class="cell">
+<div class="card todo">Roadmap view<div class="meta"><span class="st todo">To do</span><span class="tag">roadmap</span><span class="tag pers">Reviewer</span><span class="est">8</span></div></div>
+</div>
+<div class="cell">
+</div>
+</div></div>
+<aside class="panel"><span class="tag">STORY-24</span><h2>Drag a story between cells</h2>
+<dl><dt>Status</dt><dd class="st blocked">Blocked</dd><dt>Estimate</dt><dd>8 points</dd><dt>Assignee</dt><dd>Alex K.</dd><dt>Placed in</dt><dd>Release 1 · Place stories</dd><dt>Labels</dt><dd><span class="tag">dnd</span></dd><dt>Persona</dt><dd><span class="tag pers">Facilitator</span></dd><dt>Blocked by</dt><dd class="dep">STORY-31</dd></dl>
+<hr><p style="font-size:13px;line-height:1.5">As a facilitator, I drag a story to another step or release so the map reflects the plan. The card keeps its rank within the cell.</p>
+<hr><div class="c"><b>Riya S. · 2h ago</b>Can we pick a keyboard-accessible alternative for drag?</div><div class="c"><b>Alex K. · 1h ago</b>Yes, dnd-kit has a keyboard sensor. Adding it.</div></aside>
+</body></html>
