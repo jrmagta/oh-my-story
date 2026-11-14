@@ -15,6 +15,7 @@ import (
 	"github.com/jrmagta/oh-my-story/internal/config"
 	"github.com/jrmagta/oh-my-story/internal/db"
 	"github.com/jrmagta/oh-my-story/internal/httpapi"
+	"github.com/jrmagta/oh-my-story/internal/mail"
 )
 
 const usage = "usage: oh-my-story serve | migrate | healthcheck"
@@ -88,9 +89,21 @@ func serve(ctx context.Context, cfg config.Config) error {
 	}
 	defer pool.Close()
 
+	var sender mail.Sender = mail.Log{}
+	if cfg.SMTP.Addr != "" {
+		sender = mail.SMTP{Addr: cfg.SMTP.Addr, Username: cfg.SMTP.Username, Password: cfg.SMTP.Password, From: cfg.SMTP.From}
+	}
+	var sso *httpapi.OIDC
+	if cfg.OIDC != nil {
+		if sso, err = httpapi.NewOIDC(ctx, *cfg.OIDC, cfg.BaseURL); err != nil {
+			return fmt.Errorf("oidc discovery at %s: %w", cfg.OIDC.DiscoveryURL, err)
+		}
+		slog.Info("sso enabled", "issuer", cfg.OIDC.Issuer)
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.NewHandler(pool),
+		Handler:           httpapi.New(cfg, pool, sender, sso),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errc := make(chan error, 1)

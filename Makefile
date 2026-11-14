@@ -22,8 +22,12 @@ db-up:
 db-down:
 	$(COMPOSE) down
 
+# Needs the stack from `make up`: Postgres, plus Keycloak and Mailpit for the SSO and SMTP tests.
 test:
-	TEST_DATABASE_URL='$(DATABASE_URL)' $(GO) test ./...
+	TEST_DATABASE_URL='$(DATABASE_URL)' \
+	TEST_OIDC_ISSUER=http://localhost:8180/realms/oms \
+	TEST_SMTP_ADDR=localhost:1025 TEST_MAILPIT_URL=http://localhost:8025 \
+	$(GO) test ./...
 
 migrate:
 	OMS_DATABASE_URL='$(DATABASE_URL)' $(GO) run ./cmd/oh-my-story migrate

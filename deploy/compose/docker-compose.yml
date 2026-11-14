@@ -8,6 +8,15 @@ name: oh-my-story
 
 x-app-env: &app-env
   OMS_DATABASE_URL: postgres://oms:oms@postgres:5432/oms?sslmode=disable
+  OMS_BASE_URL: http://localhost:8080
+  OMS_SMTP_ADDR: mailpit:1025
+  OMS_MAIL_FROM: oh-my-story <no-reply@oh-my-story.local>
+  OMS_OIDC_ISSUER: http://localhost:8180/realms/oms
+  # The app fetches discovery inside the compose network; tokens still carry the public issuer.
+  OMS_OIDC_DISCOVERY_URL: http://keycloak:8080/realms/oms
+  OMS_OIDC_CLIENT_ID: oh-my-story
+  OMS_OIDC_CLIENT_SECRET: dev-only-client-secret
+  OMS_OIDC_NAME: Keycloak
 
 services:
   postgres:
@@ -49,6 +58,10 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "/oh-my-story", "healthcheck"]
       interval: 5s
