@@ -19,14 +19,14 @@ type Story struct {
 	Version       int        `json:"version"`
 }
 
-// Placement is where a story sits on a map: a step, a release (nil for
+// Placement is where a story sits on a map: an activity, a release (nil for
 // Unscheduled) and a rank within that cell.
 type Placement struct {
-	ID        uuid.UUID  `json:"id"`
-	StoryID   uuid.UUID  `json:"storyId"`
-	StepID    uuid.UUID  `json:"stepId"`
-	ReleaseID *uuid.UUID `json:"releaseId"`
-	Rank      string     `json:"rank"`
+	ID         uuid.UUID  `json:"id"`
+	StoryID    uuid.UUID  `json:"storyId"`
+	ActivityID uuid.UUID  `json:"activityId"`
+	ReleaseID  *uuid.UUID `json:"releaseId"`
+	Rank       string     `json:"rank"`
 }
 
 const storyCols = `s.id, s.key, s.title, s.description_md, s.status_id, s.assignee_id, s.estimate, s.version`
@@ -37,25 +37,25 @@ func scanStory(row pgx.Row) (Story, error) {
 	return st, notFound(err)
 }
 
-const placementCols = `id, story_id, step_id, release_id, rank`
+const placementCols = `id, story_id, activity_id, release_id, rank`
 
 func scanPlacement(row pgx.Row) (Placement, error) {
 	var p Placement
-	err := row.Scan(&p.ID, &p.StoryID, &p.StepID, &p.ReleaseID, &p.Rank)
+	err := row.Scan(&p.ID, &p.StoryID, &p.ActivityID, &p.ReleaseID, &p.Rank)
 	return p, notFound(err)
 }
 
 // cellSiblings orders the placements in one cell. Positions name stories, not placements.
-func cellSiblings(mapID, stepID uuid.UUID, releaseID *uuid.UUID) siblings {
-	return siblings{table: "placements", where: "map_id = $1 AND step_id = $2 AND release_id IS NOT DISTINCT FROM $3",
-		args: []any{mapID, stepID, releaseID}, anchor: "story_id"}
+func cellSiblings(mapID, activityID uuid.UUID, releaseID *uuid.UUID) siblings {
+	return siblings{table: "placements", where: "map_id = $1 AND activity_id = $2 AND release_id IS NOT DISTINCT FROM $3",
+		args: []any{mapID, activityID, releaseID}, anchor: "story_id"}
 }
 
-// checkCell verifies that a step and release can hold stories on this map.
-func checkCell(ctx context.Context, tx pgx.Tx, mapID, stepID uuid.UUID, releaseID *uuid.UUID) error {
-	n, err := liveNode(ctx, tx, mapID, stepID)
-	if err != nil || n.Level != "step" {
-		return fmt.Errorf("%w: stories sit on a step of this map", ErrInvalid)
+// checkCell verifies that an activity and release can hold stories on this map.
+func checkCell(ctx context.Context, tx pgx.Tx, mapID, activityID uuid.UUID, releaseID *uuid.UUID) error {
+	n, err := liveNode(ctx, tx, mapID, activityID)
+	if err != nil || n.Level != "activity" {
+		return fmt.Errorf("%w: stories sit under an activity of this map", ErrInvalid)
 	}
 	if releaseID != nil {
 		if _, err := mapRelease(ctx, tx, mapID, *releaseID); err != nil {
@@ -70,17 +70,17 @@ func mapStory(ctx context.Context, tx pgx.Tx, mapID, storyID uuid.UUID) (Story, 
 	var st Story
 	var p Placement
 	err := tx.QueryRow(ctx,
-		`SELECT `+storyCols+`, p.id, p.story_id, p.step_id, p.release_id, p.rank
+		`SELECT `+storyCols+`, p.id, p.story_id, p.activity_id, p.release_id, p.rank
 		 FROM stories s JOIN placements p ON p.story_id = s.id
 		 WHERE s.id = $1 AND p.map_id = $2 AND s.deleted_at IS NULL FOR UPDATE OF s`, storyID, mapID).
 		Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.Version,
-			&p.ID, &p.StoryID, &p.StepID, &p.ReleaseID, &p.Rank)
+			&p.ID, &p.StoryID, &p.ActivityID, &p.ReleaseID, &p.Rank)
 	return st, p, notFound(err)
 }
 
 type StoryInput struct {
 	Title, DescriptionMD string
-	StepID               uuid.UUID
+	ActivityID           uuid.UUID
 	ReleaseID            *uuid.UUID
 }
 
@@ -88,13 +88,13 @@ type StoryInput struct {
 // the next workspace key and the first status of the map's workflow.
 func (s *Store) CreateStory(ctx context.Context, actor, workspaceID, mapID uuid.UUID, in StoryInput, pos Position) (Story, Placement, error) {
 	st := Story{ID: newID(), Title: in.Title, DescriptionMD: in.DescriptionMD}
-	p := Placement{ID: newID(), StoryID: st.ID, StepID: in.StepID, ReleaseID: in.ReleaseID}
+	p := Placement{ID: newID(), StoryID: st.ID, ActivityID: in.ActivityID, ReleaseID: in.ReleaseID}
 	err := s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
-		if err := checkCell(ctx, tx, mapID, in.StepID, in.ReleaseID); err != nil {
+		if err := checkCell(ctx, tx, mapID, in.ActivityID, in.ReleaseID); err != nil {
 			return nil, err
 		}
 		var err error
-		if p.Rank, err = cellSiblings(mapID, in.StepID, in.ReleaseID).rank(ctx, tx, pos, p.ID); err != nil {
+		if p.Rank, err = cellSiblings(mapID, in.ActivityID, in.ReleaseID).rank(ctx, tx, pos, p.ID); err != nil {
 			return nil, err
 		}
 		err = tx.QueryRow(ctx,
@@ -117,8 +117,8 @@ func (s *Store) CreateStory(ctx context.Context, actor, workspaceID, mapID uuid.
 			return nil, err
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO placements (id, story_id, map_id, step_id, release_id, rank) VALUES ($1, $2, $3, $4, $5, $6)`,
-			p.ID, p.StoryID, mapID, p.StepID, p.ReleaseID, p.Rank); err != nil {
+			`INSERT INTO placements (id, story_id, map_id, activity_id, release_id, rank) VALUES ($1, $2, $3, $4, $5, $6)`,
+			p.ID, p.StoryID, mapID, p.ActivityID, p.ReleaseID, p.Rank); err != nil {
 			return nil, err
 		}
 		return []change{created(mapID, "story", st.ID, st), created(mapID, "placement", p.ID, p)}, nil
@@ -177,9 +177,9 @@ func (s *Store) UpdateStory(ctx context.Context, actor, workspaceID, mapID, stor
 }
 
 type StoryMove struct {
-	StepID    uuid.UUID
-	ReleaseID *uuid.UUID // nil: Unscheduled
-	Position  Position
+	ActivityID uuid.UUID
+	ReleaseID  *uuid.UUID // nil: Unscheduled
+	Position   Position
 	// SeenVersion is the story version the mover's client showed. The move
 	// applies either way; MoveStory reports whether it was stale.
 	SeenVersion int
@@ -194,16 +194,16 @@ func (s *Store) MoveStory(ctx context.Context, actor, workspaceID, mapID, storyI
 			return nil, err
 		}
 		stale = st.Version != m.SeenVersion
-		if err := checkCell(ctx, tx, mapID, m.StepID, m.ReleaseID); err != nil {
+		if err := checkCell(ctx, tx, mapID, m.ActivityID, m.ReleaseID); err != nil {
 			return nil, err
 		}
 		p = before
-		p.StepID, p.ReleaseID = m.StepID, m.ReleaseID
-		if p.Rank, err = cellSiblings(mapID, m.StepID, m.ReleaseID).rank(ctx, tx, m.Position, p.ID); err != nil {
+		p.ActivityID, p.ReleaseID = m.ActivityID, m.ReleaseID
+		if p.Rank, err = cellSiblings(mapID, m.ActivityID, m.ReleaseID).rank(ctx, tx, m.Position, p.ID); err != nil {
 			return nil, err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE placements SET step_id = $2, release_id = $3, rank = $4 WHERE id = $1`,
-			p.ID, p.StepID, p.ReleaseID, p.Rank); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE placements SET activity_id = $2, release_id = $3, rank = $4 WHERE id = $1`,
+			p.ID, p.ActivityID, p.ReleaseID, p.Rank); err != nil {
 			return nil, err
 		}
 		var version int
@@ -236,20 +236,20 @@ func (s *Store) DeleteStory(ctx context.Context, actor, workspaceID, mapID, stor
 	})
 }
 
-// RestoreStory undoes DeleteStory. The story's step must not be deleted.
+// RestoreStory undoes DeleteStory. The story's activity must not be deleted.
 func (s *Store) RestoreStory(ctx context.Context, actor, workspaceID, mapID, storyID uuid.UUID) (Story, error) {
 	var st Story
 	err := s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
-		var stepID uuid.UUID
+		var activityID uuid.UUID
 		err := tx.QueryRow(ctx,
-			`SELECT p.step_id FROM stories s JOIN placements p ON p.story_id = s.id
+			`SELECT p.activity_id FROM stories s JOIN placements p ON p.story_id = s.id
 			 WHERE s.id = $1 AND p.map_id = $2 AND s.workspace_id = $3 AND s.deleted_at IS NOT NULL`,
-			storyID, mapID, workspaceID).Scan(&stepID)
+			storyID, mapID, workspaceID).Scan(&activityID)
 		if err != nil {
 			return nil, notFound(err)
 		}
-		if _, err := liveNode(ctx, tx, mapID, stepID); err != nil {
-			return nil, fmt.Errorf("%w: the story's step is deleted; restore it first", ErrInvalid)
+		if _, err := liveNode(ctx, tx, mapID, activityID); err != nil {
+			return nil, fmt.Errorf("%w: the story's activity is deleted; restore it first", ErrInvalid)
 		}
 		if st, err = scanStory(tx.QueryRow(ctx,
 			`UPDATE stories s SET deleted_at = NULL, updated_at = now() WHERE id = $1 RETURNING `+storyCols, storyID)); err != nil {

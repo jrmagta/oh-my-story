@@ -9,7 +9,7 @@ export type DragItem =
 /** Where it can land. A story, node or release target means "next to this one". */
 export type DropTarget =
   | { kind: 'story'; storyId: string; placement: Placement; label: string }
-  | { kind: 'cell'; stepId: string; releaseId: string | null; label: string }
+  | { kind: 'cell'; activityId: string; releaseId: string | null; label: string }
   | { kind: 'node'; node: MapNode; label: string }
   | { kind: 'slot'; level: MapNode['level']; parentId: string; label: string }
   | { kind: 'release'; release: Release; label: string }
@@ -42,7 +42,7 @@ export function accepts(target: DropTarget, item: DragItem | undefined): boolean
 
 /** A move, as the API takes it. */
 export type Move =
-  | { kind: 'story'; storyId: string; stepId: string; releaseId: string | null; position: Position }
+  | { kind: 'story'; storyId: string; activityId: string; releaseId: string | null; position: Position }
   | { kind: 'node'; nodeId: string; parentId: string | null; position: Position }
   | { kind: 'release'; releaseId: string; position: Position }
 
@@ -66,15 +66,15 @@ export function moveFor(view: MapView, item: DragItem, target: DropTarget): Move
   if (!accepts(target, item)) return null
   if (item.kind === 'story') {
     if (target.kind === 'cell') {
-      return { kind: 'story', storyId: item.storyId, stepId: target.stepId, releaseId: target.releaseId, position: {} }
+      return { kind: 'story', storyId: item.storyId, activityId: target.activityId, releaseId: target.releaseId, position: {} }
     }
     if (target.kind !== 'story') return null
     const t = target.placement
-    const cell = view.placements.filter((p) => p.stepId === t.stepId && p.releaseId === t.releaseId)
+    const cell = view.placements.filter((p) => p.activityId === t.activityId && p.releaseId === t.releaseId)
     return {
       kind: 'story',
       storyId: item.storyId,
-      stepId: t.stepId,
+      activityId: t.activityId,
       releaseId: t.releaseId,
       position: nextTo(cell, item.placement, t, (p) => p.storyId),
     }
@@ -122,11 +122,11 @@ export function applyMove(view: MapView, m: Move): MapView {
     case 'story': {
       const moving = view.placements.find((p) => p.storyId === m.storyId)
       if (!moving) return view
-      const cell = view.placements.filter((p) => p.stepId === m.stepId && p.releaseId === m.releaseId && p.id !== moving.id)
+      const cell = view.placements.filter((p) => p.activityId === m.activityId && p.releaseId === m.releaseId && p.id !== moving.id)
       const rank = interimRank(cell, m.position, (p) => p.storyId)
       return {
         ...view,
-        placements: view.placements.map((p) => (p.id === moving.id ? { ...p, stepId: m.stepId, releaseId: m.releaseId, rank } : p)),
+        placements: view.placements.map((p) => (p.id === moving.id ? { ...p, activityId: m.activityId, releaseId: m.releaseId, rank } : p)),
       }
     }
     case 'node': {

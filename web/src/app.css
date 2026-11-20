@@ -373,21 +373,14 @@
     padding: 8px 12px;
     border-radius: var(--oms-radius);
   }
-  .map-step {
-    border-bottom: 2px solid var(--color-base-content);
-    padding: 8px 2px;
-    font-weight: 700;
-  }
   /* A colour chosen for a backbone card fills it; text turns black or white to suit. */
   .map-obj.coloured,
-  .map-act.coloured,
-  .map-step.coloured {
+  .map-act.coloured {
     background: var(--node-bg);
     color: var(--node-fg);
     border: 2px solid var(--node-bg);
     border-radius: var(--oms-radius);
   }
-  .map-step.coloured { padding: 8px 10px; }
   .coloured .node-total { color: inherit; opacity: 0.75; }
   .colour-pop {
     position: absolute;

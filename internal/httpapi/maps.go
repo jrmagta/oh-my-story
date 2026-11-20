@@ -225,22 +225,18 @@ func (s *Server) listMaps(q mapRequest) (int, any, error) {
 func (s *Server) createMap(q mapRequest) (int, any, error) {
 	var in struct {
 		Name, Description string
-		Levels            int
 		WorkflowID        *uuid.UUID
 	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
 	}
-	mi := store.MapInput{Levels: in.Levels, WorkflowID: in.WorkflowID}
+	mi := store.MapInput{WorkflowID: in.WorkflowID}
 	var err error
 	if mi.Name, err = text("name", in.Name, maxName, false); err != nil {
 		return 0, nil, err
 	}
 	if mi.Description, err = text("description", in.Description, maxDescription, true); err != nil {
 		return 0, nil, err
-	}
-	if in.Levels != 3 && in.Levels != 4 {
-		return 0, nil, errBadRequest("levels must be 3 or 4")
 	}
 	m, err := s.store.CreateMap(q.r.Context(), q.user, q.ws, mi)
 	return http.StatusCreated, m, err
@@ -254,21 +250,17 @@ func (s *Server) getMap(q mapRequest) (int, any, error) {
 func (s *Server) patchMap(q mapRequest) (int, any, error) {
 	var in struct {
 		Name, Description *string
-		Levels            *int
 	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
 	}
-	p := store.MapPatch{Levels: in.Levels}
+	var p store.MapPatch
 	var err error
 	if p.Name, err = textPtr("name", in.Name, maxName, false); err != nil {
 		return 0, nil, err
 	}
 	if p.Description, err = textPtr("description", in.Description, maxDescription, true); err != nil {
 		return 0, nil, err
-	}
-	if in.Levels != nil && *in.Levels != 3 && *in.Levels != 4 {
-		return 0, nil, errBadRequest("levels must be 3 or 4")
 	}
 	m, err := s.store.UpdateMap(q.r.Context(), q.user, q.ws, q.mapID, p)
 	return http.StatusOK, m, err
@@ -292,7 +284,7 @@ func (s *Server) createNode(q mapRequest) (int, any, error) {
 	}
 	n := store.NodeInput{ParentID: in.ParentID}
 	var err error
-	if n.Level, err = oneOf("level", in.Level, "objective", "activity", "step"); err != nil {
+	if n.Level, err = oneOf("level", in.Level, "objective", "activity"); err != nil {
 		return 0, nil, err
 	}
 	if n.Title, err = text("title", in.Title, maxTitle, false); err != nil {
@@ -430,14 +422,14 @@ type storyAndPlacement struct {
 func (s *Server) createStory(q mapRequest) (int, any, error) {
 	var in struct {
 		Title, DescriptionMD string
-		StepID               uuid.UUID
+		ActivityID           uuid.UUID
 		ReleaseID            *uuid.UUID
 		positionIn
 	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
 	}
-	si := store.StoryInput{StepID: in.StepID, ReleaseID: in.ReleaseID}
+	si := store.StoryInput{ActivityID: in.ActivityID, ReleaseID: in.ReleaseID}
 	var err error
 	if si.Title, err = text("title", in.Title, maxTitle, false); err != nil {
 		return 0, nil, err
@@ -445,8 +437,8 @@ func (s *Server) createStory(q mapRequest) (int, any, error) {
 	if si.DescriptionMD, err = text("descriptionMd", in.DescriptionMD, maxDescription, true); err != nil {
 		return 0, nil, err
 	}
-	if in.StepID == uuid.Nil {
-		return 0, nil, errBadRequest("stepId is required")
+	if in.ActivityID == uuid.Nil {
+		return 0, nil, errBadRequest("activityId is required")
 	}
 	st, p, err := s.store.CreateStory(q.r.Context(), q.user, q.ws, q.mapID, si, in.position())
 	return http.StatusCreated, storyAndPlacement{st, p}, err
@@ -486,19 +478,19 @@ func (s *Server) patchStory(q mapRequest) (int, any, error) {
 // is the story version the client showed; the reply says whether it was stale.
 func (s *Server) moveStory(q mapRequest) (int, any, error) {
 	var in struct {
-		StepID    uuid.UUID
-		ReleaseID optional[uuid.UUID]
-		Version   *int
+		ActivityID uuid.UUID
+		ReleaseID  optional[uuid.UUID]
+		Version    *int
 		positionIn
 	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
 	}
-	if in.StepID == uuid.Nil || !in.ReleaseID.Set || in.Version == nil {
-		return 0, nil, errBadRequest("stepId, releaseId (null for Unscheduled) and version are required")
+	if in.ActivityID == uuid.Nil || !in.ReleaseID.Set || in.Version == nil {
+		return 0, nil, errBadRequest("activityId, releaseId (null for Unscheduled) and version are required")
 	}
 	p, stale, err := s.store.MoveStory(q.r.Context(), q.user, q.ws, q.mapID, q.id, store.StoryMove{
-		StepID: in.StepID, ReleaseID: in.ReleaseID.Value, Position: in.position(), SeenVersion: *in.Version,
+		ActivityID: in.ActivityID, ReleaseID: in.ReleaseID.Value, Position: in.position(), SeenVersion: *in.Version,
 	})
 	return http.StatusOK, map[string]any{"placement": p, "stale": stale}, err
 }

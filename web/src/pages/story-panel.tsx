@@ -16,7 +16,7 @@ export function StoryPanel({ storyId }: { storyId: string }) {
   if (!story) return null
   const status = statuses.get(story.statusId)
   const placement = view.placements.find((p) => p.storyId === story.id)
-  const step = view.nodes.find((n) => n.id === placement?.stepId)
+  const activity = view.nodes.find((n) => n.id === placement?.activityId)
   const release = view.releases.find((r) => r.id === placement?.releaseId)
   const assignee = members.data?.find((m) => m.userId === story.assigneeId)
   const patch = (b: Parameters<typeof api.patchStory>[3]) => run(() => api.patchStory(ws.slug, view.map.id, story.id, b))
@@ -117,7 +117,7 @@ export function StoryPanel({ storyId }: { storyId: string }) {
             <div className="row">
               <dt>Placed in</dt>
               <dd className="text-right">
-                {release?.name ?? 'Unscheduled'} · {step?.title}
+                {release?.name ?? 'Unscheduled'} · {activity?.title}
               </dd>
             </div>
           </dl>

@@ -1,15 +1,13 @@
 import type { MapNode, MapView, Placement, Release, Story } from '../api'
 
 /**
- * One grid column under the backbone. Each step is a column; an activity with
- * no steps, or an objective with no activities, still takes one column so
- * there is somewhere to add the first child.
+ * One grid column under the backbone. Each activity is a column; an objective
+ * with no activities still takes one, which holds the button for its first.
  */
 export interface Column {
   key: string
-  step: MapNode | null
   activity: MapNode | null
-  objective: MapNode | null
+  objective: MapNode
 }
 
 /** A backbone node drawn across `span` columns starting at column `start` (0-based). */
@@ -21,7 +19,6 @@ export interface Span {
 
 export interface Backbone {
   objectives: Span[]
-  activities: Span[]
   columns: Column[]
 }
 
@@ -43,26 +40,12 @@ function childrenOf(nodes: MapNode[]): Map<string, MapNode[]> {
 
 export function backbone(view: MapView): Backbone {
   const kids = childrenOf(view.nodes)
-  const out: Backbone = { objectives: [], activities: [], columns: [] }
-
-  const addActivity = (act: MapNode, objective: MapNode | null) => {
-    const start = out.columns.length
-    const steps = kids.get(act.id) ?? []
-    if (steps.length === 0) out.columns.push({ key: `a:${act.id}`, step: null, activity: act, objective })
-    for (const step of steps) out.columns.push({ key: step.id, step, activity: act, objective })
-    out.activities.push({ node: act, start, span: out.columns.length - start })
-  }
-
-  const top = kids.get('') ?? []
-  if (view.map.levels === 3) {
-    for (const act of top) addActivity(act, null)
-    return out
-  }
-  for (const obj of top) {
+  const out: Backbone = { objectives: [], columns: [] }
+  for (const obj of kids.get('') ?? []) {
     const start = out.columns.length
     const acts = kids.get(obj.id) ?? []
-    if (acts.length === 0) out.columns.push({ key: `o:${obj.id}`, step: null, activity: null, objective: obj })
-    for (const act of acts) addActivity(act, obj)
+    if (acts.length === 0) out.columns.push({ key: `o:${obj.id}`, activity: null, objective: obj })
+    for (const act of acts) out.columns.push({ key: act.id, activity: act, objective: obj })
     out.objectives.push({ node: obj, start, span: out.columns.length - start })
   }
   return out
@@ -86,7 +69,7 @@ export interface Card {
   placement: Placement
 }
 
-export const cellKey = (stepId: string, releaseId: string | null) => `${stepId}|${releaseId ?? ''}`
+export const cellKey = (activityId: string, releaseId: string | null) => `${activityId}|${releaseId ?? ''}`
 
 /** Stories by cell, each cell in rank order. */
 export function cells(view: MapView): Map<string, Card[]> {
@@ -95,7 +78,7 @@ export function cells(view: MapView): Map<string, Card[]> {
   for (const p of [...view.placements].sort(byRank)) {
     const story = stories.get(p.storyId)
     if (!story) continue
-    const k = cellKey(p.stepId, p.releaseId)
+    const k = cellKey(p.activityId, p.releaseId)
     const list = out.get(k)
     if (list) list.push({ story, placement: p })
     else out.set(k, [{ story, placement: p }])

@@ -54,7 +54,7 @@ func (s *Store) MapView(ctx context.Context, workspaceID, mapID uuid.UUID) (MapV
 			return err
 		}
 		v.Placements, err = collect(ctx, tx, scanPlacement,
-			`SELECT p.id, p.story_id, p.step_id, p.release_id, p.rank FROM placements p JOIN stories s ON s.id = p.story_id
+			`SELECT p.id, p.story_id, p.activity_id, p.release_id, p.rank FROM placements p JOIN stories s ON s.id = p.story_id
 			 WHERE p.map_id = $1 AND s.deleted_at IS NULL ORDER BY p.rank`, mapID)
 		return err
 	})

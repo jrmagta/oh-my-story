@@ -96,7 +96,7 @@ export function MapPage() {
           case 'story': {
             const story = before.stories.find((s) => s.id === m.storyId)
             const r = await api.moveStory(ws.slug, mapId, m.storyId, {
-              stepId: m.stepId,
+              activityId: m.activityId,
               releaseId: m.releaseId,
               version: story?.version ?? 0,
               ...m.position,
@@ -255,10 +255,8 @@ function MapHeader(props: {
   const { ws, view, canEdit, totals, run } = useMap()
   const count = (level: Level) => view.nodes.filter((n) => n.level === level).length
   const facts = [
-    `${view.map.levels}-level map`,
-    ...(view.map.levels === 4 ? [plural(count('objective'), 'objective')] : []),
+    plural(count('objective'), 'objective'),
     plural(count('activity'), 'activity').replace('activitys', 'activities'),
-    plural(count('step'), 'step'),
     plural(view.stories.length, 'story').replace('storys', 'stories'),
     estimated(totals.map, ws.estimateUnit),
   ].filter(Boolean)
@@ -298,26 +296,20 @@ function MapHeader(props: {
   )
 }
 
-const levelLabel: Record<Level, string> = { objective: 'Objective', activity: 'Activity', step: 'Step' }
+const levelLabel: Record<Level, string> = { objective: 'Objective', activity: 'Activity' }
 
 function MapGrid() {
   const { view, canEdit } = useMap()
   const bb = useMemo(() => backbone(view), [view])
   const bs = useMemo(() => bands(view), [view])
   const byCell = useMemo(() => cells(view), [view])
-  const four = view.map.levels === 4
-  const topLevel: Level = four ? 'objective' : 'activity'
 
   if (bb.columns.length === 0) {
     return (
       <div className="max-w-xl py-10">
         <p className="up mb-2 text-2xl">An empty map</p>
-        <p className="text-muted mb-6 font-medium">
-          {four
-            ? 'Start the backbone with an objective, then add the activities and steps under it.'
-            : 'Start the backbone with an activity, then add the steps under it.'}
-        </p>
-        {canEdit && <AddNode level={topLevel} parent={null} label={`Add ${topLevel}`} />}
+        <p className="text-muted mb-6 font-medium">Start the backbone with an objective, then add its activities and the steps under them.</p>
+        {canEdit && <AddNode level="objective" parent={null} label="Add objective" />}
       </div>
     )
   }
@@ -329,57 +321,38 @@ function MapGrid() {
 
   return (
     <div className="map-grid" style={style}>
-      {four && (
-        <>
-          <div className="map-lbl">Objective</div>
-          {bb.objectives.map((o) => (
-            <div key={o.node.id} className={`map-obj up ${o.node.colour ? 'coloured' : ''}`} style={{ ...col(o.start, o.span), ...nodeStyle(o.node.colour) }}>
-              <NodeHead node={o.node} child="activity" />
-            </div>
-          ))}
-          {canEdit && (
-            <div style={trailing}>
-              <AddNode level="objective" parent={null} label="Add objective" />
-            </div>
-          )}
-        </>
+      <div className="map-lbl">Objective</div>
+      {bb.objectives.map((o) => (
+        <div
+          key={o.node.id}
+          className={`map-obj up ${o.node.colour ? 'coloured' : ''}`}
+          style={{ ...col(o.start, o.span), ...nodeStyle(o.node.colour) }}
+        >
+          <NodeHead node={o.node} child="activity" />
+        </div>
+      ))}
+      {canEdit && (
+        <div style={trailing}>
+          <AddNode level="objective" parent={null} label="Add objective" />
+        </div>
       )}
 
       <div className="map-lbl" style={{ gridColumn: 1 }}>
         Activity
       </div>
-      {bb.activities.map((a) => (
-        <div key={a.node.id} className={`map-act ${a.node.colour ? 'coloured' : ''}`} style={{ ...col(a.start, a.span), ...nodeStyle(a.node.colour) }}>
-          <NodeHead node={a.node} child="step" bold />
-        </div>
-      ))}
       {bb.columns.map((c, i) =>
-        !c.activity && c.objective ? (
+        c.activity ? (
+          <div
+            key={c.key}
+            className={`map-act ${c.activity.colour ? 'coloured' : ''}`}
+            style={{ ...col(i), ...nodeStyle(c.activity.colour) }}
+          >
+            <NodeHead node={c.activity} bold />
+          </div>
+        ) : (
           <Slot key={c.key} style={col(i)} level="activity" parent={c.objective}>
             {canEdit && <AddNode level="activity" parent={c.objective} label={`Add activity to ${c.objective.title}`} short="Add activity" />}
           </Slot>
-        ) : null,
-      )}
-      {canEdit && !four && (
-        <div style={trailing}>
-          <AddNode level="activity" parent={null} label="Add activity" />
-        </div>
-      )}
-
-      <div className="map-lbl" style={{ gridColumn: 1 }}>
-        Step
-      </div>
-      {bb.columns.map((c, i) =>
-        c.step ? (
-          <div key={c.key} style={{ ...col(i), ...nodeStyle(c.step.colour) }} className={`map-step ${c.step.colour ? 'coloured' : ''}`}>
-            <NodeHead node={c.step} />
-          </div>
-        ) : c.activity ? (
-          <Slot key={c.key} style={col(i)} level="step" parent={c.activity}>
-            {canEdit && <AddNode level="step" parent={c.activity} label={`Add step to ${c.activity.title}`} short="Add step" />}
-          </Slot>
-        ) : (
-          <div key={c.key} style={col(i)} />
         ),
       )}
 
@@ -515,7 +488,7 @@ function ColourMenu({ node, label }: { node: MapNode; label: string }) {
 /**
  * Adding backbone nodes. Which add input is open lives in the map context, not
  * in the button, because the button that opened it can unmount mid-entry: the
- * empty column that offers a first step becomes that step. The input then
+ * empty column that offers a first activity becomes that activity. The input then
  * reappears at the parent's own add button, still open.
  */
 function useAddNode(level: Level, parent: MapNode | null) {
@@ -583,14 +556,14 @@ function BandRows(props: { band: Band; index: number; columns: Column[]; byCell:
       <BandHeader release={band.release} index={props.index} total={totals.releases.get(band.release?.id ?? '')} />
       <div className="map-lbl" style={{ gridColumn: 1 }} />
       {columns.map((c, i) =>
-        c.step ? (
+        c.activity ? (
           <Cell
             key={c.key}
             column={i + 2}
-            step={c.step}
+            activity={c.activity}
             release={band.release}
             bandName={name}
-            cards={byCell.get(cellKey(c.step.id, band.release?.id ?? null)) ?? []}
+            cards={byCell.get(cellKey(c.activity.id, band.release?.id ?? null)) ?? []}
           />
         ) : (
           <div key={c.key} style={{ gridColumn: i + 2 }} />
@@ -737,14 +710,14 @@ function AddRelease() {
   )
 }
 
-function Cell(props: { column: number; step: MapNode; release: Release | null; bandName: string; cards: Card[] }) {
-  const { step, release, bandName, cards } = props
+function Cell(props: { column: number; activity: MapNode; release: Release | null; bandName: string; cards: Card[] }) {
+  const { activity, release, bandName, cards } = props
   const { ws, view, canEdit, run } = useMap()
   const [adding, setAdding] = useState(false)
-  const where = `${step.title} / ${bandName}`
-  const drop = useDrop(`cell:${cellKey(step.id, release?.id ?? null)}`, {
+  const where = `${activity.title} / ${bandName}`
+  const drop = useDrop(`cell:${cellKey(activity.id, release?.id ?? null)}`, {
     kind: 'cell',
-    stepId: step.id,
+    activityId: activity.id,
     releaseId: release?.id ?? null,
     label: `the end of ${where}`,
   })
@@ -770,7 +743,7 @@ function Cell(props: { column: number; step: MapNode; release: Release | null; b
                 setAdding(false)
                 return
               }
-              await run(() => api.createStory(ws.slug, view.map.id, { title, stepId: step.id, releaseId: release?.id ?? null }))
+              await run(() => api.createStory(ws.slug, view.map.id, { title, activityId: activity.id, releaseId: release?.id ?? null }))
             }}
           />
         ) : (

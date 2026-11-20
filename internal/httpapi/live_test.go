@@ -88,7 +88,7 @@ func TestLiveAcrossInstances(t *testing.T) {
 	onTwo := h2.clientWithSession(owner.sessionToken())
 
 	conn := onTwo.mustDial(b.path, lastEventID(onTwo, b.path))
-	created := owner.must(201, "POST", b.path+"/stories", map[string]any{"title": "Live story", "stepId": b.step1})
+	created := owner.must(201, "POST", b.path+"/stories", map[string]any{"title": "Live story", "activityId": b.act1})
 
 	evs := events(t, conn, 2)
 	if evs[0].Event.Entity != "story" || evs[0].Event.Action != "create" || evs[0].Event.After["title"] != "Live story" ||
@@ -110,10 +110,10 @@ func TestLiveResume(t *testing.T) {
 	b := buildMap(owner)
 	from := lastEventID(owner, b.path)
 	for _, title := range []string{"one", "two"} {
-		owner.must(201, "POST", b.path+"/stories", map[string]any{"title": title, "stepId": b.step1})
+		owner.must(201, "POST", b.path+"/stories", map[string]any{"title": title, "activityId": b.act1})
 	}
-	other := owner.must(201, "POST", acme+"/maps", map[string]any{"name": "Other", "levels": 3})
-	owner.must(201, "POST", acme+"/maps/"+str(other.body, "id")+"/nodes", map[string]any{"level": "activity", "title": "x"})
+	other := owner.must(201, "POST", acme+"/maps", map[string]any{"name": "Other"})
+	owner.must(201, "POST", acme+"/maps/"+str(other.body, "id")+"/nodes", map[string]any{"level": "objective", "title": "x"})
 
 	conn := owner.mustDial(b.path, from)
 	evs := events(t, conn, 4)
@@ -128,7 +128,7 @@ func TestLiveResume(t *testing.T) {
 	}
 
 	// The next live event follows straight on; the other map's events never came.
-	owner.must(201, "POST", b.path+"/stories", map[string]any{"title": "three", "stepId": b.step1})
+	owner.must(201, "POST", b.path+"/stories", map[string]any{"title": "three", "activityId": b.act1})
 	if ev := events(t, conn, 1)[0].Event; ev.After["title"] != "three" || ev.ID <= ids[3] {
 		t.Errorf("live after replay = %+v", ev)
 	}

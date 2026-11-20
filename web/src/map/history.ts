@@ -35,9 +35,9 @@ function status(n: Names, id: unknown): string {
   return n.view.workflow.statuses.find((s) => s.id === id)?.name ?? 'a removed status'
 }
 
-function step(n: Names, id: unknown): string {
+function activity(n: Names, id: unknown): string {
   const s = n.view.nodes.find((x) => x.id === id)
-  return s ? q(s.title) : 'a deleted step'
+  return s ? q(s.title) : 'a deleted activity'
 }
 
 function release(n: Names, id: unknown): string {
@@ -88,10 +88,10 @@ export function describe(e: HistoryEntry, n: Names): string | null {
     case 'placement:move': {
       const p = n.view.placements.find((x) => x.id === e.entityId)
       const key = p ? storyName(n, p.storyId) : 'a story'
-      if (changed('stepId') || changed('releaseId')) {
-        const stepId = changed('stepId') ? a.stepId : p?.stepId
+      if (changed('activityId') || changed('releaseId')) {
+        const activityId = changed('activityId') ? a.activityId : p?.activityId
         const releaseId = changed('releaseId') ? a.releaseId : (p?.releaseId ?? null)
-        return `moved ${key} to ${step(n, stepId)} in ${release(n, releaseId)}`
+        return `moved ${key} to ${activity(n, activityId)} in ${release(n, releaseId)}`
       }
       return `reordered ${key}`
     }

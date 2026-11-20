@@ -6,7 +6,7 @@ func TestStoryEstimate(t *testing.T) {
 	h := newHarness(t, harnessOpts{})
 	owner := h.bootstrap()
 	b := buildMap(owner)
-	story := str(owner.must(201, "POST", b.path+"/stories", map[string]any{"title": "s", "stepId": b.step1}).body, "story", "id")
+	story := str(owner.must(201, "POST", b.path+"/stories", map[string]any{"title": "s", "activityId": b.act1}).body, "story", "id")
 	path := b.path + "/stories/" + story
 
 	if r := owner.must(200, "GET", b.path, nil); r.body["stories"].([]any)[0].(map[string]any)["estimate"] != nil {

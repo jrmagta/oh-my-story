@@ -15,13 +15,13 @@ const empty = (): Total => ({ stories: 0, hundredths: 0, unestimated: 0, byCateg
 
 export interface Totals {
   map: Total
-  /** Per backbone node: a step's own stories; an activity or objective, everything under it. */
+  /** Per backbone node: an activity's own stories; an objective's, everything under it. */
   nodes: Map<string, Total>
   /** Per release id; Unscheduled is ''. */
   releases: Map<string, Total>
 }
 
-/** Adds up the stories on the map. Stories whose step is not on the map are left out. */
+/** Adds up the stories on the map. Stories whose activity is not on the map are left out. */
 export function totals(view: MapView, statuses: Map<string, Status>): Totals {
   const parent = new Map(view.nodes.map((n) => [n.id, n.parentId]))
   const stories = new Map(view.stories.map((s) => [s.id, s]))
@@ -33,9 +33,9 @@ export function totals(view: MapView, statuses: Map<string, Status>): Totals {
   }
   for (const p of view.placements) {
     const s = stories.get(p.storyId)
-    if (!s || !parent.has(p.stepId)) continue
+    if (!s || !parent.has(p.activityId)) continue
     const targets = [out.map, add(out.releases, p.releaseId ?? '')]
-    for (let id: string | null | undefined = p.stepId; id; id = parent.get(id)) targets.push(add(out.nodes, id))
+    for (let id: string | null | undefined = p.activityId; id; id = parent.get(id)) targets.push(add(out.nodes, id))
     const category = statuses.get(s.statusId)?.category ?? 'todo'
     for (const t of targets) {
       t.stories++
