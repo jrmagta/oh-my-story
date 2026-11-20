@@ -21,8 +21,11 @@ export interface Totals {
   releases: Map<string, Total>
 }
 
-/** Adds up the steps on the map. Steps whose activity is not on the map are left out. */
-export function totals(view: MapView, statuses: Map<string, Status>): Totals {
+/**
+ * Adds up the steps on the map. Steps whose activity is not on the map are
+ * left out, and so are steps outside only when it is given (a filter's matches).
+ */
+export function totals(view: MapView, statuses: Map<string, Status>, only?: Set<string> | null): Totals {
   const parent = new Map(view.nodes.map((n) => [n.id, n.parentId]))
   const steps = new Map(view.steps.map((s) => [s.id, s]))
   const out: Totals = { map: empty(), nodes: new Map(), releases: new Map() }
@@ -33,7 +36,7 @@ export function totals(view: MapView, statuses: Map<string, Status>): Totals {
   }
   for (const p of view.placements) {
     const s = steps.get(p.stepId)
-    if (!s || !parent.has(p.activityId)) continue
+    if (!s || !parent.has(p.activityId) || (only && !only.has(s.id))) continue
     const targets = [out.map, add(out.releases, p.releaseId ?? '')]
     for (let id: string | null | undefined = p.activityId; id; id = parent.get(id)) targets.push(add(out.nodes, id))
     const category = statuses.get(s.statusId)?.category ?? 'todo'
