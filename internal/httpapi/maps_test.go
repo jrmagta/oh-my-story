@@ -1,7 +1,6 @@
 package httpapi_test
 
 import (
-	"fmt"
 	"slices"
 	"testing"
 )
@@ -273,7 +272,7 @@ func TestMapValidation(t *testing.T) {
 			t.Errorf("move %v: status %d: %s", body, r.status, r.raw)
 		}
 	}
-	if r := owner.do("POST", b.path+"/stories/"+fmt.Sprint("00000000-0000-7000-8000-000000000000")+"/move",
+	if r := owner.do("POST", b.path+"/stories/00000000-0000-7000-8000-000000000000/move",
 		map[string]any{"stepId": b.step1, "releaseId": nil, "version": 0}); r.status != 404 {
 		t.Errorf("move of unknown story: %d", r.status)
 	}
