@@ -75,6 +75,7 @@ export function describe(e: HistoryEntry, n: Names): string | null {
       if (changed('title')) parts.push(`renamed ${key} from ${q(b.title)} to ${q(a.title)}`)
       if (changed('statusId')) parts.push(`set ${key} to ${status(n, a.statusId)}`)
       if (changed('assigneeId')) parts.push(a.assigneeId ? `assigned ${key} to ${person(n, a.assigneeId)}` : `unassigned ${key}`)
+      if (changed('estimate')) parts.push(a.estimate === null ? `cleared the estimate of ${key}` : `estimated ${key} at ${String(a.estimate)}`)
       if (changed('descriptionMd')) parts.push(`edited the description of ${key}`)
       return parts.length ? parts.join(', ') : null
     }

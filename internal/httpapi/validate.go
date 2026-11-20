@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/mail"
 	"regexp"
 	"slices"
@@ -70,6 +71,15 @@ func parseEstimateUnit(s string) (string, error) {
 		return "", errBadRequest("estimate unit must be 1 to 20 characters")
 	}
 	return s, nil
+}
+
+// parseEstimate accepts what stories.estimate (numeric(6,2)) holds exactly:
+// 0 to 9999.99 with at most two decimals.
+func parseEstimate(v float64) error {
+	if v < 0 || v > 9999.99 || math.Abs(v*100-math.Round(v*100)) > 1e-6 {
+		return errBadRequest("estimate must be a number from 0 to 9999.99 with at most two decimals")
+	}
+	return nil
 }
 
 // text trims s and requires 1 to max characters, or 0 to max when optional.

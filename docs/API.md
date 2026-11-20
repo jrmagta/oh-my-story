@@ -113,12 +113,12 @@ A status is `{id, workflowId, name, category, colour, rank}`; `category` is `tod
 | `POST /maps/{mapId}/releases/{id}/move` | `{afterId?, beforeId?}` → release |
 | `DELETE /maps/{mapId}/releases/{id}` | → `204`. Its stories go to the end of their step's Unscheduled cell |
 | `POST /maps/{mapId}/stories` | `{title, stepId, releaseId?, descriptionMd?, afterId?, beforeId?}` → `201 {story, placement}`. Gets the next workspace key and the workflow's first status |
-| `PATCH /maps/{mapId}/stories/{id}` | `{title?, descriptionMd?, statusId?, assigneeId?}` → story. `assigneeId`: optional null; must be a member |
+| `PATCH /maps/{mapId}/stories/{id}` | `{title?, descriptionMd?, statusId?, assigneeId?, estimate?}` → story. `assigneeId`: optional null; must be a member. `estimate`: 0 to 9999.99 with at most two decimals, in the workspace's `estimateUnit`; null clears it |
 | `POST /maps/{mapId}/stories/{id}/move` | `{stepId, releaseId, version, afterId?, beforeId?}` → `{placement, stale}`. `releaseId` is required, `null` for Unscheduled. `version` is the story version the client showed; the move applies regardless and `stale` says whether someone changed the story since |
 | `DELETE /maps/{mapId}/stories/{id}` | → `204` (soft delete) |
 | `POST /maps/{mapId}/stories/{id}/restore` | `{}` → story. Its step must not be deleted |
 
-Shapes: map `{id, workflowId, name, description, levels}`; node `{id, parentId, level, title, description, colour, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; story `{id, key, title, descriptionMd, statusId, assigneeId, version}`; placement `{id, storyId, stepId, releaseId, rank}`.
+Shapes: map `{id, workflowId, name, description, levels}`; node `{id, parentId, level, title, description, colour, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; story `{id, key, title, descriptionMd, statusId, assigneeId, estimate, version}` with `estimate` a number or null; placement `{id, storyId, stepId, releaseId, rank}`.
 
 Limits: names 1 to 100 characters, titles 1 to 500, descriptions up to 50,000; colours are `#RRGGBB`.
 

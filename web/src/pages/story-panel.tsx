@@ -4,6 +4,7 @@ import Markdown from 'react-markdown'
 import { api } from '../api'
 import { ConfirmButton, InlineText } from '../ui'
 import { HistoryList } from '../map/HistoryList'
+import { amount, formatEstimate } from '../map/estimates'
 import { mapKey, StatusLabel, useMap } from './map'
 
 /** The open story, beside the map. Editors change it in place; everyone else reads. */
@@ -97,6 +98,23 @@ export function StoryPanel({ storyId }: { storyId: string }) {
               </dd>
             </div>
             <div className="row">
+              <dt>Estimate</dt>
+              <dd>
+                {canEdit ? (
+                  <EstimateInput
+                    key={`${story.id}:${story.estimate}`}
+                    value={story.estimate}
+                    unit={ws.estimateUnit}
+                    onSave={(estimate) => patch({ estimate })}
+                  />
+                ) : story.estimate === null ? (
+                  'None'
+                ) : (
+                  amount(story.estimate * 100, ws.estimateUnit)
+                )}
+              </dd>
+            </div>
+            <div className="row">
               <dt>Placed in</dt>
               <dd className="text-right">
                 {release?.name ?? 'Unscheduled'} · {step?.title}
@@ -134,6 +152,37 @@ export function StoryPanel({ storyId }: { storyId: string }) {
         </div>
       )}
     </aside>
+  )
+}
+
+/** Saves on Enter or when focus leaves; empty clears the estimate, Escape puts it back. */
+function EstimateInput({ value, unit, onSave }: { value: number | null; unit: string; onSave: (v: number | null) => void }) {
+  const shown = value === null ? '' : formatEstimate(value)
+  const [draft, setDraft] = useState(shown)
+  const save = () => {
+    const v = draft.trim() === '' ? null : Number(draft)
+    if (v !== value && !Number.isNaN(v)) onSave(v)
+  }
+  return (
+    <span className="flex items-center justify-end gap-2 font-bold">
+      <input
+        type="number"
+        className="input input-sm w-24 text-right font-bold"
+        aria-label={`Estimate (${unit})`}
+        min={0}
+        max={9999.99}
+        step="any"
+        placeholder="None"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+          if (e.key === 'Escape') setDraft(shown)
+        }}
+      />
+      {unit}
+    </span>
   )
 }
 

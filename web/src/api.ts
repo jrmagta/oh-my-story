@@ -114,6 +114,8 @@ export interface Story {
   descriptionMd: string
   statusId: string
   assigneeId: string | null
+  /** In the workspace's estimateUnit; null when not estimated. */
+  estimate: number | null
   version: number
 }
 
@@ -197,6 +199,8 @@ export const api = {
 
   createWorkspace: (b: { name: string; slug: string }) => request<Membership>('POST', '/api/workspaces', b),
   workspace: (slug: string) => request<Membership>('GET', ws(slug)),
+  updateWorkspace: (slug: string, b: { name?: string; keyPrefix?: string; estimateUnit?: string }) =>
+    request<Membership>('PATCH', ws(slug), b),
   members: (slug: string) => request<Member[]>('GET', `${ws(slug)}/members`),
   setRole: (slug: string, userId: string, role: Role) =>
     request<Member>('PATCH', `${ws(slug)}/members/${encodeURIComponent(userId)}`, { role }),
@@ -257,7 +261,7 @@ export const api = {
     slug: string,
     mapId: string,
     id: string,
-    b: { title?: string; descriptionMd?: string; statusId?: string; assigneeId?: string | null },
+    b: { title?: string; descriptionMd?: string; statusId?: string; assigneeId?: string | null; estimate?: number | null },
   ) => request<Story>('PATCH', `${mp(slug, mapId)}/stories/${id}`, b),
   /** version is the story version the client showed; stale says someone changed it since. */
   moveStory: (slug: string, mapId: string, id: string, b: { stepId: string; releaseId: string | null; version: number } & Position) =>
