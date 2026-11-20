@@ -137,12 +137,20 @@ async function centre(locator: ReturnType<Page["locator"]>) {
   return { x: b.x + b.width / 2, y: b.y + b.height / 2, bottom: b.y + b.height }
 }
 
-/** Pick up with Space, take one arrow-key step once the drag has started, drop with Space. */
+/**
+ * Pick up with Space, take one arrow-key step, drop with Space. Each key waits
+ * for the screen to catch up, as a person would: at pickup the item's own
+ * container is already the highlighted target, so the step is done only when
+ * the highlight has moved somewhere else.
+ */
 async function keyboardMove(page: Page, handle: string, key: string) {
+  const target = () => page.locator('.drop').evaluateAll((els) => els.map((e) => e.textContent).join('|'))
   await page.getByRole('button', { name: handle }).focus()
   await page.keyboard.press('Space')
   await expect(page.locator('.drag-ghost')).toBeVisible()
+  const before = await target()
   await page.keyboard.press(key)
+  await expect.poll(target).not.toBe(before)
   await expect(page.locator('.drop')).toHaveCount(1)
   await page.keyboard.press('Space')
   await expect(page.locator('.drag-ghost')).toHaveCount(0)
@@ -167,6 +175,15 @@ test('dragging a story with the pointer to another cell and release', async ({ p
 test('reordering with the keyboard: a story in its cell, a step, a release', async ({ page }) => {
   await signIn(page)
   await page.goto(mapUrl)
+
+  // Picking up and dropping at once moves nothing.
+  await page.getByRole('button', { name: 'Move STORY-2 Send verification email' }).focus()
+  await page.keyboard.press('Space')
+  await expect(page.locator('.drag-ghost')).toBeVisible()
+  await page.keyboard.press('Space')
+  await expect(page.locator('.drag-ghost')).toHaveCount(0)
+  await page.reload()
+  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['STORY-1', 'STORY-2'])
 
   await keyboardMove(page, 'Move STORY-2 Send verification email', 'ArrowUp')
   await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['STORY-2', 'STORY-1'])

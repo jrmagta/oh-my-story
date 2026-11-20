@@ -15,6 +15,16 @@ export type DropTarget =
   | { kind: 'release'; release: Release; label: string }
   | { kind: 'unscheduled'; label: string }
 
+/** Whether the target is the dragged item itself. */
+export function isSelf(target: DropTarget, item: DragItem | undefined): boolean {
+  if (!item) return false
+  return (
+    (item.kind === 'story' && target.kind === 'story' && target.storyId === item.storyId) ||
+    (item.kind === 'node' && target.kind === 'node' && target.node.id === item.node.id) ||
+    (item.kind === 'release' && target.kind === 'release' && target.release.id === item.release.id)
+  )
+}
+
 export function accepts(target: DropTarget, item: DragItem | undefined): boolean {
   if (!item) return false
   switch (item.kind) {

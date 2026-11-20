@@ -17,7 +17,7 @@ import {
   type DragEndEvent,
   type KeyboardCoordinateGetter,
 } from '@dnd-kit/core'
-import { accepts, moveFor, type DragItem, type DropTarget, type Move } from './moves'
+import { accepts, isSelf, moveFor, type DragItem, type DropTarget, type Move } from './moves'
 import type { MapView } from '../api'
 
 const itemOf = (d: unknown) => (d as { item?: DragItem } | undefined)?.item
@@ -139,12 +139,17 @@ export function useDrag(id: string, item: DragItem, disabled: boolean) {
   }
 }
 
-/** A place to drop. It turns itself off for drags it cannot take. */
+/**
+ * A place to drop. It turns itself off for drags it cannot take, except the
+ * dragged item's own place: a drag starts over itself, so picking something up
+ * and dropping it straight away moves nothing.
+ */
 export function useDrop(id: string, target: DropTarget) {
   const { active } = useDndContext()
-  const disabled = !accepts(target, itemOf(active?.data.current))
-  const d = useDroppable({ id: `drop:${id}`, data: { target }, disabled })
-  return { ref: d.setNodeRef, over: d.isOver && !disabled }
+  const item = itemOf(active?.data.current)
+  const ok = accepts(target, item)
+  const d = useDroppable({ id: `drop:${id}`, data: { target }, disabled: !ok && !isSelf(target, item) })
+  return { ref: d.setNodeRef, over: d.isOver && ok }
 }
 
 /** One ref callback that sets several refs, for an element that is dragged and dropped on. */
