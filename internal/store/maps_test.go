@@ -82,6 +82,18 @@ func (f *fixture) story(mapID, stepID uuid.UUID, release *uuid.UUID, title strin
 	return st
 }
 
+func (f *fixture) storyByTitle(mapID uuid.UUID, title string) store.Story {
+	f.t.Helper()
+	v := must[store.MapView](f.t)(f.s.MapView(ctx, f.ws, mapID))
+	for _, s := range v.Stories {
+		if s.Title == title {
+			return s
+		}
+	}
+	f.t.Fatalf("no story %q", title)
+	return store.Story{}
+}
+
 // cell lists story titles in a cell, in rank order.
 func (f *fixture) cell(mapID, stepID uuid.UUID, release *uuid.UUID) []string {
 	f.t.Helper()
@@ -262,7 +274,8 @@ func TestEventsRecordChangedFields(t *testing.T) {
 	if len(evs) != 1 {
 		t.Fatalf("update events = %+v", evs)
 	}
-	if !reflect.DeepEqual(evs[0].Before, map[string]any{"title": "Old"}) || !reflect.DeepEqual(evs[0].After, map[string]any{"title": "New"}) {
+	if !reflect.DeepEqual(evs[0].Before, map[string]any{"title": "Old", "version": 0.0}) ||
+		!reflect.DeepEqual(evs[0].After, map[string]any{"title": "New", "version": 1.0}) {
 		t.Errorf("update event before=%v after=%v", evs[0].Before, evs[0].After)
 	}
 
@@ -302,6 +315,22 @@ func TestMoveStory(t *testing.T) {
 
 	_, _, err = f.s.MoveStory(ctx, f.user, f.ws, m.ID, s1.ID, store.StoryMove{StepID: a.ID, Position: store.Position{After: &s3.ID}, SeenVersion: 0})
 	wantInvalid(t, err, "anchor in another cell")
+
+	// Moving the last story of a cell to the end again can reuse its rank; the
+	// event still records the story's new version.
+	start := f.lastEventID()
+	last := f.cell(m.ID, a.ID, nil)
+	if last[len(last)-1] != "two" {
+		t.Fatalf("cell a = %v", last)
+	}
+	two := f.storyByTitle(m.ID, "two")
+	if _, _, err := f.s.MoveStory(ctx, f.user, f.ws, m.ID, two.ID, store.StoryMove{StepID: a.ID, SeenVersion: two.Version}); err != nil {
+		t.Fatal(err)
+	}
+	evs := f.eventsAfter(start)
+	if len(evs) != 1 || evs[0].After["storyVersion"] != float64(two.Version+1) {
+		t.Errorf("move to the same place: %+v", evs)
+	}
 	_, _, err = f.s.MoveStory(ctx, f.user, f.ws, m.ID, s1.ID, store.StoryMove{StepID: m.ID})
 	wantInvalid(t, err, "moving onto a non-step")
 }
@@ -411,7 +440,7 @@ func TestOtherWorkspaceIsNotFound(t *testing.T) {
 	}
 }
 
-// Event payloads use the API's JSON field names.
+// Event payloads use the API's JSON field names, and carry the version.
 func TestEventFieldNames(t *testing.T) {
 	f := newFixture(t)
 	m, _, step, _ := f.steps()
@@ -419,12 +448,9 @@ func TestEventFieldNames(t *testing.T) {
 	f.story(m.ID, step.ID, nil, "s")
 	after := f.eventsAfter(start)[0].After
 	b, _ := json.Marshal(after)
-	for _, k := range []string{"id", "key", "title", "descriptionMd", "statusId", "assigneeId"} {
+	for _, k := range []string{"id", "key", "title", "descriptionMd", "statusId", "assigneeId", "version"} {
 		if _, ok := after[k]; !ok {
 			t.Errorf("story create event lacks %q: %s", k, b)
 		}
-	}
-	if _, ok := after["version"]; ok {
-		t.Errorf("events should not carry version: %s", b)
 	}
 }

@@ -100,22 +100,29 @@ func fields(v any) map[string]any {
 	if err := json.Unmarshal(b, &m); err != nil {
 		panic(err)
 	}
-	delete(m, "version")
 	return m
 }
 
 // diff returns the fields that differ between two values of the same type.
-// Both maps are nil when nothing changed.
+// Both maps are nil when nothing changed. A version bump alone is not a
+// change, but a real change carries the new version, so a live client always
+// knows the version it is showing.
 func diff(before, after any) (map[string]any, map[string]any) {
 	b, a := fields(before), fields(after)
 	var db, da map[string]any
 	for k, av := range a {
+		if k == "version" {
+			continue
+		}
 		if bv := b[k]; !reflect.DeepEqual(bv, av) {
 			if db == nil {
 				db, da = map[string]any{}, map[string]any{}
 			}
 			db[k], da[k] = bv, av
 		}
+	}
+	if v, ok := a["version"]; ok && da != nil {
+		db["version"], da["version"] = b["version"], v
 	}
 	return db, da
 }

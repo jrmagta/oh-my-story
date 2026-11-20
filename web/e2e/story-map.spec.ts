@@ -206,6 +206,9 @@ test('reordering with the keyboard: a story in its cell, a step, a release', asy
 
 test('a move that crosses another edit says so, and one that fails is undone', async ({ page }) => {
   await signIn(page)
+  // Hold this page's live socket open but silent, so it keeps showing the map
+  // as it was while someone else changes it.
+  await page.routeWebSocket(/\/live\?/, () => {})
   await page.goto(mapUrl)
   await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['STORY-2', 'STORY-1'])
 
@@ -255,4 +258,42 @@ test('a viewer sees the map without edit controls', async ({ page, browser }) =>
   await expect(panel(v).getByRole('button', { name: 'Edit' })).toHaveCount(0)
   await expect(panel(v).getByRole('heading', { name: 'Notes' })).toBeVisible()
   await ctx.close()
+})
+
+test('two people on one map see each other and each other’s edits live', async ({ page, browser }) => {
+  await signIn(page)
+  await page.goto(mapUrl)
+  await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
+
+  const ctx = await browser.newContext()
+  const v = await ctx.newPage()
+  await v.goto('/login')
+  await v.getByLabel('Email').fill(viewer.email)
+  await v.getByLabel('Password').fill(viewer.password)
+  await v.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await expect(v).not.toHaveURL(/\/login/)
+  await v.goto(mapUrl)
+
+  const present = (p: Page) => p.getByLabel('On this map now')
+  await expect(present(page)).toContainText(viewer.name)
+  await expect(present(page)).toContainText('Olive Owner')
+  await expect(present(v)).toContainText('Olive Owner')
+
+  // The owner adds a story and renames a step; the viewer sees both without reloading.
+  await page.getByRole('button', { name: 'Add story to Check inbox / MVP' }).click()
+  await typeEach(page, 'New story in Check inbox / MVP', ['Resend the link'])
+  await expect(v.getByRole('group', { name: 'Stories in Check inbox / MVP' })).toContainText('Resend the link')
+  await page.getByRole('button', { name: 'Rename step Check inbox' }).click()
+  await page.getByRole('textbox', { name: 'New name for step Check inbox' }).fill('Open the email')
+  await page.keyboard.press('Enter')
+  await expect(v.getByRole('group', { name: 'Stories in Open the email / MVP' })).toContainText('Resend the link')
+
+  // A move shows up too: up into the Later release.
+  await keyboardMove(page, 'Move STORY-3 Resend the link', 'ArrowUp')
+  await expect(page.getByRole('group', { name: 'Stories in Open the email / Later' })).toContainText('Resend the link')
+  await expect(v.getByRole('group', { name: 'Stories in Open the email / Later' })).toContainText('Resend the link')
+  await expect(v.getByRole('group', { name: 'Stories in Open the email / MVP' })).not.toContainText('Resend the link')
+
+  await ctx.close()
+  await expect(present(page)).not.toContainText(viewer.name)
 })

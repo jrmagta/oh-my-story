@@ -3,9 +3,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { api, ApiError, atLeast, type Category, type Level, type MapNode, type MapView, type Membership, type Release, type Status } from '../api'
 import { MapDnd, refs, useDrag, useDrop } from '../map/dnd'
+import { useLiveMap, type LiveState, type PresentUser } from '../map/live'
 import { backbone, bands, cellKey, cells, type Band, type Card, type Column } from '../map/layout'
 import { applyMove, type Move } from '../map/moves'
-import { ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toasts, type ToastMessage } from '../ui'
+import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toasts, type ToastMessage } from '../ui'
 import { PageBand } from './app'
 import { StoryPanel } from './story-panel'
 
@@ -42,6 +43,7 @@ export function MapPage() {
   const [search, setSearch] = useSearchParams()
   const key = useMemo(() => mapKey(ws.slug, mapId), [ws.slug, mapId])
   const query = useQuery({ queryKey: key, queryFn: () => api.map(ws.slug, mapId), retry: false })
+  const live = useLiveMap(ws.slug, mapId, key)
 
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const nextToast = useRef(1)
@@ -171,7 +173,7 @@ export function MapPage() {
   const panelOpen = !!selectedStory && ctx.view.stories.some((s) => s.id === selectedStory)
   return (
     <Ctx.Provider value={ctx}>
-      <MapHeader panelOpen={panelOpen} />
+      <MapHeader panelOpen={panelOpen} users={live.users} state={live.state} />
       <div className={`map-scroll ${panelOpen ? 'with-panel' : ''}`}>
         <MapDnd view={ctx.view} onMove={move}>
           <MapGrid />
@@ -194,7 +196,28 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`
 }
 
-function MapHeader({ panelOpen }: { panelOpen: boolean }) {
+const liveLabel: Record<LiveState, string> = { connecting: 'Connecting…', live: 'Live', offline: 'Offline, reconnecting…' }
+
+/** Who is on the map now, and whether this page is receiving their changes. */
+function Presence({ users, state }: { users: PresentUser[]; state: LiveState }) {
+  return (
+    <div className="presence" aria-label="On this map now">
+      <span className={`live-dot ${state}`} role="status">
+        {liveLabel[state]}
+      </span>
+      <ul className="flex -space-x-1">
+        {users.map((u) => (
+          <li key={u.id} title={u.name}>
+            <Avatar id={u.id} name={u.name} size={30} />
+            <span className="sr-only">{u.name}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function MapHeader({ panelOpen, users, state }: { panelOpen: boolean; users: PresentUser[]; state: LiveState }) {
   const { ws, view, canEdit, statuses, run } = useMap()
   const count = (level: Level) => view.nodes.filter((n) => n.level === level).length
   const byCategory = new Map<Category, number>()
@@ -227,6 +250,7 @@ function MapHeader({ panelOpen }: { panelOpen: boolean }) {
         </h1>
         <p className="text-muted mt-1.5 text-sm font-semibold">{facts.join(' · ')}</p>
       </div>
+      <Presence users={users} state={state} />
       <div className="kpis" aria-label="Stories by status">
         {categoryOrder.map((c) => (
           <div className="kpi" key={c.category}>

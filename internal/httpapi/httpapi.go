@@ -15,6 +15,7 @@ import (
 
 	"github.com/jrmagta/oh-my-story/internal/auth"
 	"github.com/jrmagta/oh-my-story/internal/config"
+	"github.com/jrmagta/oh-my-story/internal/live"
 	"github.com/jrmagta/oh-my-story/internal/mail"
 	"github.com/jrmagta/oh-my-story/internal/role"
 	"github.com/jrmagta/oh-my-story/internal/store"
@@ -33,12 +34,13 @@ type Server struct {
 	store *store.Store
 	mail  mail.Sender
 	oidc  *OIDC // nil when SSO is off
+	hub   *live.Hub
 }
 
-// New returns the server's handler. ui serves the web app for every other GET;
-// nil leaves those paths 404 (the API tests run without it).
-func New(cfg config.Config, pool *pgxpool.Pool, sender mail.Sender, oidc *OIDC, ui http.Handler) http.Handler {
-	s := &Server{cfg: cfg, pool: pool, store: store.New(pool), mail: sender, oidc: oidc}
+// New returns the server's handler. hub must be started. ui serves the web
+// app for every other GET; nil leaves those paths 404 (the API tests run without it).
+func New(cfg config.Config, pool *pgxpool.Pool, sender mail.Sender, oidc *OIDC, hub *live.Hub, ui http.Handler) http.Handler {
+	s := &Server{cfg: cfg, pool: pool, store: store.New(pool), mail: sender, oidc: oidc, hub: hub}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", s.healthz)
