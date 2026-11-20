@@ -105,6 +105,12 @@
   --oms-field-line: #1B1B1D;
 }
 
+/* Corner rounding for map cards, cells and bands. */
+:root {
+  --oms-radius: 10px;
+  --oms-radius-sm: 8px;
+}
+
 @theme inline {
   --font-sans: "Archivo", system-ui, sans-serif;
   --color-brand-red: #BA3636;
@@ -343,6 +349,7 @@
     width: max-content;
   }
   .map-lbl {
+    padding-right: 4px;
     @apply text-muted;
     position: sticky;
     left: 0;
@@ -359,16 +366,59 @@
     color: var(--oms-obj-fg);
     padding: 10px 14px;
     font-size: 17px;
+    border-radius: var(--oms-radius);
   }
   .map-act {
     border: 2px solid var(--color-base-content);
     padding: 8px 12px;
+    border-radius: var(--oms-radius);
   }
   .map-step {
     border-bottom: 2px solid var(--color-base-content);
     padding: 8px 2px;
     font-weight: 700;
   }
+  /* A colour chosen for a backbone card fills it; text turns black or white to suit. */
+  .map-obj.coloured,
+  .map-act.coloured,
+  .map-step.coloured {
+    background: var(--node-bg);
+    color: var(--node-fg);
+    border: 2px solid var(--node-bg);
+    border-radius: var(--oms-radius);
+  }
+  .map-step.coloured { padding: 8px 10px; }
+  .coloured .node-total { color: inherit; opacity: 0.75; }
+  .colour-pop {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 20;
+    display: grid;
+    grid-template-columns: repeat(3, 28px);
+    gap: 6px;
+    padding: 8px;
+    background: var(--color-base-100);
+    color: var(--color-base-content);
+    border: 2px solid var(--color-base-content);
+    border-radius: var(--oms-radius);
+    text-transform: none;
+  }
+  .swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--color-base-content);
+  }
+  .swatch[aria-pressed="true"] { outline: 3px solid var(--color-brand-amber); outline-offset: 1px; }
+  .swatch.custom {
+    position: relative;
+    overflow: hidden;
+    background: conic-gradient(#BA3636, #FCB131, #549334, #3B82C4, #7E57C2, #BA3636);
+    cursor: pointer;
+  }
+  .swatch.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .swatch.custom:focus-within { outline: 3px solid var(--color-brand-amber); outline-offset: 1px; }
   .node-head {
     position: relative;
     display: flex;
@@ -412,6 +462,7 @@
   .add-slot {
     @apply text-muted;
     border: 2px dashed var(--oms-line);
+    border-radius: var(--oms-radius);
     padding: 8px 10px;
     font-weight: 800;
     text-transform: uppercase;
@@ -426,6 +477,7 @@
 
   /* Release bands: green first, amber alternate, ink for Unscheduled. */
   .band-row {
+    border-radius: var(--oms-radius);
     grid-column: 1 / -1;
     display: flex;
     align-items: center;
@@ -471,6 +523,7 @@
   }
 
   .map-cell {
+    border-radius: var(--oms-radius);
     min-height: 68px;
     background: var(--oms-cell);
     padding: 6px;
@@ -479,6 +532,7 @@
     gap: 6px;
   }
   .story-card {
+    border-radius: var(--oms-radius-sm);
     background: var(--oms-card);
     border: 1px solid var(--oms-card-line);
     font-size: 13px;
@@ -532,6 +586,7 @@
     font-size: 13px;
     max-width: 240px;
     border: 2px solid #000;
+    border-radius: var(--oms-radius-sm);
     cursor: grabbing;
   }
   .story-card .meta {

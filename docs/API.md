@@ -104,7 +104,7 @@ A status is `{id, workflowId, name, category, colour, rank}`; `category` is `tod
 | `PATCH /maps/{mapId}` | `{name?, description?, levels?}` → map. `levels` cannot change once the map has nodes |
 | `DELETE /maps/{mapId}` | → `204` (soft delete) |
 | `POST /maps/{mapId}/nodes` | `{level, title, parentId?, description?, colour?, afterId?, beforeId?}` → `201` node |
-| `PATCH /maps/{mapId}/nodes/{id}` | `{title?, description?, colour?}` → node |
+| `PATCH /maps/{mapId}/nodes/{id}` | `{title?, description?, colour?}` → node. `colour`: `#RRGGBB`; null clears it, giving the level's default look |
 | `POST /maps/{mapId}/nodes/{id}/move` | `{parentId, afterId?, beforeId?}` → node. `parentId` is required, `null` for the top level; a node keeps its level |
 | `DELETE /maps/{mapId}/nodes/{id}` | → `204`. Deletes the subtree and the stories on its steps |
 | `POST /maps/{mapId}/nodes/{id}/restore` | `{}` → node. Restores what that delete removed; the parent must not be deleted |

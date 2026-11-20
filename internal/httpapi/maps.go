@@ -308,12 +308,16 @@ func (s *Server) createNode(q mapRequest) (int, any, error) {
 	return http.StatusCreated, out, err
 }
 
+// patchNode clears the colour when colour is null.
 func (s *Server) patchNode(q mapRequest) (int, any, error) {
-	var in struct{ Title, Description, Colour *string }
+	var in struct {
+		Title, Description *string
+		Colour             optional[string]
+	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
 	}
-	var p store.NodePatch
+	p := store.NodePatch{SetColour: in.Colour.Set}
 	var err error
 	if p.Title, err = textPtr("title", in.Title, maxTitle, false); err != nil {
 		return 0, nil, err
@@ -321,7 +325,7 @@ func (s *Server) patchNode(q mapRequest) (int, any, error) {
 	if p.Description, err = textPtr("description", in.Description, maxDescription, true); err != nil {
 		return 0, nil, err
 	}
-	if p.Colour, err = parseColour(in.Colour); err != nil {
+	if p.Colour, err = parseColour(in.Colour.Value); err != nil {
 		return 0, nil, err
 	}
 	out, err := s.store.UpdateNode(q.r.Context(), q.user, q.ws, q.mapID, q.id, p)

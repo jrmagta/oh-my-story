@@ -177,7 +177,9 @@ func (s *Store) CreateNode(ctx context.Context, actor, workspaceID, mapID uuid.U
 }
 
 type NodePatch struct {
-	Title, Description, Colour *string
+	Title, Description *string
+	SetColour          bool    // Colour is applied only when set; nil clears it
+	Colour             *string // #RRGGBB
 }
 
 func (s *Store) UpdateNode(ctx context.Context, actor, workspaceID, mapID, nodeID uuid.UUID, p NodePatch) (Node, error) {
@@ -189,8 +191,8 @@ func (s *Store) UpdateNode(ctx context.Context, actor, workspaceID, mapID, nodeI
 		}
 		if n, err = scanNode(tx.QueryRow(ctx,
 			`UPDATE nodes SET title = COALESCE($2, title), description = COALESCE($3, description),
-			   colour = COALESCE($4, colour), version = version + 1, updated_at = now()
-			 WHERE id = $1 RETURNING `+nodeCols, nodeID, p.Title, p.Description, p.Colour)); err != nil {
+			   colour = CASE WHEN $4 THEN $5 ELSE colour END, version = version + 1, updated_at = now()
+			 WHERE id = $1 RETURNING `+nodeCols, nodeID, p.Title, p.Description, p.SetColour, p.Colour)); err != nil {
 			return nil, err
 		}
 		if c, ok := updated(mapID, "node", nodeID, "update", before, n); ok {
