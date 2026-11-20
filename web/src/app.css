@@ -289,6 +289,42 @@
     outline-width: 4px;
   }
   .ring-disc.todo { color: #fff; }
+  .ring-disc.done { --c: var(--color-brand-green); color: #fff; }
+  .ring-disc.doing { --c: var(--color-brand-amber); color: #000; }
+  .ring-disc.blocked { --c: var(--color-brand-red); color: #fff; }
+  /* A circle for short estimates; longer ones (12.5) stretch into a pill. */
+  .ring-disc.est {
+    min-width: 24px;
+    height: 24px;
+    padding: 0 5px;
+    border-radius: 999px;
+    font-size: 11px;
+    margin-right: 2px;
+  }
+
+  /* Estimate roll-ups. */
+  .node-total {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: none;
+    color: var(--oms-muted);
+  }
+  .map-obj .node-total { color: inherit; opacity: 0.7; }
+  .meter {
+    display: flex;
+    width: 120px;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.25);
+  }
+  .meter b { display: block; height: 100%; }
+  .meter .done { background: #fff; }
+  .meter .doing { background: var(--color-brand-amber); }
+  .meter .blocked { background: var(--color-brand-red); }
+  .band-row.amber .meter .doing { background: #000; }
+  .band-row:not(.green) .meter .done { background: var(--color-brand-green); }
+  .band-row:not(.green):not(.amber) .meter { background: color-mix(in srgb, currentColor 25%, transparent); }
 
   .map-scroll {
     overflow: auto;

@@ -15,6 +15,7 @@ type Story struct {
 	DescriptionMD string     `json:"descriptionMd"`
 	StatusID      uuid.UUID  `json:"statusId"`
 	AssigneeID    *uuid.UUID `json:"assigneeId"`
+	Estimate      *float64   `json:"estimate"`
 	Version       int        `json:"version"`
 }
 
@@ -28,11 +29,11 @@ type Placement struct {
 	Rank      string     `json:"rank"`
 }
 
-const storyCols = `s.id, s.key, s.title, s.description_md, s.status_id, s.assignee_id, s.version`
+const storyCols = `s.id, s.key, s.title, s.description_md, s.status_id, s.assignee_id, s.estimate, s.version`
 
 func scanStory(row pgx.Row) (Story, error) {
 	var st Story
-	err := row.Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Version)
+	err := row.Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.Version)
 	return st, notFound(err)
 }
 
@@ -72,7 +73,7 @@ func mapStory(ctx context.Context, tx pgx.Tx, mapID, storyID uuid.UUID) (Story, 
 		`SELECT `+storyCols+`, p.id, p.story_id, p.step_id, p.release_id, p.rank
 		 FROM stories s JOIN placements p ON p.story_id = s.id
 		 WHERE s.id = $1 AND p.map_id = $2 AND s.deleted_at IS NULL FOR UPDATE OF s`, storyID, mapID).
-		Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Version,
+		Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.Version,
 			&p.ID, &p.StoryID, &p.StepID, &p.ReleaseID, &p.Rank)
 	return st, p, notFound(err)
 }
@@ -130,6 +131,8 @@ type StoryPatch struct {
 	StatusID             *uuid.UUID // a status of the map's workflow
 	SetAssignee          bool       // AssigneeID is applied only when set; nil unassigns
 	AssigneeID           *uuid.UUID // a member of the workspace
+	SetEstimate          bool       // Estimate is applied only when set; nil clears it
+	Estimate             *float64   // 0 to 9999.99, at most two decimals
 }
 
 func (s *Store) UpdateStory(ctx context.Context, actor, workspaceID, mapID, storyID uuid.UUID, p StoryPatch) (Story, error) {
@@ -159,9 +162,10 @@ func (s *Store) UpdateStory(ctx context.Context, actor, workspaceID, mapID, stor
 		if st, err = scanStory(tx.QueryRow(ctx,
 			`UPDATE stories s SET title = COALESCE($2, title), description_md = COALESCE($3, description_md),
 			   status_id = COALESCE($4, status_id), assignee_id = CASE WHEN $5 THEN $6 ELSE assignee_id END,
+			   estimate = CASE WHEN $7 THEN $8 ELSE estimate END,
 			   version = version + 1, updated_at = now()
 			 WHERE id = $1 RETURNING `+storyCols,
-			storyID, p.Title, p.DescriptionMD, p.StatusID, p.SetAssignee, p.AssigneeID)); err != nil {
+			storyID, p.Title, p.DescriptionMD, p.StatusID, p.SetAssignee, p.AssigneeID, p.SetEstimate, p.Estimate)); err != nil {
 			return nil, err
 		}
 		if c, ok := updated(mapID, "story", storyID, "update", before, st); ok {

@@ -448,18 +448,26 @@ func (s *Server) createStory(q mapRequest) (int, any, error) {
 	return http.StatusCreated, storyAndPlacement{st, p}, err
 }
 
-// patchStory unassigns when assigneeId is null.
+// patchStory unassigns when assigneeId is null and clears the estimate when
+// estimate is null.
 func (s *Server) patchStory(q mapRequest) (int, any, error) {
 	var in struct {
 		Title, DescriptionMD *string
 		StatusID             *uuid.UUID
 		AssigneeID           optional[uuid.UUID]
+		Estimate             optional[float64]
 	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
 	}
-	p := store.StoryPatch{StatusID: in.StatusID, SetAssignee: in.AssigneeID.Set, AssigneeID: in.AssigneeID.Value}
+	p := store.StoryPatch{StatusID: in.StatusID, SetAssignee: in.AssigneeID.Set, AssigneeID: in.AssigneeID.Value,
+		SetEstimate: in.Estimate.Set, Estimate: in.Estimate.Value}
 	var err error
+	if p.Estimate != nil {
+		if err := parseEstimate(*p.Estimate); err != nil {
+			return 0, nil, err
+		}
+	}
 	if p.Title, err = textPtr("title", in.Title, maxTitle, false); err != nil {
 		return 0, nil, err
 	}

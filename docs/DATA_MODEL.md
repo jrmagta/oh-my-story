@@ -202,7 +202,7 @@ saved_views (
 )
 ```
 
-Estimate roll-ups are computed, not stored: a recursive CTE over `nodes` summing `stories.estimate` through `placements`, grouped by release. Revisit with a materialised view only if it measures slow.
+Estimate roll-ups are computed, not stored. The browser sums them from the map payload (`web/src/map/estimates.ts`), which events keep current. A server-side roll-up (a recursive CTE over `nodes` through `placements`) can come with the public API if a consumer needs it.
 
 ### Sharing (M3)
 

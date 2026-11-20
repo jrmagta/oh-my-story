@@ -139,9 +139,9 @@ async function centre(locator: ReturnType<Page["locator"]>) {
 
 /**
  * Pick up with Space, take one arrow-key step, drop with Space. Each key waits
- * for the screen to catch up, as a person would: at pickup the item's own
- * container is already the highlighted target, so the step is done only when
- * the highlight has moved somewhere else.
+ * for the screen to catch up, as a person would: the step is done only when
+ * the highlighted target differs from the one at pickup (the item's own place,
+ * or none until dnd-kit has measured the drag).
  */
 async function keyboardMove(page: Page, handle: string, key: string) {
   const target = () => page.locator('.drop').evaluateAll((els) => els.map((e) => e.textContent).join('|'))
@@ -150,7 +150,14 @@ async function keyboardMove(page: Page, handle: string, key: string) {
   await expect(page.locator('.drag-ghost')).toBeVisible()
   const before = await target()
   await page.keyboard.press(key)
-  await expect.poll(target).not.toBe(before)
+  try {
+    await expect.poll(target, { timeout: 2000 }).not.toBe(before)
+  } catch {
+    // dnd-kit measures the drag just after pickup, and ignores an arrow key
+    // pressed before that (seen on slow CI runners). Nothing moved, so press again.
+    await page.keyboard.press(key)
+    await expect.poll(target).not.toBe(before)
+  }
   await expect(page.locator('.drop')).toHaveCount(1)
   await page.keyboard.press('Space')
   await expect(page.locator('.drag-ghost')).toHaveCount(0)

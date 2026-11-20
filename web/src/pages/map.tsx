@@ -6,6 +6,7 @@ import { MapDnd, refs, useDrag, useDrop } from '../map/dnd'
 import { HistoryList } from '../map/HistoryList'
 import { useLiveMap, type LiveState, type PresentUser } from '../map/live'
 import { backbone, bands, cellKey, cells, type Band, type Card, type Column } from '../map/layout'
+import { amount, formatEstimate, totals, type Total, type Totals } from '../map/estimates'
 import { applyMove, type Move } from '../map/moves'
 import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toasts, type ToastMessage } from '../ui'
 import { PageBand } from './app'
@@ -18,6 +19,8 @@ interface MapCtx {
   view: MapView
   canEdit: boolean
   statuses: Map<string, Status>
+  /** Story counts and estimate sums for the map, each node and each release. */
+  totals: Totals
   /** Runs a write, then reloads the map. undo, when given, is offered in a notice. */
   run: (write: () => Promise<unknown>, opts?: { done?: string; undo?: () => Promise<unknown> }) => Promise<boolean>
   selectedStory: string | null
@@ -137,24 +140,23 @@ export function MapPage() {
     [setSearch],
   )
 
-  const ctx = useMemo<MapCtx | null>(
-    () =>
-      query.data
-        ? {
-            ws,
-            view: query.data,
-            canEdit: atLeast(ws.role, 'editor'),
-            statuses: new Map(query.data.workflow.statuses.map((s) => [s.id, s])),
-            run,
-            selectedStory,
-            openStory,
-            move,
-            adding,
-            setAdding,
-          }
-        : null,
-    [ws, query.data, run, selectedStory, openStory, move, adding],
-  )
+  const ctx = useMemo<MapCtx | null>(() => {
+    if (!query.data) return null
+    const statuses = new Map(query.data.workflow.statuses.map((s) => [s.id, s]))
+    return {
+      ws,
+      view: query.data,
+      canEdit: atLeast(ws.role, 'editor'),
+      statuses,
+      totals: totals(query.data, statuses),
+      run,
+      selectedStory,
+      openStory,
+      move,
+      adding,
+      setAdding,
+    }
+  }, [ws, query.data, run, selectedStory, openStory, move, adding])
 
   if (query.isPending) return <Loading />
   if (!ctx) {
@@ -214,6 +216,12 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`
 }
 
+/** "8 points" plus how many stories lack an estimate; empty when nothing is estimated yet. */
+function estimated(t: Total, unit: string): string {
+  if (t.stories === t.unestimated) return ''
+  return t.unestimated ? `${amount(t.hundredths, unit)} (${t.unestimated} unestimated)` : amount(t.hundredths, unit)
+}
+
 const liveLabel: Record<LiveState, string> = { connecting: 'Connecting…', live: 'Live', offline: 'Offline, reconnecting…' }
 
 /** Who is on the map now, and whether this page is receiving their changes. */
@@ -243,20 +251,16 @@ function MapHeader(props: {
   toggleActivity: () => void
 }) {
   const { panelOpen, users, state } = props
-  const { ws, view, canEdit, statuses, run } = useMap()
+  const { ws, view, canEdit, totals, run } = useMap()
   const count = (level: Level) => view.nodes.filter((n) => n.level === level).length
-  const byCategory = new Map<Category, number>()
-  for (const s of view.stories) {
-    const c = statuses.get(s.statusId)?.category ?? 'todo'
-    byCategory.set(c, (byCategory.get(c) ?? 0) + 1)
-  }
   const facts = [
     `${view.map.levels}-level map`,
     ...(view.map.levels === 4 ? [plural(count('objective'), 'objective')] : []),
     plural(count('activity'), 'activity').replace('activitys', 'activities'),
     plural(count('step'), 'step'),
     plural(view.stories.length, 'story').replace('storys', 'stories'),
-  ]
+    estimated(totals.map, ws.estimateUnit),
+  ].filter(Boolean)
   return (
     <section className={`mhead ${panelOpen ? 'with-panel' : ''}`}>
       <div className="min-w-0">
@@ -284,7 +288,7 @@ function MapHeader(props: {
       <div className="kpis" aria-label="Stories by status">
         {categoryOrder.map((c) => (
           <div className="kpi" key={c.category}>
-            <span className={`ring-disc ${c.ring}`}>{byCategory.get(c.category) ?? 0}</span>
+            <span className={`ring-disc ${c.ring}`}>{totals.map.byCategory[c.category]}</span>
             {c.label}
           </div>
         ))}
@@ -391,8 +395,10 @@ function MapGrid() {
  * column below offers the first one.
  */
 function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: boolean }) {
-  const { ws, view, canEdit, run } = useMap()
+  const { ws, view, canEdit, totals, run } = useMap()
   const label = `${node.level} ${node.title}`
+  const total = totals.nodes.get(node.id)
+  const sum = total && estimated(total, ws.estimateUnit)
   const hasChildren = view.nodes.some((n) => n.parentId === node.id)
   const drag = useDrag(`node:${node.id}`, { kind: 'node', node, label }, !canEdit)
   const drop = useDrop(`node:${node.id}`, { kind: 'node', node, label })
@@ -402,13 +408,20 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
       className={`node-head ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''}`}
       {...drag.pointer}
     >
-      <InlineText
-        value={node.title}
-        label={label}
-        editable={canEdit}
-        className={bold ? 'up text-[15px]' : undefined}
-        onSave={(title) => run(() => api.patchNode(ws.slug, view.map.id, node.id, { title }))}
-      />
+      <div>
+        <InlineText
+          value={node.title}
+          label={label}
+          editable={canEdit}
+          className={bold ? 'up text-[15px]' : undefined}
+          onSave={(title) => run(() => api.patchNode(ws.slug, view.map.id, node.id, { title }))}
+        />
+        {sum && (
+          <span className="node-total" aria-label={`Total for ${label}: ${sum}`}>
+            {sum}
+          </span>
+        )}
+      </div>
       {canEdit && (
         <span className="node-tools">
           {child && hasChildren && <AddNodeIcon level={child} parent={node} />}
@@ -497,14 +510,13 @@ function Slot(props: { style: CSSProperties; level: Level; parent: MapNode; chil
 }
 
 function BandRows(props: { band: Band; index: number; columns: Column[]; byCell: Map<string, Card[]>; isLast: boolean }) {
-  const { canEdit } = useMap()
+  const { canEdit, totals } = useMap()
   const { band, columns, byCell } = props
-  const stories = columns.reduce((n, c) => n + (c.step ? (byCell.get(cellKey(c.step.id, band.release?.id ?? null))?.length ?? 0) : 0), 0)
   const name = band.release?.name ?? 'Unscheduled'
   return (
     <>
       {props.isLast && canEdit && <AddRelease />}
-      <BandHeader release={band.release} index={props.index} stories={stories} />
+      <BandHeader release={band.release} index={props.index} total={totals.releases.get(band.release?.id ?? '')} />
       <div className="map-lbl" style={{ gridColumn: 1 }} />
       {columns.map((c, i) =>
         c.step ? (
@@ -528,7 +540,7 @@ function formatDate(d: string): string {
   return new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function BandHeader({ release, index, stories }: { release: Release | null; index: number; stories: number }) {
+function BandHeader({ release, index, total }: { release: Release | null; index: number; total: Total | undefined }) {
   const { ws, view, canEdit, run } = useMap()
   const tone = release ? (index % 2 === 0 ? 'green' : 'amber') : ''
   const name = release?.name ?? 'Unscheduled'
@@ -564,7 +576,8 @@ function BandHeader({ release, index, stories }: { release: Release | null; inde
       </span>
       {release && <TargetDate release={release} />}
       <span className="r">
-        {plural(stories, 'story').replace('storys', 'stories')}
+        <span>{[plural(total?.stories ?? 0, 'story').replace('storys', 'stories'), total && estimated(total, ws.estimateUnit)].filter(Boolean).join(' · ')}</span>
+        {total && <Meter total={total} />}
         {release && canEdit && (
           <button type="button" className="btn btn-xs btn-ol drag-handle" title="Move" {...drag.handle}>
             ⠿
@@ -586,6 +599,23 @@ function BandHeader({ release, index, stories }: { release: Release | null; inde
         )}
       </span>
     </div>
+  )
+}
+
+/** Share of the release's stories done, in progress and blocked. */
+function Meter({ total }: { total: Total }) {
+  const pct = (n: number) => `${(100 * n) / total.stories}%`
+  const done = total.byCategory.done
+  return (
+    <span
+      className="meter"
+      role="img"
+      aria-label={`${done} of ${total.stories} done, ${total.byCategory.doing} in progress, ${total.byCategory.blocked} blocked`}
+    >
+      <b className="done" style={{ width: pct(done) }} />
+      <b className="doing" style={{ width: pct(total.byCategory.doing) }} />
+      <b className="blocked" style={{ width: pct(total.byCategory.blocked) }} />
+    </span>
   )
 }
 
@@ -693,8 +723,9 @@ export function StatusLabel({ status }: { status: Status | undefined }) {
 }
 
 function StoryCard({ card }: { card: Card }) {
-  const { canEdit, statuses, selectedStory, openStory } = useMap()
+  const { ws, canEdit, statuses, selectedStory, openStory } = useMap()
   const { story, placement } = card
+  const status = statuses.get(story.statusId)
   const selected = selectedStory === story.id
   const label = `${story.key} ${story.title}`
   const drag = useDrag(`story:${story.id}`, { kind: 'story', storyId: story.id, placement, label }, !canEdit)
@@ -714,8 +745,13 @@ function StoryCard({ card }: { card: Card }) {
       >
         <span>{story.title}</span>
         <span className="meta">
-          <StatusLabel status={statuses.get(story.statusId)} />
+          <StatusLabel status={status} />
           <span className="text-muted ml-auto text-[11px] font-extrabold">{story.key}</span>
+          {story.estimate !== null && (
+            <span className={`ring-disc est ${status?.category ?? 'todo'}`} title={amount(story.estimate * 100, ws.estimateUnit)}>
+              {formatEstimate(story.estimate)}
+            </span>
+          )}
         </span>
       </button>
       {canEdit && (

@@ -71,6 +71,9 @@ export function AppShell() {
             <NavLink to={`/w/${current.slug}/workflows`} className="navlink">
               Workflows
             </NavLink>
+            <NavLink to={`/w/${current.slug}/settings`} className="navlink">
+              Settings
+            </NavLink>
           </nav>
         )}
         <div className="flex-1" />
