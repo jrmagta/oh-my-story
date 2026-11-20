@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import { useMap } from '../pages/map'
+import { SavedViews } from './SavedViews'
 import { emptyFilter, isActive, listFields, UNASSIGNED, UNSCHEDULED, type Filter } from './filter'
 
 type Field = (typeof listFields)[number]
@@ -51,6 +52,7 @@ export function FilterBar({ panelOpen }: { panelOpen: boolean }) {
 
   return (
     <section className={`filter-bar ${panelOpen ? 'with-panel' : ''}`} aria-label="Filter">
+      <SavedViews />
       <input
         type="search"
         className="input input-sm w-52"

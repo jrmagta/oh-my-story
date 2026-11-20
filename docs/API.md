@@ -148,6 +148,17 @@ Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, t
 
 Limits: names 1 to 100 characters, titles 1 to 500, descriptions up to 50,000; colours are `#RRGGBB`.
 
+### Saved views
+
+A saved view is a named map filter: `{id, name, filter, shared, createdBy, creatorName}`. `filter` is `{labels, statuses, assignees, personas, releases, text, mode}` (the first five are id lists, `none` meaning Unassigned or Unscheduled; `mode` is `highlight` or `hide`), the same shape the map's filter bar uses. A view is private to its creator until shared. Views are not map content, so they are not in the event log or the live feed.
+
+| Endpoint | Role | Body → response |
+|---|---|---|
+| `GET /maps/{mapId}/views` | viewer | → `[view]`: the map's shared views and the caller's own, by name |
+| `POST /maps/{mapId}/views` | viewer | `{name, filter, shared?}` → `201` view. `shared: true` needs editor. The filter is checked for shape (no other fields, at most 100 values per list, text up to 200) |
+| `PATCH /maps/{mapId}/views/{id}` | viewer | `{name?, filter?, shared?}` → view. Only the creator; anyone else gets `not_found`. Sharing needs editor |
+| `DELETE /maps/{mapId}/views/{id}` | viewer | → `204`. The creator, or an admin for a shared view |
+
 ### History
 
 | Method and path | Response |

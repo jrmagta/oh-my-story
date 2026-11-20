@@ -196,9 +196,9 @@ comments (
 mentions ( comment_id fk, user_id fk, primary key (comment_id, user_id) )
 
 saved_views (
-  id uuid pk, map_id fk, name text not null, created_by fk users,
-  filter jsonb not null,                         -- {labels, statuses, assignees, personas, text, release}
-  is_shared bool not null default false, created_at
+  id uuid pk, map_id fk on delete cascade, name text not null, created_by fk users on delete cascade,
+  filter jsonb not null,                         -- {labels, statuses, assignees, personas, releases, text, mode}
+  is_shared bool not null default false, created_at, updated_at
 )
 ```
 
@@ -280,7 +280,8 @@ Retention: keep forever in v1. Partition by month if volume demands it.
 | 0003 | `password_resets` | M1 |
 | 0004 | `labels`, `step_labels` | M2 phase 2 |
 | 0005 | `personas`, `persona_nodes` | M2 phase 3 |
-| later | `saved_views`, `comments`, `mentions`: one migration per M2 phase that needs them | M2 |
+| 0006 | `saved_views` | M2 phase 5 |
+| later | `comments`, `mentions` | M2 phase 7 |
 | later | `share_links` | M3 |
 | later | `dependencies`, `api_tokens`, `webhooks`, `webhook_deliveries`, `integrations` | M4 |
 

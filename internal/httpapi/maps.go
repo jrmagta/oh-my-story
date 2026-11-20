@@ -60,6 +60,11 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 		{"POST " + m + "/steps/{id}/move", role.Edit, s.moveStep},
 		{"DELETE " + m + "/steps/{id}", role.Edit, s.deleteStep},
 		{"POST " + m + "/steps/{id}/restore", role.Edit, s.restoreStep},
+
+		{"GET " + m + "/views", role.View, s.listViews},
+		{"POST " + m + "/views", role.View, s.createView},
+		{"PATCH " + m + "/views/{id}", role.View, s.patchView},
+		{"DELETE " + m + "/views/{id}", role.View, s.deleteView},
 	}
 	for _, rt := range routes {
 		mux.HandleFunc(rt.pattern, s.inWorkspace(rt.action, mapEndpoint(rt.h)))
@@ -78,6 +83,7 @@ type mapRequest struct {
 	ws    uuid.UUID
 	mapID uuid.UUID
 	id    uuid.UUID
+	role  role.Role
 }
 
 // mapHandler returns the status and body to send. A nil body sends 204.
@@ -85,7 +91,7 @@ type mapHandler func(q mapRequest) (int, any, error)
 
 func mapEndpoint(h mapHandler) workspaceHandler {
 	return func(w http.ResponseWriter, r *http.Request, u store.User, m store.Membership) {
-		q := mapRequest{r: r, w: w, user: u.ID, ws: m.ID}
+		q := mapRequest{r: r, w: w, user: u.ID, ws: m.ID, role: m.Role}
 		for name, dst := range map[string]*uuid.UUID{"mapId": &q.mapID, "id": &q.id} {
 			if r.PathValue(name) == "" {
 				continue
