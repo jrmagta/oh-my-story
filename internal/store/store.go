@@ -246,7 +246,10 @@ func (s *Store) CreateWorkspace(ctx context.Context, owner uuid.UUID, name, slug
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`, w.ID, owner)
+		if _, err = tx.Exec(ctx, `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`, w.ID, owner); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `SELECT oms_seed_workflow($1, 'Default', true)`, w.ID)
 		return err
 	})
 	return w, err

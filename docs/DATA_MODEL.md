@@ -6,10 +6,10 @@ Full v1 model, with the milestone in which each table is first migrated. Source 
 
 - **IDs:** `uuid`, generated app-side as UUIDv7 (time-ordered, index-friendly). Exposed as-is in the API.
 - **Timestamps:** `timestamptz`, `created_at` / `updated_at` on every mutable table. UTC.
-- **Ordering:** `rank text` using fractional indexing (lexicographic, e.g. `a0`, `a0V`, `a1`). A move rewrites one row, not its siblings. Collate `"C"`.
+- **Ordering:** `rank text` using fractional indexing (lexicographic, e.g. `a0`, `a0V`, `a1`). A move rewrites one row, not its siblings. Collate `"C"`, unique among siblings (`NULLS NOT DISTINCT` where the scope has a nullable column).
 - **Soft delete:** `deleted_at timestamptz` on `maps`, `nodes`, `stories`, `comments`. Everything else hard-deletes. The `events` log keeps the history either way.
 - **Tenancy:** every row reaches a `workspace_id`, directly or through its map. Queries always filter by it.
-- **External refs:** `ext_system text, ext_key text, ext_url text` (all nullable, together) on `nodes` and `stories`. Unique on `(ext_system, ext_key)` per workspace where set.
+- **External refs:** `ext_system text, ext_key text, ext_url text` (all nullable; system and key set together) on `nodes` and `stories`. Unique on `(ext_system, ext_key)` where set: per workspace for stories, per map for nodes, which have no `workspace_id`.
 - **Concurrency:** last-write-wins per field. `version int` on `stories` and `nodes`, bumped on write, used only to detect and report stale drags, not to reject edits.
 
 ## Entity overview
