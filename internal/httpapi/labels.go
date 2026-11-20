@@ -7,9 +7,10 @@ import (
 )
 
 const (
-	maxLabelName  = 50
-	maxStepLabels = 20
-	defaultColour = "#8A8A93"
+	maxLabelName    = 50
+	maxStepLabels   = 20
+	maxNodePersonas = 20
+	defaultColour   = "#8A8A93"
 )
 
 func (s *Server) listLabels(q mapRequest) (int, any, error) {

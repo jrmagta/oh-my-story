@@ -8,6 +8,7 @@ import { useLiveMap, type LiveState, type PresentUser } from '../map/live'
 import { backbone, bands, cellKey, cells, type Band, type Card, type Column } from '../map/layout'
 import { amount, formatEstimate, totals, type Total, type Totals } from '../map/estimates'
 import { nodeStyle, palette } from '../map/colours'
+import { colourFor, TagPicker } from '../map/TagPicker'
 import { applyMove, type Move } from '../map/moves'
 import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toasts, type ToastMessage } from '../ui'
 import { PageBand } from './app'
@@ -395,10 +396,32 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
             {sum}
           </span>
         )}
+        {node.level === 'objective' && <PersonaBadges node={node} />}
       </div>
       {canEdit && (
         <span className="node-tools">
           {child && hasChildren && <AddNodeIcon level={child} parent={node} />}
+          {node.level === 'objective' && (
+            <TagPicker
+              noun="persona"
+              iconLabel={`Personas of ${label}`}
+              tags={view.personas}
+              selected={node.personaIds}
+              onToggle={(id) =>
+                run(() =>
+                  api.patchNode(ws.slug, view.map.id, node.id, {
+                    personaIds: node.personaIds.includes(id) ? node.personaIds.filter((x) => x !== id) : [...node.personaIds, id],
+                  }),
+                )
+              }
+              onCreate={(name) =>
+                run(async () => {
+                  const p = await api.createPersona(ws.slug, { name, colour: colourFor(name) })
+                  await api.patchNode(ws.slug, view.map.id, node.id, { personaIds: [...node.personaIds, p.id] })
+                })
+              }
+            />
+          )}
           <ColourMenu node={node} label={label} />
           <button type="button" className="icon-btn drag-handle" title="Move" {...drag.handle}>
             <span>⠿</span>
@@ -757,6 +780,23 @@ function Cell(props: { column: number; activity: MapNode; release: Release | nul
 
 export function StatusLabel({ status }: { status: Status | undefined }) {
   return <span className={`st ${status?.category ?? 'todo'}`}>{status?.name ?? 'No status'}</span>
+}
+
+/** The personas an objective serves, as pills under its title. */
+function PersonaBadges({ node }: { node: MapNode }) {
+  const { view } = useMap()
+  const ps = view.personas.filter((p) => node.personaIds.includes(p.id)).sort((a, b) => a.name.localeCompare(b.name))
+  if (ps.length === 0) return null
+  return (
+    <span className="personas" aria-label={`Personas: ${ps.map((p) => p.name).join(', ')}`}>
+      {ps.map((p) => (
+        <span key={p.id} className="persona" title={p.description || undefined}>
+          <i style={{ background: p.colour }} aria-hidden />
+          {p.name}
+        </span>
+      ))}
+    </span>
+  )
 }
 
 /** A step's labels as small chips, in name order; ids of deleted labels are skipped. */

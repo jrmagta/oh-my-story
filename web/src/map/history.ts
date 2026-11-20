@@ -51,6 +51,10 @@ function labelNames(n: Names, labelIds: string[]): string {
   return labelIds.map((id) => q(n.view.labels.find((l) => l.id === id)?.name ?? 'a deleted label')).join(', ')
 }
 
+function personaNames(n: Names, personaIds: string[]): string {
+  return personaIds.map((id) => q(n.view.personas.find((p) => p.id === id)?.name ?? 'a deleted persona')).join(', ')
+}
+
 function person(n: Names, id: unknown): string {
   return n.members.find((m) => m.userId === id)?.displayName ?? 'a former member'
 }
@@ -116,6 +120,14 @@ export function describe(e: HistoryEntry, n: Names): string | null {
       if (changed('title')) parts.push(`renamed ${nodeLabel(n, e.entityId, { title: b.title })} to ${q(a.title)}`)
       if (changed('description')) parts.push(`edited the description of ${nodeLabel(n, e.entityId)}`)
       if (changed('colour')) parts.push(`recoloured ${nodeLabel(n, e.entityId)}`)
+      if (changed('personaIds')) {
+        const was = ids(b.personaIds)
+        const now = ids(a.personaIds)
+        const added = now.filter((id) => !was.includes(id))
+        const removed = was.filter((id) => !now.includes(id))
+        if (added.length) parts.push(`linked ${personaNames(n, added)} to ${nodeLabel(n, e.entityId)}`)
+        if (removed.length) parts.push(`unlinked ${personaNames(n, removed)} from ${nodeLabel(n, e.entityId)}`)
+      }
       return parts.length ? parts.join(', ') : null
     }
     case 'node:move':

@@ -14,6 +14,7 @@ import { MembersPage } from './pages/members'
 import { WorkflowsPage } from './pages/workflows'
 import { SettingsPage } from './pages/settings'
 import { LabelsPage } from './pages/labels'
+import { PersonasPage } from './pages/personas'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,6 +49,7 @@ const router = createBrowserRouter([
               { path: 'members', element: <MembersPage /> },
               { path: 'workflows', element: <WorkflowsPage /> },
               { path: 'labels', element: <LabelsPage /> },
+              { path: 'personas', element: <PersonasPage /> },
               { path: 'settings', element: <SettingsPage /> },
             ],
           },

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/google/uuid"
 )
 
 // Parsing at the boundary: handlers get clean values or a bad_request error.
@@ -157,5 +159,24 @@ func (o *optional[T]) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	o.Value = &v
+	return nil
+}
+
+// idSet checks a list of ids that replaces a set: no repeats, at most max.
+// A nil list is a field left out.
+func idSet(field string, ids *[]uuid.UUID, max int) error {
+	if ids == nil {
+		return nil
+	}
+	seen := map[uuid.UUID]bool{}
+	for _, id := range *ids {
+		if seen[id] {
+			return errBadRequest(fmt.Sprintf("%s must not repeat an id", field))
+		}
+		seen[id] = true
+	}
+	if len(seen) > max {
+		return errBadRequest(fmt.Sprintf("%s takes at most %d ids", field, max))
+	}
 	return nil
 }

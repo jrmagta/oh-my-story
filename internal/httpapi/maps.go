@@ -33,6 +33,11 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 		{"PATCH " + ws + "/labels/{id}", role.ManageSettings, s.patchLabel},
 		{"DELETE " + ws + "/labels/{id}", role.ManageSettings, s.deleteLabel},
 
+		{"GET " + ws + "/personas", role.View, s.listPersonas},
+		{"POST " + ws + "/personas", role.Edit, s.createPersona},
+		{"PATCH " + ws + "/personas/{id}", role.Edit, s.patchPersona},
+		{"DELETE " + ws + "/personas/{id}", role.Edit, s.deletePersona},
+
 		{"GET " + ws + "/maps", role.View, s.listMaps},
 		{"POST " + ws + "/maps", role.Edit, s.createMap},
 		{"GET " + m, role.View, s.getMap},
@@ -305,16 +310,21 @@ func (s *Server) createNode(q mapRequest) (int, any, error) {
 	return http.StatusCreated, out, err
 }
 
-// patchNode clears the colour when colour is null.
+// patchNode clears the colour when colour is null. personaIds replaces an
+// objective's personas.
 func (s *Server) patchNode(q mapRequest) (int, any, error) {
 	var in struct {
 		Title, Description *string
 		Colour             optional[string]
+		PersonaIDs         *[]uuid.UUID
 	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
 	}
-	p := store.NodePatch{SetColour: in.Colour.Set}
+	if err := idSet("personaIds", in.PersonaIDs, maxNodePersonas); err != nil {
+		return 0, nil, err
+	}
+	p := store.NodePatch{SetColour: in.Colour.Set, PersonaIDs: in.PersonaIDs}
 	var err error
 	if p.Title, err = textPtr("title", in.Title, maxTitle, false); err != nil {
 		return 0, nil, err
@@ -464,17 +474,8 @@ func (s *Server) patchStep(q mapRequest) (int, any, error) {
 	}
 	p := store.StepPatch{StatusID: in.StatusID, SetAssignee: in.AssigneeID.Set, AssigneeID: in.AssigneeID.Value,
 		SetEstimate: in.Estimate.Set, Estimate: in.Estimate.Value, LabelIDs: in.LabelIDs}
-	if in.LabelIDs != nil {
-		seen := map[uuid.UUID]bool{}
-		for _, id := range *in.LabelIDs {
-			if seen[id] {
-				return 0, nil, errBadRequest("labelIds must not repeat a label")
-			}
-			seen[id] = true
-		}
-		if len(seen) > maxStepLabels {
-			return 0, nil, errBadRequest("a step takes at most 20 labels")
-		}
+	if err := idSet("labelIds", in.LabelIDs, maxStepLabels); err != nil {
+		return 0, nil, err
 	}
 	var err error
 	if p.Estimate != nil {

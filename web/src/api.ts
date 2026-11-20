@@ -94,8 +94,18 @@ export interface MapNode {
   title: string
   description: string
   colour: string | null
+  /** Objectives only (activities have none); sorted. Names are in MapView.personas. */
+  personaIds: string[]
   rank: string
   version: number
+}
+
+/** Someone a map serves; shared by the workspace's maps and linked to objectives. */
+export interface Persona {
+  id: string
+  name: string
+  description: string
+  colour: string
 }
 
 export interface Release {
@@ -139,6 +149,7 @@ export interface MapView {
   map: StoryMap
   workflow: Workflow
   labels: Label[]
+  personas: Persona[]
   nodes: MapNode[]
   releases: Release[]
   steps: Step[]
@@ -226,6 +237,13 @@ export const api = {
   patchLabel: (slug: string, id: string, b: { name?: string; colour?: string }) =>
     request<Label>('PATCH', `${ws(slug)}/labels/${encodeURIComponent(id)}`, b),
   deleteLabel: (slug: string, id: string) => request<void>('DELETE', `${ws(slug)}/labels/${encodeURIComponent(id)}`),
+  personas: (slug: string) => request<Persona[]>('GET', `${ws(slug)}/personas`),
+  /** 409 when a persona of that name exists, ignoring case. */
+  createPersona: (slug: string, b: { name: string; description?: string; colour?: string }) =>
+    request<Persona>('POST', `${ws(slug)}/personas`, b),
+  patchPersona: (slug: string, id: string, b: { name?: string; description?: string; colour?: string }) =>
+    request<Persona>('PATCH', `${ws(slug)}/personas/${encodeURIComponent(id)}`, b),
+  deletePersona: (slug: string, id: string) => request<void>('DELETE', `${ws(slug)}/personas/${encodeURIComponent(id)}`),
   createWorkflow: (slug: string, b: { name: string }) => request<Workflow>('POST', `${ws(slug)}/workflows`, b),
   renameWorkflow: (slug: string, id: string, b: { name: string }) =>
     request<Workflow>('PATCH', `${ws(slug)}/workflows/${encodeURIComponent(id)}`, b),
@@ -253,7 +271,7 @@ export const api = {
 
   createNode: (slug: string, mapId: string, b: { level: Level; title: string; parentId?: string } & Position) =>
     request<MapNode>('POST', `${mp(slug, mapId)}/nodes`, b),
-  patchNode: (slug: string, mapId: string, id: string, b: { title?: string; description?: string; colour?: string | null }) =>
+  patchNode: (slug: string, mapId: string, id: string, b: { title?: string; description?: string; colour?: string | null; personaIds?: string[] }) =>
     request<MapNode>('PATCH', `${mp(slug, mapId)}/nodes/${id}`, b),
   moveNode: (slug: string, mapId: string, id: string, b: { parentId: string | null } & Position) =>
     request<MapNode>('POST', `${mp(slug, mapId)}/nodes/${id}/move`, b),
