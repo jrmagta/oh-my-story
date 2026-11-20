@@ -45,6 +45,12 @@ function release(n: Names, id: unknown): string {
   return n.view.releases.find((r) => r.id === id)?.name ?? 'a deleted release'
 }
 
+const ids = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+
+function labelNames(n: Names, labelIds: string[]): string {
+  return labelIds.map((id) => q(n.view.labels.find((l) => l.id === id)?.name ?? 'a deleted label')).join(', ')
+}
+
 function person(n: Names, id: unknown): string {
   return n.members.find((m) => m.userId === id)?.displayName ?? 'a former member'
 }
@@ -77,6 +83,14 @@ export function describe(e: HistoryEntry, n: Names): string | null {
       if (changed('assigneeId')) parts.push(a.assigneeId ? `assigned ${key} to ${person(n, a.assigneeId)}` : `unassigned ${key}`)
       if (changed('estimate')) parts.push(a.estimate === null ? `cleared the estimate of ${key}` : `estimated ${key} at ${String(a.estimate)}`)
       if (changed('descriptionMd')) parts.push(`edited the description of ${key}`)
+      if (changed('labelIds')) {
+        const was = ids(b.labelIds)
+        const now = ids(a.labelIds)
+        const added = now.filter((id) => !was.includes(id))
+        const removed = was.filter((id) => !now.includes(id))
+        if (added.length) parts.push(`labelled ${key} ${labelNames(n, added)}`)
+        if (removed.length) parts.push(`removed ${labelNames(n, removed)} from ${key}`)
+      }
       return parts.length ? parts.join(', ') : null
     }
     case 'step:delete':

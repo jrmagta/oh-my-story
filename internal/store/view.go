@@ -13,6 +13,7 @@ import (
 type MapView struct {
 	Map         Map         `json:"map"`
 	Workflow    Workflow    `json:"workflow"`
+	Labels      []Label     `json:"labels"` // the workspace's, for naming steps' labelIds
 	Nodes       []Node      `json:"nodes"`
 	Releases    []Release   `json:"releases"`
 	Steps       []Step      `json:"steps"`
@@ -38,6 +39,10 @@ func (s *Store) MapView(ctx context.Context, workspaceID, mapID uuid.UUID) (MapV
 			return err
 		}
 		if v.Workflow.Statuses, err = listStatuses(ctx, tx, v.Map.WorkflowID); err != nil {
+			return err
+		}
+		if v.Labels, err = collect(ctx, tx, scanLabel,
+			`SELECT `+labelCols+` FROM labels WHERE workspace_id = $1 ORDER BY name, id`, workspaceID); err != nil {
 			return err
 		}
 		if v.Nodes, err = collect(ctx, tx, scanNode,

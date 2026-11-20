@@ -115,7 +115,16 @@ export interface Step {
   assigneeId: string | null
   /** In the workspace's estimateUnit; null when not estimated. */
   estimate: number | null
+  /** Sorted; names and colours are in MapView.labels. */
+  labelIds: string[]
   version: number
+}
+
+/** Shared by every map of the workspace. */
+export interface Label {
+  id: string
+  name: string
+  colour: string
 }
 
 export interface Placement {
@@ -129,6 +138,7 @@ export interface Placement {
 export interface MapView {
   map: StoryMap
   workflow: Workflow
+  labels: Label[]
   nodes: MapNode[]
   releases: Release[]
   steps: Step[]
@@ -210,6 +220,12 @@ export const api = {
   revokeInvite: (slug: string, id: string) => request<void>('DELETE', `${ws(slug)}/invites/${encodeURIComponent(id)}`),
 
   workflows: (slug: string) => request<Workflow[]>('GET', `${ws(slug)}/workflows`),
+  labels: (slug: string) => request<Label[]>('GET', `${ws(slug)}/labels`),
+  /** 409 when a label of that name exists, ignoring case. */
+  createLabel: (slug: string, b: { name: string; colour?: string }) => request<Label>('POST', `${ws(slug)}/labels`, b),
+  patchLabel: (slug: string, id: string, b: { name?: string; colour?: string }) =>
+    request<Label>('PATCH', `${ws(slug)}/labels/${encodeURIComponent(id)}`, b),
+  deleteLabel: (slug: string, id: string) => request<void>('DELETE', `${ws(slug)}/labels/${encodeURIComponent(id)}`),
   createWorkflow: (slug: string, b: { name: string }) => request<Workflow>('POST', `${ws(slug)}/workflows`, b),
   renameWorkflow: (slug: string, id: string, b: { name: string }) =>
     request<Workflow>('PATCH', `${ws(slug)}/workflows/${encodeURIComponent(id)}`, b),
@@ -260,7 +276,15 @@ export const api = {
     slug: string,
     mapId: string,
     id: string,
-    b: { title?: string; descriptionMd?: string; statusId?: string; assigneeId?: string | null; estimate?: number | null },
+    b: {
+      title?: string
+      descriptionMd?: string
+      statusId?: string
+      assigneeId?: string | null
+      estimate?: number | null
+      /** Replaces the step's labels. */
+      labelIds?: string[]
+    },
   ) => request<Step>('PATCH', `${mp(slug, mapId)}/steps/${id}`, b),
   /** version is the step version the client showed; stale says someone changed it since. */
   moveStep: (slug: string, mapId: string, id: string, b: { activityId: string; releaseId: string | null; version: number } & Position) =>

@@ -94,6 +94,19 @@ Every write is logged in `events` in the same transaction (see `DATA_MODEL.md`).
 
 A status is `{id, workflowId, name, category, colour, rank}`; `category` is `todo`, `doing`, `done` or `blocked`.
 
+### Labels
+
+Labels belong to the workspace and are shared by its maps. A label is `{id, name, colour}`.
+
+| Endpoint | Role | Body → response |
+|---|---|---|
+| `GET /labels` | viewer | → `[label]`, by name |
+| `POST /labels` | editor | `{name, colour?}` → `201` label. `name` 1 to 50 characters; `409` when the workspace has a label of that name, ignoring case. `colour` defaults to `#8A8A93` |
+| `PATCH /labels/{id}` | admin | `{name?, colour?}` → label. Same name rule |
+| `DELETE /labels/{id}` | admin | → `204`. Takes the label off every step; the one `label` delete event says so, with no step events |
+
+A step's labels are its `labelIds`, set with `PATCH .../steps/{id}`. Label events have no map, so every open map in the workspace gets them.
+
 ### Maps, nodes, releases, steps
 
 | Method and path | Body → response |
@@ -113,12 +126,12 @@ A status is `{id, workflowId, name, category, colour, rank}`; `category` is `tod
 | `POST /maps/{mapId}/releases/{id}/move` | `{afterId?, beforeId?}` → release |
 | `DELETE /maps/{mapId}/releases/{id}` | → `204`. Its steps go to the end of their activity's Unscheduled cell |
 | `POST /maps/{mapId}/steps` | `{title, activityId, releaseId?, descriptionMd?, afterId?, beforeId?}` → `201 {step, placement}`. Gets the next workspace key (`PREFIX-n`) and the workflow's first status |
-| `PATCH /maps/{mapId}/steps/{id}` | `{title?, descriptionMd?, statusId?, assigneeId?, estimate?}` → step. `assigneeId`: optional null; must be a member. `estimate`: 0 to 9999.99 with at most two decimals, in the workspace's `estimateUnit`; null clears it |
+| `PATCH /maps/{mapId}/steps/{id}` | `{title?, descriptionMd?, statusId?, assigneeId?, estimate?, labelIds?}` → step. `assigneeId`: optional null; must be a member. `estimate`: 0 to 9999.99 with at most two decimals, in the workspace's `estimateUnit`; null clears it. `labelIds` replaces the step's labels: labels of this workspace, no repeats, at most 20 |
 | `POST /maps/{mapId}/steps/{id}/move` | `{activityId, releaseId, version, afterId?, beforeId?}` → `{placement, stale}`. `releaseId` is required, `null` for Unscheduled. `version` is the step version the client showed; the move applies regardless and `stale` says whether someone changed the step since |
 | `DELETE /maps/{mapId}/steps/{id}` | → `204` (soft delete) |
 | `POST /maps/{mapId}/steps/{id}/restore` | `{}` → step. Its activity must not be deleted |
 
-Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, title, description, colour, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; step `{id, key, title, descriptionMd, statusId, assigneeId, estimate, version}` with `estimate` a number or null; placement `{id, stepId, activityId, releaseId, rank}`.
+Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, title, description, colour, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; step `{id, key, title, descriptionMd, statusId, assigneeId, estimate, labelIds, version}` with `estimate` a number or null and `labelIds` sorted; placement `{id, stepId, activityId, releaseId, rank}`.
 
 Limits: names 1 to 100 characters, titles 1 to 500, descriptions up to 50,000; colours are `#RRGGBB`.
 

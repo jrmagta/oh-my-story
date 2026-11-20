@@ -5,7 +5,8 @@ import { api } from '../api'
 import { ConfirmButton, InlineText } from '../ui'
 import { HistoryList } from '../map/HistoryList'
 import { amount, formatEstimate } from '../map/estimates'
-import { mapKey, StatusLabel, useMap } from './map'
+import { LabelChips, mapKey, StatusLabel, useMap } from './map'
+import { colourFor, LabelPicker } from '../map/LabelPicker'
 
 /** The open step, beside the map. Editors change it in place; everyone else reads. */
 export function StepPanel({ stepId }: { stepId: string }) {
@@ -112,6 +113,31 @@ export function StepPanel({ stepId }: { stepId: string }) {
                 ) : (
                   amount(step.estimate * 100, ws.estimateUnit)
                 )}
+              </dd>
+            </div>
+            <div className="row">
+              <dt>Labels</dt>
+              <dd className="labels-dd">
+                <LabelChips
+                  ids={step.labelIds}
+                  onRemove={canEdit ? (id) => patch({ labelIds: step.labelIds.filter((x) => x !== id) }) : undefined}
+                />
+                {canEdit && (
+                  <LabelPicker
+                    labels={view.labels}
+                    selected={step.labelIds}
+                    onToggle={(id) =>
+                      patch({ labelIds: step.labelIds.includes(id) ? step.labelIds.filter((x) => x !== id) : [...step.labelIds, id] })
+                    }
+                    onCreate={(name) =>
+                      run(async () => {
+                        const l = await api.createLabel(ws.slug, { name, colour: colourFor(name) })
+                        await api.patchStep(ws.slug, view.map.id, step.id, { labelIds: [...step.labelIds, l.id] })
+                      })
+                    }
+                  />
+                )}
+                {!canEdit && step.labelIds.length === 0 && 'None'}
               </dd>
             </div>
             <div className="row">
