@@ -115,9 +115,7 @@ func newHarness(t *testing.T, opts harnessOpts) *harness {
 	}
 	hubCtx, stopHub := context.WithCancel(ctx)
 	hub := live.New(pool)
-	if err := hub.Start(hubCtx); err != nil {
-		t.Fatal(err)
-	}
+	hub.Start(hubCtx)
 	rec := &recorder{}
 	srv.Config.Handler = httpapi.New(cfg, pool, rec, sso, hub, nil)
 	srv.Start()

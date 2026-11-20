@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/jrmagta/oh-my-story/internal/store"
@@ -65,6 +66,7 @@ type Hub struct {
 	mu       sync.Mutex
 	subs     map[uuid.UUID]map[*Sub]struct{} // by map
 	last     int64                           // newest event id handed out
+	started  bool                            // last has been read from the log
 	presence map[uuid.UUID]map[string]seen   // by map, then connection key
 }
 
@@ -83,20 +85,18 @@ func New(pool *pgxpool.Pool) *Hub {
 	}
 }
 
-// Start reads the log's current end and starts listening, then keeps
-// listening in the background until ctx ends, reconnecting after errors.
-// Events written after Start returns are delivered.
-func (h *Hub) Start(ctx context.Context) error {
-	last, err := h.store.LastEventID(ctx)
-	if err != nil {
-		return err
-	}
-	h.last = last
+// Start begins following the event log and keeps at it until ctx ends,
+// reconnecting after errors. When the database is reachable and migrated,
+// Start returns with the listener up, so events written afterwards are
+// delivered. When it is not (on a first install the schema can arrive after
+// the app starts), Start logs, returns, and keeps trying in the background:
+// the server must come up either way.
+func (h *Hub) Start(ctx context.Context) {
+	go h.beat(ctx)
 	conn, err := h.connect(ctx)
 	if err != nil {
-		return err
+		slog.Warn("live: not following events yet, retrying", "err", err)
 	}
-	go h.beat(ctx)
 	go func() {
 		for {
 			if conn != nil {
@@ -113,16 +113,38 @@ func (h *Hub) Start(ctx context.Context) error {
 			case <-time.After(2 * time.Second):
 			}
 			if conn, err = h.connect(ctx); err != nil {
-				slog.Error("live: reconnect", "err", err)
+				slog.Warn("live: reconnect", "err", err)
 				conn = nil
 			}
 		}
 	}()
-	return nil
 }
 
 // connect opens a connection that LISTENs for good, so it leaves the pool.
+// The first time it succeeds it also sets the cursor to the log's end; later
+// reconnects keep the cursor and catch up from it.
 func (h *Hub) connect(ctx context.Context) (*pgx.Conn, error) {
+	h.mu.Lock()
+	started := h.started
+	h.mu.Unlock()
+	if !started {
+		last, err := h.store.LastEventID(ctx)
+		var pg *pgconn.PgError
+		switch {
+		case errors.As(err, &pg) && pg.Code == "42P01": // undefined_table
+			// Not migrated yet, so no events exist: follow the log from its
+			// start, or events written as the migration lands would be skipped.
+			h.mu.Lock()
+			h.last, h.started = 0, true
+			h.mu.Unlock()
+			return nil, err
+		case err != nil:
+			return nil, err
+		}
+		h.mu.Lock()
+		h.last, h.started = last, true
+		h.mu.Unlock()
+	}
 	pc, err := h.pool.Acquire(ctx)
 	if err != nil {
 		return nil, err

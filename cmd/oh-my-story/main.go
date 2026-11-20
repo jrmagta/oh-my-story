@@ -104,9 +104,7 @@ func serve(ctx context.Context, cfg config.Config) error {
 	}
 
 	hub := live.New(pool)
-	if err := hub.Start(ctx); err != nil {
-		return fmt.Errorf("start live updates: %w", err)
-	}
+	hub.Start(ctx)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
