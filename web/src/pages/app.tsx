@@ -68,6 +68,9 @@ export function AppShell() {
             <NavLink to={`/w/${current.slug}/members`} className="navlink">
               Members
             </NavLink>
+            <NavLink to={`/w/${current.slug}/workflows`} className="navlink">
+              Workflows
+            </NavLink>
           </nav>
         )}
         <div className="flex-1" />
