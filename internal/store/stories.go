@@ -221,13 +221,14 @@ func (s *Store) MoveStory(ctx context.Context, actor, workspaceID, mapID, storyI
 
 func (s *Store) DeleteStory(ctx context.Context, actor, workspaceID, mapID, storyID uuid.UUID) error {
 	return s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
-		if _, _, err := mapStory(ctx, tx, mapID, storyID); err != nil {
+		st, _, err := mapStory(ctx, tx, mapID, storyID)
+		if err != nil {
 			return nil, err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE stories SET deleted_at = now(), updated_at = now() WHERE id = $1`, storyID); err != nil {
 			return nil, err
 		}
-		return []change{{mapID: mapID, entity: "story", id: storyID, action: "delete"}}, nil
+		return []change{gone(mapID, "story", storyID, "delete", map[string]any{"key": st.Key, "title": st.Title})}, nil
 	})
 }
 
@@ -250,7 +251,7 @@ func (s *Store) RestoreStory(ctx context.Context, actor, workspaceID, mapID, sto
 			`UPDATE stories s SET deleted_at = NULL, updated_at = now() WHERE id = $1 RETURNING `+storyCols, storyID)); err != nil {
 			return nil, err
 		}
-		return []change{{mapID: mapID, entity: "story", id: storyID, action: "restore"}}, nil
+		return []change{gone(mapID, "story", storyID, "restore", map[string]any{"key": st.Key, "title": st.Title})}, nil
 	})
 	return st, err
 }

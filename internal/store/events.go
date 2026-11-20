@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -59,4 +60,77 @@ func (s *Store) CheckMap(ctx context.Context, workspaceID, mapID uuid.UUID) erro
 	err := s.pool.QueryRow(ctx, `SELECT true FROM maps WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
 		mapID, workspaceID).Scan(&ok)
 	return notFound(err)
+}
+
+// HistoryEntry is an event with the name of who made it ("" when that
+// account no longer exists).
+type HistoryEntry struct {
+	Event
+	ActorName string `json:"actorName"`
+}
+
+// A page of history, newest first. Next is the cursor for the page after it
+// (pass it as before), nil on the last page.
+type History struct {
+	Entries []HistoryEntry `json:"entries"`
+	Next    *int64         `json:"next"`
+}
+
+func (s *Store) history(ctx context.Context, where string, before int64, limit int, args ...any) (History, error) {
+	n := len(args)
+	cond := where
+	if before > 0 {
+		cond += fmt.Sprintf(" AND e.id < $%d", n+1)
+		args = append(args, before)
+	}
+	args = append(args, limit+1)
+	rows, err := s.pool.Query(ctx,
+		`SELECT e.id, e.workspace_id, e.map_id, e.actor_id, e.entity_type, e.entity_id, e.action, e.before, e.after, e.created_at,
+		        coalesce(u.display_name, '')
+		 FROM events e LEFT JOIN users u ON u.id = e.actor_id
+		 WHERE `+cond+fmt.Sprintf(` ORDER BY e.id DESC LIMIT $%d`, len(args)), args...)
+	if err != nil {
+		return History{}, err
+	}
+	entries, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (HistoryEntry, error) {
+		var h HistoryEntry
+		e := &h.Event
+		err := r.Scan(&e.ID, &e.WorkspaceID, &e.MapID, &e.ActorID, &e.Entity, &e.EntityID, &e.Action, &e.Before, &e.After, &e.At, &h.ActorName)
+		return h, err
+	})
+	if err != nil {
+		return History{}, err
+	}
+	out := History{Entries: entries}
+	if len(entries) > limit {
+		out.Entries = entries[:limit]
+		next := out.Entries[limit-1].ID
+		out.Next = &next
+	}
+	return out, nil
+}
+
+// MapHistory is the map's activity: every event on the map, newest first.
+func (s *Store) MapHistory(ctx context.Context, workspaceID, mapID uuid.UUID, before int64, limit int) (History, error) {
+	if err := s.CheckMap(ctx, workspaceID, mapID); err != nil {
+		return History{}, err
+	}
+	return s.history(ctx, `e.workspace_id = $1 AND e.map_id = $2`, before, limit, workspaceID, mapID)
+}
+
+// StoryHistory is one story's events and its placements' (moves), newest
+// first. Deleted stories keep their history.
+func (s *Store) StoryHistory(ctx context.Context, workspaceID, mapID, storyID uuid.UUID, before int64, limit int) (History, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT true FROM stories s JOIN placements p ON p.story_id = s.id JOIN maps m ON m.id = p.map_id
+		 WHERE s.id = $1 AND p.map_id = $2 AND s.workspace_id = $3 AND m.deleted_at IS NULL`,
+		storyID, mapID, workspaceID).Scan(&ok)
+	if err != nil {
+		return History{}, notFound(err)
+	}
+	return s.history(ctx,
+		`e.workspace_id = $1 AND ((e.entity_type = 'story' AND e.entity_id = $2)
+		   OR (e.entity_type = 'placement' AND e.entity_id IN (SELECT id FROM placements WHERE story_id = $2)))`,
+		before, limit, workspaceID, storyID)
 }

@@ -3,11 +3,13 @@ import { useQuery } from '@tanstack/react-query'
 import Markdown from 'react-markdown'
 import { api } from '../api'
 import { ConfirmButton, InlineText } from '../ui'
-import { StatusLabel, useMap } from './map'
+import { HistoryList } from '../map/HistoryList'
+import { mapKey, StatusLabel, useMap } from './map'
 
 /** The open story, beside the map. Editors change it in place; everyone else reads. */
 export function StoryPanel({ storyId }: { storyId: string }) {
   const { ws, view, canEdit, statuses, run, openStory } = useMap()
+  const [tab, setTab] = useState<'details' | 'history'>('details')
   const members = useQuery({ queryKey: ['ws', ws.slug, 'members'], queryFn: () => api.members(ws.slug) })
   const story = view.stories.find((s) => s.id === storyId)
   if (!story) return null
@@ -33,72 +35,101 @@ export function StoryPanel({ storyId }: { storyId: string }) {
           <InlineText value={story.title} label="story" editable={canEdit} onSave={(title) => patch({ title })} />
         </h2>
       </div>
-      <dl>
-        <div className="row">
-          <dt>Status</dt>
-          <dd>
-            {canEdit ? (
-              <select
-                className="select select-sm w-44 font-bold"
-                aria-label="Status"
-                value={story.statusId}
-                onChange={(e) => patch({ statusId: e.target.value })}
-              >
-                {view.workflow.statuses.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <StatusLabel status={status} />
-            )}
-          </dd>
+      <div role="tablist" aria-label="Story" className="story-tabs">
+        {(['details', 'history'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            id={`story-tab-${t}`}
+            aria-selected={tab === t}
+            aria-controls={`story-pane-${t}`}
+            onClick={() => setTab(t)}
+          >
+            {t === 'details' ? 'Details' : 'History'}
+          </button>
+        ))}
+      </div>
+      {tab === 'details' ? (
+        <div role="tabpanel" id="story-pane-details" aria-labelledby="story-tab-details">
+          <dl>
+            <div className="row">
+              <dt>Status</dt>
+              <dd>
+                {canEdit ? (
+                  <select
+                    className="select select-sm w-44 font-bold"
+                    aria-label="Status"
+                    value={story.statusId}
+                    onChange={(e) => patch({ statusId: e.target.value })}
+                  >
+                    {view.workflow.statuses.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <StatusLabel status={status} />
+                )}
+              </dd>
+            </div>
+            <div className="row">
+              <dt>Assignee</dt>
+              <dd>
+                {canEdit ? (
+                  <select
+                    className="select select-sm w-44 font-bold"
+                    aria-label="Assignee"
+                    value={story.assigneeId ?? ''}
+                    onChange={(e) => patch({ assigneeId: e.target.value || null })}
+                  >
+                    <option value="">Unassigned</option>
+                    {members.data?.map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.displayName}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  (assignee?.displayName ?? 'Unassigned')
+                )}
+              </dd>
+            </div>
+            <div className="row">
+              <dt>Placed in</dt>
+              <dd className="text-right">
+                {release?.name ?? 'Unscheduled'} · {step?.title}
+              </dd>
+            </div>
+          </dl>
+          <Description key={story.id} text={story.descriptionMd} editable={canEdit} onSave={(descriptionMd) => patch({ descriptionMd })} />
+          {canEdit && (
+            <div className="p-5">
+              <ConfirmButton
+                label="Delete story"
+                confirm="Confirm delete"
+                name={story.key}
+                busy={false}
+                onConfirm={() => {
+                  openStory(null)
+                  run(() => api.deleteStory(ws.slug, view.map.id, story.id), {
+                    done: `Deleted ${story.key}`,
+                    undo: () => api.restoreStory(ws.slug, view.map.id, story.id),
+                  })
+                }}
+              />
+            </div>
+          )}
         </div>
-        <div className="row">
-          <dt>Assignee</dt>
-          <dd>
-            {canEdit ? (
-              <select
-                className="select select-sm w-44 font-bold"
-                aria-label="Assignee"
-                value={story.assigneeId ?? ''}
-                onChange={(e) => patch({ assigneeId: e.target.value || null })}
-              >
-                <option value="">Unassigned</option>
-                {members.data?.map((m) => (
-                  <option key={m.userId} value={m.userId}>
-                    {m.displayName}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              (assignee?.displayName ?? 'Unassigned')
-            )}
-          </dd>
-        </div>
-        <div className="row">
-          <dt>Placed in</dt>
-          <dd className="text-right">
-            {release?.name ?? 'Unscheduled'} · {step?.title}
-          </dd>
-        </div>
-      </dl>
-      <Description key={story.id} text={story.descriptionMd} editable={canEdit} onSave={(descriptionMd) => patch({ descriptionMd })} />
-      {canEdit && (
-        <div className="p-5">
-          <ConfirmButton
-            label="Delete story"
-            confirm="Confirm delete"
-            name={story.key}
-            busy={false}
-            onConfirm={() => {
-              openStory(null)
-              run(() => api.deleteStory(ws.slug, view.map.id, story.id), {
-                done: `Deleted ${story.key}`,
-                undo: () => api.restoreStory(ws.slug, view.map.id, story.id),
-              })
-            }}
+      ) : (
+        <div role="tabpanel" id="story-pane-history" aria-labelledby="story-tab-history">
+          <HistoryList
+            slug={ws.slug}
+            view={view}
+            queryKey={[...mapKey(ws.slug, view.map.id), 'history', story.id]}
+            page={(before) => api.storyHistory(ws.slug, view.map.id, story.id, before)}
+            label={`History of ${story.key}`}
           />
         </div>
       )}

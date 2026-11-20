@@ -117,6 +117,8 @@ export function useLiveMap(slug: string, mapId: string, key: QueryKey): { users:
       const next = applyEvents(view, evs)
       if (next) qc.setQueryData(key, next)
       else reload()
+      // History lists live under the map's key; refresh them for the new entries.
+      void qc.invalidateQueries({ queryKey: [...key, 'history'] })
     }
 
     // When a fetched snapshot is older than events already applied, re-apply them.

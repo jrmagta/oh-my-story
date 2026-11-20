@@ -19,7 +19,7 @@ const statuses = (page: Page, workflow: string) =>
 async function openStory(page: Page) {
   await page.goto(`/w/${slug}/maps`)
   await page.getByRole('link', { name: 'Open Onboarding' }).click()
-  await page.getByRole('button', { name: 'STORY-1 Register with email', exact: true }).click()
+  await page.getByRole('button', { name: /^STORY-1 / }).click()
 }
 
 test('an admin adds a status, a story uses it, and deleting it moves the story on', async ({ page }) => {
@@ -47,7 +47,7 @@ test('an admin adds a status, a story uses it, and deleting it moves the story o
   const status = page.getByRole('complementary', { name: 'Story STORY-1' }).getByLabel('Status')
   await expect(status.locator('option')).toHaveText(['To do', 'In progress', 'Blocked', 'In review', 'Done'])
   await status.selectOption({ label: 'In review' })
-  await expect(page.getByRole('button', { name: 'STORY-1 Register with email', exact: true })).toContainText('In review')
+  await expect(page.getByRole('button', { name: /^STORY-1 / })).toContainText('In review')
 
   // Deleting it asks where its stories go.
   await page.getByRole('link', { name: 'Workflows' }).click()
@@ -58,7 +58,7 @@ test('an admin adds a status, a story uses it, and deleting it moves the story o
   await expect(statuses(page, 'Default')).toHaveText(['To do', 'In progress', 'Blocked', 'Done'])
 
   await openStory(page)
-  await expect(page.getByRole('button', { name: 'STORY-1 Register with email', exact: true })).toContainText('Done')
+  await expect(page.getByRole('button', { name: /^STORY-1 / })).toContainText('Done')
 })
 
 test('a new workflow can back a new map', async ({ page }) => {

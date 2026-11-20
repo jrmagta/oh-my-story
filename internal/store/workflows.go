@@ -264,6 +264,6 @@ func (s *Store) DeleteStatus(ctx context.Context, actor, workspaceID, statusID u
 		if _, err := tx.Exec(ctx, `DELETE FROM statuses WHERE id = $1`, st.ID); err != nil {
 			return nil, err
 		}
-		return append(changes, change{entity: "status", id: st.ID, action: "delete"}), nil
+		return append(changes, gone(uuid.Nil, "status", st.ID, "delete", map[string]any{"name": st.Name})), nil
 	})
 }

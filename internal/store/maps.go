@@ -108,10 +108,11 @@ func (s *Store) UpdateMap(ctx context.Context, actor, workspaceID, mapID uuid.UU
 
 func (s *Store) DeleteMap(ctx context.Context, actor, workspaceID, mapID uuid.UUID) error {
 	return s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
-		if _, err := tx.Exec(ctx, `UPDATE maps SET deleted_at = now() WHERE id = $1`, mapID); err != nil {
+		var name string
+		if err := tx.QueryRow(ctx, `UPDATE maps SET deleted_at = now() WHERE id = $1 RETURNING name`, mapID).Scan(&name); err != nil {
 			return nil, err
 		}
-		return []change{{mapID: mapID, entity: "map", id: mapID, action: "delete"}}, nil
+		return []change{gone(mapID, "map", mapID, "delete", map[string]any{"name": name})}, nil
 	})
 }
 
@@ -284,23 +285,26 @@ func setSubtreeDeleted(ctx context.Context, tx pgx.Tx, mapID, nodeID uuid.UUID, 
 		   SELECT n.id FROM nodes n JOIN sub ON n.parent_id = sub.id WHERE n.deleted_at IS NOT DISTINCT FROM $2
 		 ),
 		 nodes_done AS (
-		   UPDATE nodes SET deleted_at = $3, updated_at = now() WHERE id IN (SELECT id FROM sub) RETURNING 'node'::text AS entity, id
+		   UPDATE nodes SET deleted_at = $3, updated_at = now() WHERE id IN (SELECT id FROM sub)
+		   RETURNING 'node'::text AS entity, id, jsonb_build_object('title', title, 'level', level) AS label
 		 ),
 		 stories_done AS (
 		   UPDATE stories SET deleted_at = $3, updated_at = now()
 		   WHERE deleted_at IS NOT DISTINCT FROM $2
 		     AND id IN (SELECT story_id FROM placements WHERE map_id = $4 AND step_id IN (SELECT id FROM sub))
-		   RETURNING 'story'::text AS entity, id
+		   RETURNING 'story'::text AS entity, id, jsonb_build_object('key', key, 'title', title) AS label
 		 )
-		 SELECT entity, id FROM nodes_done UNION ALL SELECT entity, id FROM stories_done`,
+		 SELECT entity, id, label FROM nodes_done UNION ALL SELECT entity, id, label FROM stories_done`,
 		nodeID, from, to, mapID)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (change, error) {
-		c := change{mapID: mapID, action: action}
-		err := r.Scan(&c.entity, &c.id)
-		return c, err
+		var entity string
+		var id uuid.UUID
+		var label map[string]any
+		err := r.Scan(&entity, &id, &label)
+		return gone(mapID, entity, id, action, label), err
 	})
 }
 
@@ -397,7 +401,8 @@ func (s *Store) MoveRelease(ctx context.Context, actor, workspaceID, mapID, rele
 // Unscheduled cell of their step, keeping their order.
 func (s *Store) DeleteRelease(ctx context.Context, actor, workspaceID, mapID, releaseID uuid.UUID) error {
 	return s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
-		if _, err := mapRelease(ctx, tx, mapID, releaseID); err != nil {
+		rel, err := mapRelease(ctx, tx, mapID, releaseID)
+		if err != nil {
 			return nil, err
 		}
 		rows, err := tx.Query(ctx,
@@ -425,6 +430,6 @@ func (s *Store) DeleteRelease(ctx context.Context, actor, workspaceID, mapID, re
 		if _, err := tx.Exec(ctx, `DELETE FROM releases WHERE id = $1`, releaseID); err != nil {
 			return nil, err
 		}
-		return append(changes, change{mapID: mapID, entity: "release", id: releaseID, action: "delete"}), nil
+		return append(changes, gone(mapID, "release", releaseID, "delete", map[string]any{"name": rel.Name})), nil
 	})
 }

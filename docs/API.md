@@ -119,6 +119,15 @@ Shapes: map `{id, workflowId, name, description, levels}`; node `{id, parentId, 
 
 Limits: names 1 to 100 characters, titles 1 to 500, descriptions up to 50,000; colours are `#RRGGBB`.
 
+### History
+
+| Method and path | Response |
+|---|---|
+| `GET /maps/{mapId}/history?before=&limit=` | the map's events, newest first |
+| `GET /maps/{mapId}/stories/{id}/history?before=&limit=` | the story's events and its placement moves, newest first; kept after the story is deleted |
+
+Both need viewer and return `{entries: [event + actorName], next}`. `actorName` is `""` when the account no longer exists. `limit` is 1 to 200 (default 50); pass `next` as `before` for the following page; `next` is null on the last one.
+
 ### Live
 
 `GET /maps/{mapId}/live?after=<lastEventId>` (viewer) upgrades to a WebSocket. `after` is the `lastEventId` of the map payload the client holds. The server sends JSON messages and never reads any:
@@ -129,7 +138,7 @@ Limits: names 1 to 100 characters, titles 1 to 500, descriptions up to 50,000; c
 | `{type: "presence", users: [{id, name}]}` | Everyone watching the map now, on any instance, each once, sorted by name. Sent whenever it changes |
 | `{type: "resync"}` | The client is too far behind (over 1,000 events, or too slow to read): reload the map and reconnect from its new `lastEventId`. The socket then closes |
 
-An event is `{id, mapId, actorId, entity, entityId, action, before, after, at}`. `entity` is `map`, `node`, `release`, `story`, `placement`, `workflow` or `status`; `action` is `create`, `update`, `move`, `delete` or `restore`. A create carries the whole entity in `after`; an update or move carries the changed fields in `before` and `after`, plus the new `version` where the entity has one; a placement move also carries the story's new version as `storyVersion`. Delete and restore carry neither; a restore brings back rows the client no longer holds, so clients reload on it. Workspace-wide events (workflows and statuses, `mapId` null) go to every map in the workspace.
+An event is `{id, mapId, actorId, entity, entityId, action, before, after, at}`. `entity` is `map`, `node`, `release`, `story`, `placement`, `workflow` or `status`; `action` is `create`, `update`, `move`, `delete` or `restore`. A create carries the whole entity in `after`; an update or move carries the changed fields in `before` and `after`, plus the new `version` where the entity has one; a placement move also carries the story's new version as `storyVersion`. A delete carries the fields that name the row in `before` (a node's `title` and `level`, a story's `key` and `title`, a release's, status's or map's `name`), a restore the same in `after`; a restore brings back rows the client no longer holds, so clients reload on it. Workspace-wide events (workflows and statuses, `mapId` null) go to every map in the workspace.
 
 The upgrade needs the session cookie and an `Origin` equal to `OMS_BASE_URL`'s host (or none, for non-browser clients). The server pings every 25 seconds and closes the socket within a minute of the caller leaving the workspace.
 
