@@ -66,6 +66,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, sender mail.Sender, oidc *OIDC, 
 	mux.HandleFunc("DELETE /api/workspaces/{slug}/invites/{id}", s.inWorkspace(role.ManageMembers, s.revokeInvite))
 	mux.HandleFunc("GET /api/invites/{token}", s.getInvite)
 	mux.HandleFunc("POST /api/invites/{token}/accept", s.acceptInvite)
+	s.mapRoutes(mux)
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -213,6 +214,8 @@ func writeError(w http.ResponseWriter, err error) {
 		e = &apiError{http.StatusConflict, "conflict", err.Error()}
 	case errors.Is(err, store.ErrAlreadyMember):
 		e = &apiError{http.StatusConflict, "conflict", "already a member of this workspace"}
+	case errors.Is(err, store.ErrInvalid):
+		e = errBadRequest(err.Error())
 	case errors.Is(err, store.ErrConflict):
 		e = &apiError{http.StatusConflict, "conflict", "already exists"}
 	case errors.Is(err, store.ErrInviteUsed), errors.Is(err, store.ErrBootstrapped):
