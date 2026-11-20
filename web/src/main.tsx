@@ -7,6 +7,8 @@ import { ApiError } from './api'
 import { AppShell, RequireAuth, WorkspaceRoute, WorkspacesPage } from './pages/app'
 import { LoginPage, NotFoundPage, SetupPage } from './pages/auth'
 import { InvitePage } from './pages/invite'
+import { MapPage } from './pages/map'
+import { MapsPage } from './pages/maps'
 import { MembersPage } from './pages/members'
 
 const queryClient = new QueryClient({
@@ -34,7 +36,9 @@ const router = createBrowserRouter([
             path: '/w/:slug',
             element: <WorkspaceRoute />,
             children: [
-              { index: true, element: <Navigate to="members" replace /> },
+              { index: true, element: <Navigate to="maps" replace /> },
+              { path: 'maps', element: <MapsPage /> },
+              { path: 'maps/:mapId', element: <MapPage /> },
               { path: 'members', element: <MembersPage /> },
             ],
           },

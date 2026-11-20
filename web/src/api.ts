@@ -58,6 +58,87 @@ export interface Providers {
   oidc: { enabled: false } | { enabled: true; name: string }
 }
 
+export type Category = 'todo' | 'doing' | 'done' | 'blocked'
+
+export interface Status {
+  id: string
+  workflowId: string
+  name: string
+  category: Category
+  colour: string | null
+  rank: string
+}
+
+export interface Workflow {
+  id: string
+  name: string
+  isDefault: boolean
+  statuses: Status[]
+}
+
+export interface StoryMap {
+  id: string
+  workflowId: string
+  name: string
+  description: string
+  levels: 3 | 4
+}
+
+export type Level = 'objective' | 'activity' | 'step'
+
+export interface MapNode {
+  id: string
+  parentId: string | null
+  level: Level
+  title: string
+  description: string
+  colour: string | null
+  rank: string
+  version: number
+}
+
+export interface Release {
+  id: string
+  name: string
+  description: string
+  targetDate: string | null
+  rank: string
+}
+
+export interface Story {
+  id: string
+  key: string
+  title: string
+  descriptionMd: string
+  statusId: string
+  assigneeId: string | null
+  version: number
+}
+
+export interface Placement {
+  id: string
+  storyId: string
+  stepId: string
+  releaseId: string | null
+  rank: string
+}
+
+export interface MapView {
+  map: StoryMap
+  workflow: Workflow
+  nodes: MapNode[]
+  releases: Release[]
+  stories: Story[]
+  placements: Placement[]
+  lastEventId: number
+}
+
+/** Where a new or moved item goes: next to one sibling, or last when both are absent. */
+export interface Position {
+  afterId?: string
+  beforeId?: string
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
@@ -87,6 +168,7 @@ async function request<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: str
 
 const ws = (slug: string) => `/api/workspaces/${encodeURIComponent(slug)}`
 const inv = (token: string) => `/api/invites/${encodeURIComponent(token)}`
+const mp = (slug: string, mapId: string) => `${ws(slug)}/maps/${encodeURIComponent(mapId)}`
 
 export const api = {
   setup: () => request<{ needsBootstrap: boolean }>('GET', '/api/setup'),
@@ -115,6 +197,42 @@ export const api = {
   invites: (slug: string) => request<Invite[]>('GET', `${ws(slug)}/invites`),
   invite: (slug: string, b: { email: string; role: Role }) => request<Invite>('POST', `${ws(slug)}/invites`, b),
   revokeInvite: (slug: string, id: string) => request<void>('DELETE', `${ws(slug)}/invites/${encodeURIComponent(id)}`),
+
+  workflows: (slug: string) => request<Workflow[]>('GET', `${ws(slug)}/workflows`),
+  maps: (slug: string) => request<StoryMap[]>('GET', `${ws(slug)}/maps`),
+  createMap: (slug: string, b: { name: string; levels: 3 | 4; description?: string; workflowId?: string }) =>
+    request<StoryMap>('POST', `${ws(slug)}/maps`, b),
+  map: (slug: string, mapId: string) => request<MapView>('GET', mp(slug, mapId)),
+  patchMap: (slug: string, mapId: string, b: { name?: string; description?: string }) =>
+    request<StoryMap>('PATCH', mp(slug, mapId), b),
+  deleteMap: (slug: string, mapId: string) => request<void>('DELETE', mp(slug, mapId)),
+
+  createNode: (slug: string, mapId: string, b: { level: Level; title: string; parentId?: string } & Position) =>
+    request<MapNode>('POST', `${mp(slug, mapId)}/nodes`, b),
+  patchNode: (slug: string, mapId: string, id: string, b: { title?: string; description?: string }) =>
+    request<MapNode>('PATCH', `${mp(slug, mapId)}/nodes/${id}`, b),
+  deleteNode: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/nodes/${id}`),
+  restoreNode: (slug: string, mapId: string, id: string) =>
+    request<MapNode>('POST', `${mp(slug, mapId)}/nodes/${id}/restore`, {}),
+
+  createRelease: (slug: string, mapId: string, b: { name: string; targetDate?: string } & Position) =>
+    request<Release>('POST', `${mp(slug, mapId)}/releases`, b),
+  patchRelease: (slug: string, mapId: string, id: string, b: { name?: string; targetDate?: string | null }) =>
+    request<Release>('PATCH', `${mp(slug, mapId)}/releases/${id}`, b),
+  deleteRelease: (slug: string, mapId: string, id: string) =>
+    request<void>('DELETE', `${mp(slug, mapId)}/releases/${id}`),
+
+  createStory: (slug: string, mapId: string, b: { title: string; stepId: string; releaseId: string | null } & Position) =>
+    request<{ story: Story; placement: Placement }>('POST', `${mp(slug, mapId)}/stories`, b),
+  patchStory: (
+    slug: string,
+    mapId: string,
+    id: string,
+    b: { title?: string; descriptionMd?: string; statusId?: string; assigneeId?: string | null },
+  ) => request<Story>('PATCH', `${mp(slug, mapId)}/stories/${id}`, b),
+  deleteStory: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/stories/${id}`),
+  restoreStory: (slug: string, mapId: string, id: string) =>
+    request<Story>('POST', `${mp(slug, mapId)}/stories/${id}/restore`, {}),
 
   invitePreview: (token: string) => request<InvitePreview>('GET', inv(token)),
   acceptInvite: (token: string, newAccount?: { displayName: string; password: string }) =>

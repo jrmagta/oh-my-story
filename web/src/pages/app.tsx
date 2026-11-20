@@ -62,6 +62,9 @@ export function AppShell() {
             <Link to="/" className="navlink text-[#A1A1AA]">
               {current.name}
             </Link>
+            <NavLink to={`/w/${current.slug}/maps`} className="navlink">
+              Maps
+            </NavLink>
             <NavLink to={`/w/${current.slug}/members`} className="navlink">
               Members
             </NavLink>

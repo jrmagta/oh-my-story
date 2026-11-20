@@ -4,7 +4,7 @@ DATABASE_URL ?= postgres://oms:oms@localhost:5432/oms?sslmode=disable
 
 E2E_DATABASE_URL ?= postgres://oms:oms@localhost:5432/oms_e2e?sslmode=disable
 
-.PHONY: up down ps db-up db-down test migrate run build web e2e
+.PHONY: up down ps db-up db-down test migrate run build web e2e lan lan-down
 
 # Full dev stack: postgres, migrate, app, keycloak, mailpit.
 up:
@@ -54,3 +54,14 @@ e2e: build
 	$(COMPOSE) exec -T postgres psql -q -U oms -d oms -c 'DROP DATABASE IF EXISTS oms_e2e WITH (FORCE)' -c 'CREATE DATABASE oms_e2e'
 	OMS_DATABASE_URL='$(E2E_DATABASE_URL)' bin/oh-my-story migrate
 	cd web && E2E_DATABASE_URL='$(E2E_DATABASE_URL)' npx playwright test
+
+# Try-out stack for a home network (deploy/lan): its own database, built from
+# the working tree. OMS_BASE_URL is the address people type, e.g.
+#   make lan OMS_BASE_URL=http://story.example.home
+LAN_COMPOSE = $(subst deploy/compose/docker-compose.yml,deploy/lan/docker-compose.yml,$(COMPOSE))
+
+lan:
+	OMS_BASE_URL='$(OMS_BASE_URL)' $(LAN_COMPOSE) up -d --build --wait
+
+lan-down:
+	OMS_BASE_URL=unused $(LAN_COMPOSE) down

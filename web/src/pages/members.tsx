@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useOutletContext } from 'react-router'
 import { api, atLeast, roles, type Invite, type Member, type Membership, type Role } from '../api'
 import { refreshSession, useSession } from '../session'
-import { Avatar, ErrorAlert, Field, Loading, Notice } from '../ui'
+import { Avatar, ConfirmButton, ErrorAlert, Field, Loading, Notice } from '../ui'
 import { PageBand } from './app'
 
 const invitable: readonly Role[] = roles.filter((r) => r !== 'owner')
@@ -129,27 +129,6 @@ function MemberRow({ ws, m, onError }: { ws: Membership; m: Member; onError: (e:
         )}
       </div>
     </li>
-  )
-}
-
-/** Two clicks: the first arms the button for a few seconds, the second acts. */
-function ConfirmButton(props: { label: string; confirm: string; name: string; busy: boolean; onConfirm: () => void }) {
-  const [armed, setArmed] = useState(false)
-  useEffect(() => {
-    if (!armed) return
-    const t = setTimeout(() => setArmed(false), 4000)
-    return () => clearTimeout(t)
-  }, [armed])
-  return (
-    <button
-      type="button"
-      className={`btn btn-sm ${armed ? 'btn-error' : 'btn-ol'}`}
-      aria-label={armed ? `${props.confirm}: ${props.name}` : `${props.label} ${props.name}`}
-      disabled={props.busy}
-      onClick={() => (armed ? props.onConfirm() : setArmed(true))}
-    >
-      {armed ? props.confirm : props.label}
-    </button>
   )
 }
 

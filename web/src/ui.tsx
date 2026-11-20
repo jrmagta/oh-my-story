@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { ApiError } from './api'
 
@@ -129,6 +129,154 @@ export function Loading() {
   return (
     <div className="flex justify-center py-24" role="status" aria-label="Loading">
       <span className="loading loading-spinner loading-lg text-primary" />
+    </div>
+  )
+}
+
+/** Two clicks: the first arms the button for a few seconds, the second acts. */
+export function ConfirmButton(props: { label: string; confirm: string; name: string; busy: boolean; onConfirm: () => void }) {
+  const [armed, setArmed] = useState(false)
+  useEffect(() => {
+    if (!armed) return
+    const t = setTimeout(() => setArmed(false), 4000)
+    return () => clearTimeout(t)
+  }, [armed])
+  return (
+    <button
+      type="button"
+      className={`btn btn-sm ${armed ? 'btn-error' : 'btn-ol'}`}
+      aria-label={armed ? `${props.confirm}: ${props.name}` : `${props.label} ${props.name}`}
+      disabled={props.busy}
+      onClick={() => (armed ? props.onConfirm() : setArmed(true))}
+    >
+      {armed ? props.confirm : props.label}
+    </button>
+  )
+}
+
+/**
+ * Text that becomes an input when editable and clicked. Enter or leaving the
+ * field saves; Escape cancels. Saving an empty or unchanged value does nothing.
+ */
+export function InlineText(props: {
+  value: string
+  label: string
+  editable: boolean
+  onSave: (v: string) => void
+  className?: string
+  maxLength?: number
+}) {
+  const [editing, setEditing] = useState(false)
+  if (!props.editable) return <span className={props.className}>{props.value}</span>
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className={`inline-edit ${props.className ?? ''}`}
+        aria-label={`Rename ${props.label}`}
+        onClick={() => setEditing(true)}
+      >
+        {props.value}
+      </button>
+    )
+  }
+  return (
+    <TextInput
+      label={`New name for ${props.label}`}
+      initial={props.value}
+      maxLength={props.maxLength ?? 500}
+      className={props.className}
+      onDone={(v) => {
+        setEditing(false)
+        if (v !== null && v !== props.value) props.onSave(v)
+      }}
+    />
+  )
+}
+
+/** A one-line input that reports its trimmed value on Enter or blur, or null on Escape or when empty. */
+export function TextInput(props: {
+  label: string
+  initial?: string
+  placeholder?: string
+  maxLength?: number
+  className?: string
+  keepOpen?: boolean
+  onDone: (v: string | null) => void
+}) {
+  const [value, setValue] = useState(props.initial ?? '')
+  const done = useRef(false)
+  const finish = (v: string | null) => {
+    if (done.current) return
+    const t = v?.trim() ?? ''
+    if (props.keepOpen && v !== null && t) {
+      props.onDone(t)
+      setValue('')
+      return
+    }
+    done.current = true
+    props.onDone(t ? t : null)
+  }
+  return (
+    <input
+      autoFocus
+      className={`input input-sm w-full ${props.className ?? ''}`}
+      aria-label={props.label}
+      placeholder={props.placeholder}
+      maxLength={props.maxLength ?? 500}
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => finish(props.keepOpen ? null : value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          finish(value)
+        } else if (e.key === 'Escape') {
+          finish(null)
+        }
+      }}
+    />
+  )
+}
+
+export interface ToastMessage {
+  id: number
+  text: string
+  tone: 'info' | 'error'
+  action?: { label: string; run: () => void }
+}
+
+/** Bottom-left notices that disappear after a few seconds. */
+export function Toasts({ items, dismiss }: { items: ToastMessage[]; dismiss: (id: number) => void }) {
+  return (
+    <div className="toasts" aria-live="polite">
+      {items.map((t) => (
+        <Toast key={t.id} t={t} dismiss={dismiss} />
+      ))}
+    </div>
+  )
+}
+
+function Toast({ t, dismiss }: { t: ToastMessage; dismiss: (id: number) => void }) {
+  useEffect(() => {
+    const timer = setTimeout(() => dismiss(t.id), t.tone === 'error' ? 8000 : 6000)
+    return () => clearTimeout(timer)
+  }, [t, dismiss])
+  return (
+    <div role={t.tone === 'error' ? 'alert' : 'status'} className={`toast-item ${t.tone}`}>
+      <span className="flex-1">{t.text}</span>
+      {t.action && (
+        <button
+          type="button"
+          className="btn btn-xs btn-ol"
+          onClick={() => {
+            t.action?.run()
+            dismiss(t.id)
+          }}
+        >
+          {t.action.label}
+        </button>
+      )}
     </div>
   )
 }
