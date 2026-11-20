@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Postgres, Keycloak and Mailpit come from the dev compose file, so CI runs the
+# same services and realm as `make up`. Only the app itself runs outside compose.
+env:
+  COMPOSE: docker compose -f deploy/compose/docker-compose.yml
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l $(git ls-files '*.go'))
+          if [ -n "$unformatted" ]; then echo "needs gofmt:"; echo "$unformatted"; exit 1; fi
+      - run: go vet ./...
+      - uses: dominikh/staticcheck-action@v1.4.1
+        with:
+          version: 2026.2.2
+          install-go: false
+      - name: TypeScript
+        working-directory: web
+        run: npm ci && npm run typecheck
+
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Start Postgres, Keycloak and Mailpit
+        run: $COMPOSE up -d --wait postgres keycloak mailpit
+      - name: Go tests (race detector)
+        run: make test GO=go
+        env:
+          GOFLAGS: -race
+      - name: Service logs
+        if: failure()
+        run: $COMPOSE logs --no-color
+
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Start Postgres, Keycloak and Mailpit
+        run: $COMPOSE up -d --wait postgres keycloak mailpit
+      - name: Build web app and binary
+        run: make build GO=go
+      - name: Install Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Playwright
+        run: make e2e GO=go
+      - name: Service logs
+        if: failure()
+        run: $COMPOSE logs --no-color
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-traces
+          path: web/test-results/
+          retention-days: 7
+
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build container image
+        run: docker build -t oh-my-story:ci .
+      # With no database configured, serve should start and refuse cleanly.
+      - name: Binary runs in the image
+        run: |
+          out=$(docker run --rm oh-my-story:ci 2>&1 || true)
+          echo "$out"
+          echo "$out" | grep -q "OMS_DATABASE_URL is required"
