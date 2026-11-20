@@ -76,6 +76,11 @@ export function LoginPage() {
           {login.isPending ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
+      <p className="mt-3 text-sm font-semibold">
+        <Link className="underline" to="/forgot">
+          Forgot your password?
+        </Link>
+      </p>
       <SsoButton next={next} />
       <p className="text-muted mt-8 text-sm font-medium">New here? Accounts are by invitation: ask a workspace admin to invite you.</p>
     </AuthShell>

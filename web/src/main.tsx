@@ -7,6 +7,7 @@ import { ApiError } from './api'
 import { AppShell, RequireAuth, WorkspaceRoute, WorkspacesPage } from './pages/app'
 import { LoginPage, NotFoundPage, SetupPage } from './pages/auth'
 import { InvitePage } from './pages/invite'
+import { ForgotPage, ResetPage } from './pages/reset'
 import { MapPage } from './pages/map'
 import { MapsPage } from './pages/maps'
 import { MembersPage } from './pages/members'
@@ -26,6 +27,8 @@ const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/setup', element: <SetupPage /> },
   { path: '/invites/:token', element: <InvitePage /> },
+  { path: '/forgot', element: <ForgotPage /> },
+  { path: '/reset/:token', element: <ResetPage /> },
   {
     element: <RequireAuth />,
     children: [

@@ -95,6 +95,11 @@ invites (
   token_hash bytea unique not null, invited_by fk users,
   expires_at, accepted_at
 )
+
+password_resets (                                -- M1: one-hour, single-use links for local accounts
+  id uuid pk, user_id fk users on delete cascade,
+  token_hash bytea unique not null, expires_at timestamptz not null, used_at, created_at
+)
 ```
 
 Role capabilities: `owner` all incl. delete workspace; `admin` members, workflows, tokens, webhooks; `editor` all map and story edits; `commenter` comments only; `viewer` read only.
@@ -272,9 +277,10 @@ Retention: keep forever in v1. Partition by month if volume demands it.
 |---|---|---|
 | 0001 | extensions (`citext`, `pg_trgm`), `users`, `identities`, `sessions`, `workspaces`, `workspace_members`, `invites` | M0 |
 | 0002 | `workflows`, `statuses`, `maps`, `nodes`, `releases`, `stories`, `placements`, `events` | M1 |
-| 0003 | `personas`, `persona_nodes`, `labels`, `story_labels`, `comments`, `mentions`, `saved_views` | M2 |
-| 0004 | `share_links` | M3 |
-| 0005 | `dependencies`, `api_tokens`, `webhooks`, `webhook_deliveries`, `integrations` | M4 |
+| 0003 | `password_resets` | M1 |
+| 0004 | `personas`, `persona_nodes`, `labels`, `story_labels`, `comments`, `mentions`, `saved_views` | M2 |
+| 0005 | `share_links` | M3 |
+| 0006 | `dependencies`, `api_tokens`, `webhooks`, `webhook_deliveries`, `integrations` | M4 |
 
 M0 migrates only 0001. The rest are specified here so M1 does not reshape M0 tables.
 

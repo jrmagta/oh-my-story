@@ -47,6 +47,9 @@ Extra rules:
 | `POST /api/auth/logout` | session | → `204`, clears session |
 | `GET /api/me` | session | → `{user, workspaces: [{slug, name, role}]}` |
 | `GET /api/auth/providers` | none | → `{oidc: {enabled, name}}` |
+| `POST /api/auth/reset` | none | `{email}` → `204`, always (see Password reset) |
+| `GET /api/auth/reset/{token}` | none | → `{email}`; used, replaced or expired: `gone` |
+| `POST /api/auth/reset/{token}` | none | `{password}` → user; sets the password, ends all the user's sessions, signs this browser in. Used, replaced or expired: `gone` |
 | `GET /auth/oidc/login?next=<path>` | none | browser redirect to the identity provider |
 | `GET /auth/oidc/callback` | none | browser redirect to `next` (a local path, default `/`) with a session, or to `/login?error=<code>&next=<path>`: `not_invited`, `account_disabled`, `sso_email_unverified`, `sso_denied`, `sso_expired`, `sso_state`, `sso_failed` |
 | `GET /api/workspaces` | session | → my workspaces |
@@ -163,6 +166,12 @@ The upgrade needs the session cookie and an `Origin` equal to `OMS_BASE_URL`'s h
 | `OMS_OIDC_CLIENT_ID`, `OMS_OIDC_CLIENT_SECRET` | — | required when the issuer is set |
 | `OMS_OIDC_NAME` | `SSO` | button label |
 
+## Password reset
+
+- Only active accounts with a password get an email; accounts that sign in only through SSO do not, so a reset cannot add a password that bypasses SSO.
+- `POST /api/auth/reset` answers `204` for any well-formed address. The lookup and the email happen after the reply, so neither the answer nor its timing says whether an account exists.
+- The email links to `/reset/{token}`. A token works once, for one hour. A new request replaces the account's earlier unused tokens, and at most one email per account goes out per minute.
+
 ## Deferred
 
-Login rate limiting, password reset (M1 backlog: "Reset a forgotten password"), email change, session listing and revoke-all.
+Login rate limiting, email change, session listing and revoke-all.
