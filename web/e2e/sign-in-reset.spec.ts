@@ -24,6 +24,8 @@ test('a forgotten password is reset from the email, and other sessions end', asy
 
   await page.goto('/login')
   await page.getByRole('link', { name: 'Forgot your password?' }).click()
+  // The sign-in page has an Email field too; wait for the new page before typing.
+  await expect(page.getByRole('heading', { name: 'Reset your password' })).toBeVisible()
   await page.getByLabel('Email').fill(person.email)
   await page.getByRole('button', { name: 'Send reset link' }).click()
   await expect(page.getByText('Check your inbox.')).toBeVisible()
@@ -49,6 +51,7 @@ test('a forgotten password is reset from the email, and other sessions end', asy
 
 test('asking for an address with no account looks the same', async ({ page }) => {
   await page.goto('/forgot')
+  await expect(page.getByRole('heading', { name: 'Reset your password' })).toBeVisible()
   await page.getByLabel('Email').fill(`nobody+${Date.now()}@example.com`)
   await page.getByRole('button', { name: 'Send reset link' }).click()
   await expect(page.getByText('Check your inbox.')).toBeVisible()
