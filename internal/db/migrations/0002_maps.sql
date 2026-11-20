@@ -123,7 +123,7 @@ CREATE TABLE releases (
     UNIQUE (map_id, rank)
 );
 
-CREATE TABLE stories (
+CREATE TABLE steps (
     id             uuid PRIMARY KEY,
     workspace_id   uuid NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
     key            text NOT NULL,
@@ -144,18 +144,18 @@ CREATE TABLE stories (
     UNIQUE (workspace_id, key),
     CHECK (num_nulls(ext_system, ext_key) IN (0, 2))
 );
-CREATE INDEX stories_search ON stories USING gin (search);
-CREATE INDEX stories_status_id ON stories (status_id);
-CREATE UNIQUE INDEX stories_ext ON stories (workspace_id, ext_system, ext_key) WHERE ext_system IS NOT NULL;
+CREATE INDEX steps_search ON steps USING gin (search);
+CREATE INDEX steps_status_id ON steps (status_id);
+CREATE UNIQUE INDEX steps_ext ON steps (workspace_id, ext_system, ext_key) WHERE ext_system IS NOT NULL;
 
 CREATE TABLE placements (
     id         uuid PRIMARY KEY,
-    story_id   uuid NOT NULL REFERENCES stories (id) ON DELETE CASCADE,
+    step_id   uuid NOT NULL REFERENCES steps (id) ON DELETE CASCADE,
     map_id     uuid NOT NULL REFERENCES maps (id) ON DELETE CASCADE,
     activity_id uuid NOT NULL REFERENCES nodes (id) ON DELETE CASCADE,
     release_id uuid REFERENCES releases (id) ON DELETE SET NULL,
     rank       text COLLATE "C" NOT NULL,
-    UNIQUE (story_id, map_id)
+    UNIQUE (step_id, map_id)
 );
 CREATE UNIQUE INDEX placements_cell_rank ON placements (map_id, activity_id, release_id, rank) NULLS NOT DISTINCT;
 CREATE INDEX placements_activity_id ON placements (activity_id);
@@ -199,7 +199,7 @@ CREATE INDEX events_map ON events (map_id, id);
 DROP TABLE events;
 DROP TABLE placements;
 DROP FUNCTION oms_placements_check;
-DROP TABLE stories;
+DROP TABLE steps;
 DROP TABLE releases;
 DROP TABLE nodes;
 DROP FUNCTION oms_nodes_check_parent;

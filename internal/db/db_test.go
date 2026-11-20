@@ -60,7 +60,7 @@ func TestSchemaConstraints(t *testing.T) {
 	}{
 		"email is case-insensitive unique": {`INSERT INTO users (id, email, display_name) VALUES ('00000000-0000-7000-8000-0000000000aa', 'ann@example.com', 'Dup')`, nil},
 		"unknown role":                     {`UPDATE workspace_members SET role = 'superuser' WHERE user_id = $1`, []any{user}},
-		"lowercase key prefix":             {`UPDATE workspaces SET key_prefix = 'story' WHERE id = $1`, []any{ws}},
+		"lowercase key prefix":             {`UPDATE workspaces SET key_prefix = 'step' WHERE id = $1`, []any{ws}},
 		"invite cannot grant owner": {`INSERT INTO invites (id, workspace_id, email, role, token_hash, invited_by, expires_at)
 			VALUES ('00000000-0000-7000-8000-0000000000bb', $1, 'bo@example.com', 'owner', 'x', $2, now())`, []any{ws, user}},
 	}

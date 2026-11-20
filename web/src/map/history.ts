@@ -26,9 +26,9 @@ export interface Names {
 
 const q = (s: unknown) => `“${String(s)}”`
 
-function storyName(n: Names, id: string, fields?: Record<string, unknown> | null): string {
-  const key = fields?.key ?? n.view.stories.find((s) => s.id === id)?.key
-  return typeof key === 'string' ? key : 'a story'
+function stepName(n: Names, id: string, fields?: Record<string, unknown> | null): string {
+  const key = fields?.key ?? n.view.steps.find((s) => s.id === id)?.key
+  return typeof key === 'string' ? key : 'a step'
 }
 
 function status(n: Names, id: unknown): string {
@@ -58,8 +58,8 @@ function nodeLabel(n: Names, id: string, fields?: Record<string, unknown> | null
 
 /**
  * What an entry did, as the rest of a sentence that starts with the actor's
- * name: "set STORY-4 to In progress". Changes the reader cannot act on (a
- * placement created with its story, a reorder's rank) are folded in or left
+ * name: "set ACME-4 to In progress". Changes the reader cannot act on (a
+ * placement created with its step, a reorder's rank) are folded in or left
  * out; returns null for entries that add nothing on their own.
  */
 export function describe(e: HistoryEntry, n: Names): string | null {
@@ -67,10 +67,10 @@ export function describe(e: HistoryEntry, n: Names): string | null {
   const a = e.after ?? {}
   const changed = (k: string) => k in a
   switch (`${e.entity}:${e.action}`) {
-    case 'story:create':
-      return `added ${storyName(n, e.entityId, a)} ${q(a.title)}`
-    case 'story:update': {
-      const key = storyName(n, e.entityId)
+    case 'step:create':
+      return `added ${stepName(n, e.entityId, a)} ${q(a.title)}`
+    case 'step:update': {
+      const key = stepName(n, e.entityId)
       const parts: string[] = []
       if (changed('title')) parts.push(`renamed ${key} from ${q(b.title)} to ${q(a.title)}`)
       if (changed('statusId')) parts.push(`set ${key} to ${status(n, a.statusId)}`)
@@ -79,15 +79,15 @@ export function describe(e: HistoryEntry, n: Names): string | null {
       if (changed('descriptionMd')) parts.push(`edited the description of ${key}`)
       return parts.length ? parts.join(', ') : null
     }
-    case 'story:delete':
-      return `deleted ${storyName(n, e.entityId, b)} ${b.title !== undefined ? q(b.title) : ''}`.trim()
-    case 'story:restore':
-      return `restored ${storyName(n, e.entityId, a)}`
+    case 'step:delete':
+      return `deleted ${stepName(n, e.entityId, b)} ${b.title !== undefined ? q(b.title) : ''}`.trim()
+    case 'step:restore':
+      return `restored ${stepName(n, e.entityId, a)}`
     case 'placement:create':
       return null
     case 'placement:move': {
       const p = n.view.placements.find((x) => x.id === e.entityId)
-      const key = p ? storyName(n, p.storyId) : 'a story'
+      const key = p ? stepName(n, p.stepId) : 'a step'
       if (changed('activityId') || changed('releaseId')) {
         const activityId = changed('activityId') ? a.activityId : p?.activityId
         const releaseId = changed('releaseId') ? a.releaseId : (p?.releaseId ?? null)

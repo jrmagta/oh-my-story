@@ -2,15 +2,15 @@ package httpapi_test
 
 import "testing"
 
-func TestStoryEstimate(t *testing.T) {
+func TestStepEstimate(t *testing.T) {
 	h := newHarness(t, harnessOpts{})
 	owner := h.bootstrap()
 	b := buildMap(owner)
-	story := str(owner.must(201, "POST", b.path+"/stories", map[string]any{"title": "s", "activityId": b.act1}).body, "story", "id")
-	path := b.path + "/stories/" + story
+	step := str(owner.must(201, "POST", b.path+"/steps", map[string]any{"title": "s", "activityId": b.act1}).body, "step", "id")
+	path := b.path + "/steps/" + step
 
-	if r := owner.must(200, "GET", b.path, nil); r.body["stories"].([]any)[0].(map[string]any)["estimate"] != nil {
-		t.Errorf("a new story has no estimate: %v", r.body["stories"])
+	if r := owner.must(200, "GET", b.path, nil); r.body["steps"].([]any)[0].(map[string]any)["estimate"] != nil {
+		t.Errorf("a new step has no estimate: %v", r.body["steps"])
 	}
 	for _, v := range []float64{3, 0.5, 9999.99, 0} {
 		if r := owner.must(200, "PATCH", path, map[string]any{"estimate": v}); r.body["estimate"] != v {

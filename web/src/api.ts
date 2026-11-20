@@ -106,7 +106,7 @@ export interface Release {
   rank: string
 }
 
-export interface Story {
+export interface Step {
   id: string
   key: string
   title: string
@@ -120,7 +120,7 @@ export interface Story {
 
 export interface Placement {
   id: string
-  storyId: string
+  stepId: string
   activityId: string
   releaseId: string | null
   rank: string
@@ -131,7 +131,7 @@ export interface MapView {
   workflow: Workflow
   nodes: MapNode[]
   releases: Release[]
-  stories: Story[]
+  steps: Step[]
   placements: Placement[]
   lastEventId: number
 }
@@ -218,7 +218,7 @@ export const api = {
   patchStatus: (slug: string, id: string, b: { name?: string; category?: Category; colour?: string }) =>
     request<Status>('PATCH', `${ws(slug)}/statuses/${encodeURIComponent(id)}`, b),
   moveStatus: (slug: string, id: string, b: Position) => request<Status>('POST', `${ws(slug)}/statuses/${encodeURIComponent(id)}/move`, b),
-  /** Stories in the status move to the replacement, another status of the same workflow. */
+  /** Steps in the status move to the replacement, another status of the same workflow. */
   deleteStatus: (slug: string, id: string, replacementId: string) =>
     request<void>('DELETE', `${ws(slug)}/statuses/${encodeURIComponent(id)}?replacementId=${encodeURIComponent(replacementId)}`),
   maps: (slug: string) => request<StoryMap[]>('GET', `${ws(slug)}/maps`),
@@ -232,8 +232,8 @@ export const api = {
   /** before: the next cursor of the previous page; omit for the newest. */
   mapHistory: (slug: string, mapId: string, before?: number) =>
     request<HistoryPage>('GET', `${mp(slug, mapId)}/history${before ? `?before=${before}` : ''}`),
-  storyHistory: (slug: string, mapId: string, id: string, before?: number) =>
-    request<HistoryPage>('GET', `${mp(slug, mapId)}/stories/${id}/history${before ? `?before=${before}` : ''}`),
+  stepHistory: (slug: string, mapId: string, id: string, before?: number) =>
+    request<HistoryPage>('GET', `${mp(slug, mapId)}/steps/${id}/history${before ? `?before=${before}` : ''}`),
 
   createNode: (slug: string, mapId: string, b: { level: Level; title: string; parentId?: string } & Position) =>
     request<MapNode>('POST', `${mp(slug, mapId)}/nodes`, b),
@@ -254,20 +254,20 @@ export const api = {
   deleteRelease: (slug: string, mapId: string, id: string) =>
     request<void>('DELETE', `${mp(slug, mapId)}/releases/${id}`),
 
-  createStory: (slug: string, mapId: string, b: { title: string; activityId: string; releaseId: string | null } & Position) =>
-    request<{ story: Story; placement: Placement }>('POST', `${mp(slug, mapId)}/stories`, b),
-  patchStory: (
+  createStep: (slug: string, mapId: string, b: { title: string; activityId: string; releaseId: string | null } & Position) =>
+    request<{ step: Step; placement: Placement }>('POST', `${mp(slug, mapId)}/steps`, b),
+  patchStep: (
     slug: string,
     mapId: string,
     id: string,
     b: { title?: string; descriptionMd?: string; statusId?: string; assigneeId?: string | null; estimate?: number | null },
-  ) => request<Story>('PATCH', `${mp(slug, mapId)}/stories/${id}`, b),
-  /** version is the story version the client showed; stale says someone changed it since. */
-  moveStory: (slug: string, mapId: string, id: string, b: { activityId: string; releaseId: string | null; version: number } & Position) =>
-    request<{ placement: Placement; stale: boolean }>('POST', `${mp(slug, mapId)}/stories/${id}/move`, b),
-  deleteStory: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/stories/${id}`),
-  restoreStory: (slug: string, mapId: string, id: string) =>
-    request<Story>('POST', `${mp(slug, mapId)}/stories/${id}/restore`, {}),
+  ) => request<Step>('PATCH', `${mp(slug, mapId)}/steps/${id}`, b),
+  /** version is the step version the client showed; stale says someone changed it since. */
+  moveStep: (slug: string, mapId: string, id: string, b: { activityId: string; releaseId: string | null; version: number } & Position) =>
+    request<{ placement: Placement; stale: boolean }>('POST', `${mp(slug, mapId)}/steps/${id}/move`, b),
+  deleteStep: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/steps/${id}`),
+  restoreStep: (slug: string, mapId: string, id: string) =>
+    request<Step>('POST', `${mp(slug, mapId)}/steps/${id}/restore`, {}),
 
   invitePreview: (token: string) => request<InvitePreview>('GET', inv(token)),
   acceptInvite: (token: string, newAccount?: { displayName: string; password: string }) =>

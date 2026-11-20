@@ -102,7 +102,7 @@ function CreateMap({ ws }: { ws: Membership }) {
           <input className="input w-full" required maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         {workflows.data && workflows.data.length > 1 && (
-          <Field label="Workflow" hint="Statuses for this map's stories. Fixed after creation.">
+          <Field label="Workflow" hint="Statuses for this map's steps. Fixed after creation.">
             <select className="select w-full" value={workflowId} onChange={(e) => setWorkflowId(e.target.value)}>
               {workflows.data.map((w) => (
                 <option key={w.id} value={w.isDefault ? '' : w.id}>

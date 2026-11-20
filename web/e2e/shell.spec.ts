@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { clearMail, inviteLink } from './mailpit'
 
-// One story, in order, against a fresh database: the owner sets up the
+// One scenario, in order, against a fresh database: the owner sets up the
 // instance, then people join by email and by Keycloak.
 test.describe.configure({ mode: 'serial' })
 

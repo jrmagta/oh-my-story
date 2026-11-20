@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-// Runs after story-map.spec.ts and uses its workspace and map.
+// Runs after step-map.spec.ts and uses its workspace and map.
 test.describe.configure({ mode: 'serial' })
 
 const slug = 'mapping'
@@ -16,13 +16,13 @@ async function signIn(page: Page) {
 const statuses = (page: Page, workflow: string) =>
   page.getByRole('list', { name: `Statuses in ${workflow}` }).getByRole('button', { name: /^Rename status / })
 
-async function openStory(page: Page) {
+async function openStep(page: Page) {
   await page.goto(`/w/${slug}/maps`)
   await page.getByRole('link', { name: 'Open Onboarding' }).click()
-  await page.getByRole('button', { name: /^STORY-1 / }).click()
+  await page.getByRole('button', { name: /^MAPPING-1 / }).click()
 }
 
-test('an admin adds a status, a story uses it, and deleting it moves the story on', async ({ page }) => {
+test('an admin adds a status, a step uses it, and deleting it moves the step on', async ({ page }) => {
   await signIn(page)
   await page.goto(`/w/${slug}`)
   await page.getByRole('link', { name: 'Workflows' }).click()
@@ -43,22 +43,22 @@ test('an admin adds a status, a story uses it, and deleting it moves the story o
   await expect(statuses(page, 'Default')).toHaveText(['To do', 'In progress', 'Blocked', 'In review', 'Done'])
 
   // The map offers the new status, in workflow order, and the card shows it.
-  await openStory(page)
-  const status = page.getByRole('complementary', { name: 'Story STORY-1' }).getByLabel('Status')
+  await openStep(page)
+  const status = page.getByRole('complementary', { name: 'Step MAPPING-1' }).getByLabel('Status')
   await expect(status.locator('option')).toHaveText(['To do', 'In progress', 'Blocked', 'In review', 'Done'])
   await status.selectOption({ label: 'In review' })
-  await expect(page.getByRole('button', { name: /^STORY-1 / })).toContainText('In review')
+  await expect(page.getByRole('button', { name: /^MAPPING-1 / })).toContainText('In review')
 
-  // Deleting it asks where its stories go.
+  // Deleting it asks where its steps go.
   await page.getByRole('link', { name: 'Workflows' }).click()
   await page.getByRole('button', { name: 'Delete In review' }).click()
   const confirm = page.getByRole('form', { name: 'Delete In review' })
-  await confirm.getByLabel('Move its stories to').selectOption({ label: 'Done' })
+  await confirm.getByLabel('Move its steps to').selectOption({ label: 'Done' })
   await confirm.getByRole('button', { name: 'Delete In review' }).click()
   await expect(statuses(page, 'Default')).toHaveText(['To do', 'In progress', 'Blocked', 'Done'])
 
-  await openStory(page)
-  await expect(page.getByRole('button', { name: /^STORY-1 / })).toContainText('Done')
+  await openStep(page)
+  await expect(page.getByRole('button', { name: /^MAPPING-1 / })).toContainText('Done')
 })
 
 test('a new workflow can back a new map', async ({ page }) => {
@@ -87,13 +87,9 @@ test('a new workflow can back a new map', async ({ page }) => {
   await page.getByRole('textbox', { name: 'New activity in Tokens' }).fill('Colour')
   await page.keyboard.press('Enter')
   await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: 'Add step to Colour' }).click()
-  await page.getByRole('textbox', { name: 'New step in Colour' }).fill('Palette')
+  await page.getByRole('button', { name: 'Add step to Colour / Unscheduled' }).click()
+  await page.getByRole('textbox', { name: 'New step in Colour / Unscheduled' }).fill('Brand colours')
   await page.keyboard.press('Enter')
-  await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: 'Add story to Palette / Unscheduled' }).click()
-  await page.getByRole('textbox', { name: 'New story in Palette / Unscheduled' }).fill('Brand colours')
-  await page.keyboard.press('Enter')
-  // New stories start in the workflow's first status.
-  await expect(page.getByRole('group', { name: 'Stories in Palette / Unscheduled' })).toContainText('Ideas')
+  // New steps start in the workflow's first status.
+  await expect(page.getByRole('group', { name: 'Steps in Colour / Unscheduled' })).toContainText('Ideas')
 })

@@ -6,7 +6,7 @@ import { refreshSession } from '../session'
 import { ErrorAlert, Field, Notice } from '../ui'
 import { PageBand } from './app'
 
-/** Workspace name, story key prefix and estimate unit. Admins change them; everyone else reads. */
+/** Workspace name, step key prefix and estimate unit. Admins change them; everyone else reads. */
 export function SettingsPage() {
   const ws = useOutletContext<Membership>()
   const qc = useQueryClient()
@@ -37,7 +37,7 @@ export function SettingsPage() {
             <Field label="Workspace name">
               <input className="input w-full" required maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
             </Field>
-            <Field label="Story key prefix" hint="New stories get keys like STORY-12. Existing keys keep their prefix.">
+            <Field label="Step key prefix" hint="New steps get keys like STEP-12. Existing keys keep their prefix.">
               <input
                 className="input w-full"
                 required

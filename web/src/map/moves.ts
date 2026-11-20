@@ -2,13 +2,13 @@ import type { MapNode, MapView, Placement, Position, Release } from '../api'
 
 /** What is being dragged. */
 export type DragItem =
-  | { kind: 'story'; storyId: string; placement: Placement; label: string }
+  | { kind: 'step'; stepId: string; placement: Placement; label: string }
   | { kind: 'node'; node: MapNode; label: string }
   | { kind: 'release'; release: Release; label: string }
 
-/** Where it can land. A story, node or release target means "next to this one". */
+/** Where it can land. A step, node or release target means "next to this one". */
 export type DropTarget =
-  | { kind: 'story'; storyId: string; placement: Placement; label: string }
+  | { kind: 'step'; stepId: string; placement: Placement; label: string }
   | { kind: 'cell'; activityId: string; releaseId: string | null; label: string }
   | { kind: 'node'; node: MapNode; label: string }
   | { kind: 'slot'; level: MapNode['level']; parentId: string; label: string }
@@ -19,7 +19,7 @@ export type DropTarget =
 export function isSelf(target: DropTarget, item: DragItem | undefined): boolean {
   if (!item) return false
   return (
-    (item.kind === 'story' && target.kind === 'story' && target.storyId === item.storyId) ||
+    (item.kind === 'step' && target.kind === 'step' && target.stepId === item.stepId) ||
     (item.kind === 'node' && target.kind === 'node' && target.node.id === item.node.id) ||
     (item.kind === 'release' && target.kind === 'release' && target.release.id === item.release.id)
   )
@@ -28,8 +28,8 @@ export function isSelf(target: DropTarget, item: DragItem | undefined): boolean 
 export function accepts(target: DropTarget, item: DragItem | undefined): boolean {
   if (!item) return false
   switch (item.kind) {
-    case 'story':
-      return (target.kind === 'story' && target.storyId !== item.storyId) || target.kind === 'cell'
+    case 'step':
+      return (target.kind === 'step' && target.stepId !== item.stepId) || target.kind === 'cell'
     case 'node':
       return (
         (target.kind === 'node' && target.node.level === item.node.level && target.node.id !== item.node.id) ||
@@ -42,7 +42,7 @@ export function accepts(target: DropTarget, item: DragItem | undefined): boolean
 
 /** A move, as the API takes it. */
 export type Move =
-  | { kind: 'story'; storyId: string; activityId: string; releaseId: string | null; position: Position }
+  | { kind: 'step'; stepId: string; activityId: string; releaseId: string | null; position: Position }
   | { kind: 'node'; nodeId: string; parentId: string | null; position: Position }
   | { kind: 'release'; releaseId: string; position: Position }
 
@@ -64,19 +64,19 @@ function nextTo<T extends { id: string; rank: string }>(list: T[], moving: T, ta
 /** The move a drop asks for, or null when it would change nothing the user meant. */
 export function moveFor(view: MapView, item: DragItem, target: DropTarget): Move | null {
   if (!accepts(target, item)) return null
-  if (item.kind === 'story') {
+  if (item.kind === 'step') {
     if (target.kind === 'cell') {
-      return { kind: 'story', storyId: item.storyId, activityId: target.activityId, releaseId: target.releaseId, position: {} }
+      return { kind: 'step', stepId: item.stepId, activityId: target.activityId, releaseId: target.releaseId, position: {} }
     }
-    if (target.kind !== 'story') return null
+    if (target.kind !== 'step') return null
     const t = target.placement
     const cell = view.placements.filter((p) => p.activityId === t.activityId && p.releaseId === t.releaseId)
     return {
-      kind: 'story',
-      storyId: item.storyId,
+      kind: 'step',
+      stepId: item.stepId,
       activityId: t.activityId,
       releaseId: t.releaseId,
-      position: nextTo(cell, item.placement, t, (p) => p.storyId),
+      position: nextTo(cell, item.placement, t, (p) => p.stepId),
     }
   }
   if (item.kind === 'node') {
@@ -119,11 +119,11 @@ function interimRank<T extends { id: string; rank: string }>(siblings: T[], posi
 /** The map as it will look once the move is saved. */
 export function applyMove(view: MapView, m: Move): MapView {
   switch (m.kind) {
-    case 'story': {
-      const moving = view.placements.find((p) => p.storyId === m.storyId)
+    case 'step': {
+      const moving = view.placements.find((p) => p.stepId === m.stepId)
       if (!moving) return view
       const cell = view.placements.filter((p) => p.activityId === m.activityId && p.releaseId === m.releaseId && p.id !== moving.id)
-      const rank = interimRank(cell, m.position, (p) => p.storyId)
+      const rank = interimRank(cell, m.position, (p) => p.stepId)
       return {
         ...view,
         placements: view.placements.map((p) => (p.id === moving.id ? { ...p, activityId: m.activityId, releaseId: m.releaseId, rank } : p)),

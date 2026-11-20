@@ -1,4 +1,4 @@
-import type { MapNode, MapView, Placement, Release, Story } from '../api'
+import type { MapNode, MapView, Placement, Release, Step } from '../api'
 
 /**
  * One grid column under the backbone. Each activity is a column; an objective
@@ -65,23 +65,23 @@ export function bands(view: MapView): Band[] {
 }
 
 export interface Card {
-  story: Story
+  step: Step
   placement: Placement
 }
 
 export const cellKey = (activityId: string, releaseId: string | null) => `${activityId}|${releaseId ?? ''}`
 
-/** Stories by cell, each cell in rank order. */
+/** Steps by cell, each cell in rank order. */
 export function cells(view: MapView): Map<string, Card[]> {
-  const stories = new Map(view.stories.map((s) => [s.id, s]))
+  const steps = new Map(view.steps.map((s) => [s.id, s]))
   const out = new Map<string, Card[]>()
   for (const p of [...view.placements].sort(byRank)) {
-    const story = stories.get(p.storyId)
-    if (!story) continue
+    const step = steps.get(p.stepId)
+    if (!step) continue
     const k = cellKey(p.activityId, p.releaseId)
     const list = out.get(k)
-    if (list) list.push({ story, placement: p })
-    else out.set(k, [{ story, placement: p }])
+    if (list) list.push({ step, placement: p })
+    else out.set(k, [{ step, placement: p }])
   }
   return out
 }

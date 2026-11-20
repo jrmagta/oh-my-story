@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient, type QueryKey } from '@tanstack/react-query'
-import type { MapNode, MapView, Placement, Release, Story } from '../api'
+import type { MapNode, MapView, Placement, Release, Step } from '../api'
 
 /** One row of the event log, as the live socket sends it (docs/API.md, Live). */
 export interface LiveEvent {
@@ -53,22 +53,22 @@ export function applyEvent(view: MapView, ev: LiveEvent): MapView | null {
       return { ...view, releases: patch(view.releases, ev.entityId, after) }
     case 'release:delete':
       return { ...view, releases: view.releases.filter((r) => r.id !== ev.entityId) }
-    case 'story:create':
-      return { ...view, stories: add(view.stories, after as unknown as Story) }
-    case 'story:update':
-      return { ...view, stories: patch(view.stories, ev.entityId, after) }
-    case 'story:delete':
-      return { ...view, stories: view.stories.filter((s) => s.id !== ev.entityId) }
+    case 'step:create':
+      return { ...view, steps: add(view.steps, after as unknown as Step) }
+    case 'step:update':
+      return { ...view, steps: patch(view.steps, ev.entityId, after) }
+    case 'step:delete':
+      return { ...view, steps: view.steps.filter((s) => s.id !== ev.entityId) }
     case 'placement:create':
       return { ...view, placements: add(view.placements, after as unknown as Placement) }
     case 'placement:move': {
-      // A move also bumps its story's version, which travels as storyVersion.
-      const { storyVersion, ...fields } = after
+      // A move also bumps its step's version, which travels as stepVersion.
+      const { stepVersion, ...fields } = after
       const placements = patch(view.placements, ev.entityId, fields)
-      const storyId = placements.find((p) => p.id === ev.entityId)?.storyId
-      const stories =
-        typeof storyVersion === 'number' && storyId ? patch(view.stories, storyId, { version: storyVersion }) : view.stories
-      return { ...view, placements, stories }
+      const stepId = placements.find((p) => p.id === ev.entityId)?.stepId
+      const steps =
+        typeof stepVersion === 'number' && stepId ? patch(view.steps, stepId, { version: stepVersion }) : view.steps
+      return { ...view, placements, steps }
     }
     default:
       return null

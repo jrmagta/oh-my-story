@@ -88,10 +88,10 @@ func TestLiveAcrossInstances(t *testing.T) {
 	onTwo := h2.clientWithSession(owner.sessionToken())
 
 	conn := onTwo.mustDial(b.path, lastEventID(onTwo, b.path))
-	created := owner.must(201, "POST", b.path+"/stories", map[string]any{"title": "Live story", "activityId": b.act1})
+	created := owner.must(201, "POST", b.path+"/steps", map[string]any{"title": "Live step", "activityId": b.act1})
 
 	evs := events(t, conn, 2)
-	if evs[0].Event.Entity != "story" || evs[0].Event.Action != "create" || evs[0].Event.After["title"] != "Live story" ||
+	if evs[0].Event.Entity != "step" || evs[0].Event.Action != "create" || evs[0].Event.After["title"] != "Live step" ||
 		evs[1].Event.Entity != "placement" || evs[1].Event.EntityID != str(created.body, "placement", "id") {
 		t.Errorf("events = %+v, %+v", evs[0].Event, evs[1].Event)
 	}
@@ -110,7 +110,7 @@ func TestLiveResume(t *testing.T) {
 	b := buildMap(owner)
 	from := lastEventID(owner, b.path)
 	for _, title := range []string{"one", "two"} {
-		owner.must(201, "POST", b.path+"/stories", map[string]any{"title": title, "activityId": b.act1})
+		owner.must(201, "POST", b.path+"/steps", map[string]any{"title": title, "activityId": b.act1})
 	}
 	other := owner.must(201, "POST", acme+"/maps", map[string]any{"name": "Other"})
 	owner.must(201, "POST", acme+"/maps/"+str(other.body, "id")+"/nodes", map[string]any{"level": "objective", "title": "x"})
@@ -123,12 +123,12 @@ func TestLiveResume(t *testing.T) {
 		got = append(got, e.Event.Entity+":"+fmt.Sprint(e.Event.After["title"]))
 		ids = append(ids, e.Event.ID)
 	}
-	if !slices.Equal(got, []string{"story:one", "placement:<nil>", "story:two", "placement:<nil>"}) || !slices.IsSorted(ids) {
+	if !slices.Equal(got, []string{"step:one", "placement:<nil>", "step:two", "placement:<nil>"}) || !slices.IsSorted(ids) {
 		t.Errorf("replayed %v (ids %v)", got, ids)
 	}
 
 	// The next live event follows straight on; the other map's events never came.
-	owner.must(201, "POST", b.path+"/stories", map[string]any{"title": "three", "activityId": b.act1})
+	owner.must(201, "POST", b.path+"/steps", map[string]any{"title": "three", "activityId": b.act1})
 	if ev := events(t, conn, 1)[0].Event; ev.After["title"] != "three" || ev.ID <= ids[3] {
 		t.Errorf("live after replay = %+v", ev)
 	}

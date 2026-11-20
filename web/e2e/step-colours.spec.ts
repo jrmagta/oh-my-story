@@ -22,12 +22,12 @@ test('backbone cards take a colour, keep it after a reload, and go back to defau
     expect(r.status()).toBe(201)
     return (await r.json()) as { id: string }
   }
-  const map = await post(`/api/workspaces/${slug}/maps`, { name: 'Shop', levels: 4 })
+  const map = await post(`/api/workspaces/${slug}/maps`, { name: 'Shop' })
   const api = `/api/workspaces/${slug}/maps/${map.id}`
   const obj = await post(`${api}/nodes`, { level: 'objective', title: 'Buy' })
   const act = await post(`${api}/nodes`, { level: 'activity', title: 'Browse', parentId: obj.id })
-  const step = await post(`${api}/nodes`, { level: 'step', title: 'Search', parentId: act.id })
-  await post(`${api}/stories`, { title: 'Search by name', stepId: step.id, releaseId: null })
+  await post(`${api}/nodes`, { level: 'activity', title: 'Search', parentId: obj.id })
+  await post(`${api}/steps`, { title: 'Search by name', activityId: act.id, releaseId: null })
   await page.goto(`/w/${slug}/maps/${map.id}`)
 
   const activity = page.locator('.map-act', { hasText: 'Browse' })
@@ -38,9 +38,9 @@ test('backbone cards take a colour, keep it after a reload, and go back to defau
   await pick('activity Browse', 'Blue')
   await expect(activity).toHaveCSS('background-color', 'rgb(59, 130, 196)')
   await expect(activity).toHaveCSS('color', 'rgb(255, 255, 255)')
-  await pick('step Search', 'Amber')
+  await pick('activity Search', 'Amber')
   // Amber is light, so its text is black.
-  await expect(page.locator('.map-step', { hasText: 'Search' })).toHaveCSS('color', 'rgb(0, 0, 0)')
+  await expect(page.locator('.map-act', { hasText: 'Search' })).toHaveCSS('color', 'rgb(0, 0, 0)')
   await pick('objective Buy', 'Green')
 
   await page.reload()

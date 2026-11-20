@@ -73,7 +73,7 @@ func parseEstimateUnit(s string) (string, error) {
 	return s, nil
 }
 
-// parseEstimate accepts what stories.estimate (numeric(6,2)) holds exactly:
+// parseEstimate accepts what steps.estimate (numeric(6,2)) holds exactly:
 // 0 to 9999.99 with at most two decimals.
 func parseEstimate(v float64) error {
 	if v < 0 || v > 9999.99 || math.Abs(v*100-math.Round(v*100)) > 1e-6 {

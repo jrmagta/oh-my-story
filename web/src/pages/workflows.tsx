@@ -183,7 +183,7 @@ function StatusRow(props: {
           }}
         >
           <label className="flex-1">
-            <span className="label-up mb-1 block">Move its stories to</span>
+            <span className="label-up mb-1 block">Move its steps to</span>
             <select className="select select-sm w-full font-bold" value={replacement} onChange={(e) => setReplacement(e.target.value)}>
               {others.map((o) => (
                 <option key={o.id} value={o.id}>

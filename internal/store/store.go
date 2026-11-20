@@ -233,12 +233,29 @@ func (s *Store) ResolveOIDCUser(ctx context.Context, issuer, subject, email, nam
 
 // ---- workspaces ----
 
+// KeyPrefixFor is the step key prefix a new workspace starts with: its slug
+// in capitals without hyphens, at most 10 characters and starting with a
+// letter ("acme-corp" gives ACMECORP), or STEP when the slug has no letters.
+// Admins can change it later.
+func KeyPrefixFor(slug string) string {
+	var b strings.Builder
+	for _, r := range strings.ToUpper(slug) {
+		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9' && b.Len() > 0) {
+			b.WriteRune(r)
+		}
+	}
+	if p := b.String(); p != "" {
+		return p[:min(len(p), 10)]
+	}
+	return "STEP"
+}
+
 func (s *Store) CreateWorkspace(ctx context.Context, owner uuid.UUID, name, slug string) (Workspace, error) {
 	w := Workspace{ID: newID()}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx,
-			`INSERT INTO workspaces (id, name, slug) VALUES ($1, $2, $3)
-			 RETURNING name, slug, key_prefix, estimate_unit`, w.ID, name, slug).
+			`INSERT INTO workspaces (id, name, slug, key_prefix) VALUES ($1, $2, $3, $4)
+			 RETURNING name, slug, key_prefix, estimate_unit`, w.ID, name, slug, KeyPrefixFor(slug)).
 			Scan(&w.Name, &w.Slug, &w.KeyPrefix, &w.EstimateUnit)
 		if isUnique(err) {
 			return ErrConflict

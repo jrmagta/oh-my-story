@@ -200,7 +200,8 @@ func (s *Store) UpdateNode(ctx context.Context, actor, workspaceID, mapID, nodeI
 }
 
 // MoveNode places a node under parentID (nil for the top level) at pos. A
-// node keeps its level, so only a step can change activity, for example.
+// node keeps its level: an activity can move to another objective, and an
+// objective stays at the top level.
 func (s *Store) MoveNode(ctx context.Context, actor, workspaceID, mapID, nodeID uuid.UUID, parentID *uuid.UUID, pos Position) (Node, error) {
 	var n Node
 	err := s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
@@ -226,8 +227,8 @@ func (s *Store) MoveNode(ctx context.Context, actor, workspaceID, mapID, nodeID 
 	return n, err
 }
 
-// DeleteNode soft-deletes a node, its descendants and the stories placed on
-// any of those steps, all with one timestamp so RestoreNode can bring back
+// DeleteNode soft-deletes a node, its descendants and the steps placed under
+// any of those activities, all with one timestamp so RestoreNode can bring back
 // exactly that set.
 func (s *Store) DeleteNode(ctx context.Context, actor, workspaceID, mapID, nodeID uuid.UUID) error {
 	return s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
@@ -270,7 +271,7 @@ func (s *Store) RestoreNode(ctx context.Context, actor, workspaceID, mapID, node
 }
 
 // setSubtreeDeleted moves the subtree under nodeID whose deleted_at equals
-// from (NULL for live rows) to to, along with the stories placed under its activities.
+// from (NULL for live rows) to to, along with the steps placed under its activities.
 func setSubtreeDeleted(ctx context.Context, tx pgx.Tx, mapID, nodeID uuid.UUID, from, to *time.Time) ([]change, error) {
 	action := "delete"
 	if to == nil {
@@ -286,13 +287,13 @@ func setSubtreeDeleted(ctx context.Context, tx pgx.Tx, mapID, nodeID uuid.UUID, 
 		   UPDATE nodes SET deleted_at = $3, updated_at = now() WHERE id IN (SELECT id FROM sub)
 		   RETURNING 'node'::text AS entity, id, jsonb_build_object('title', title, 'level', level) AS label
 		 ),
-		 stories_done AS (
-		   UPDATE stories SET deleted_at = $3, updated_at = now()
+		 steps_done AS (
+		   UPDATE steps SET deleted_at = $3, updated_at = now()
 		   WHERE deleted_at IS NOT DISTINCT FROM $2
-		     AND id IN (SELECT story_id FROM placements WHERE map_id = $4 AND activity_id IN (SELECT id FROM sub))
-		   RETURNING 'story'::text AS entity, id, jsonb_build_object('key', key, 'title', title) AS label
+		     AND id IN (SELECT step_id FROM placements WHERE map_id = $4 AND activity_id IN (SELECT id FROM sub))
+		   RETURNING 'step'::text AS entity, id, jsonb_build_object('key', key, 'title', title) AS label
 		 )
-		 SELECT entity, id, label FROM nodes_done UNION ALL SELECT entity, id, label FROM stories_done`,
+		 SELECT entity, id, label FROM nodes_done UNION ALL SELECT entity, id, label FROM steps_done`,
 		nodeID, from, to, mapID)
 	if err != nil {
 		return nil, err
@@ -395,7 +396,7 @@ func (s *Store) MoveRelease(ctx context.Context, actor, workspaceID, mapID, rele
 	return r, err
 }
 
-// DeleteRelease removes a release. Its stories move to the end of the
+// DeleteRelease removes a release. Its steps move to the end of the
 // Unscheduled cell of their activity, keeping their order.
 func (s *Store) DeleteRelease(ctx context.Context, actor, workspaceID, mapID, releaseID uuid.UUID) error {
 	return s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {

@@ -118,19 +118,19 @@ func (s *Store) MapHistory(ctx context.Context, workspaceID, mapID uuid.UUID, be
 	return s.history(ctx, `e.workspace_id = $1 AND e.map_id = $2`, before, limit, workspaceID, mapID)
 }
 
-// StoryHistory is one story's events and its placements' (moves), newest
-// first. Deleted stories keep their history.
-func (s *Store) StoryHistory(ctx context.Context, workspaceID, mapID, storyID uuid.UUID, before int64, limit int) (History, error) {
+// StepHistory is one step's events and its placements' (moves), newest
+// first. Deleted steps keep their history.
+func (s *Store) StepHistory(ctx context.Context, workspaceID, mapID, stepID uuid.UUID, before int64, limit int) (History, error) {
 	var ok bool
 	err := s.pool.QueryRow(ctx,
-		`SELECT true FROM stories s JOIN placements p ON p.story_id = s.id JOIN maps m ON m.id = p.map_id
+		`SELECT true FROM steps s JOIN placements p ON p.step_id = s.id JOIN maps m ON m.id = p.map_id
 		 WHERE s.id = $1 AND p.map_id = $2 AND s.workspace_id = $3 AND m.deleted_at IS NULL`,
-		storyID, mapID, workspaceID).Scan(&ok)
+		stepID, mapID, workspaceID).Scan(&ok)
 	if err != nil {
 		return History{}, notFound(err)
 	}
 	return s.history(ctx,
-		`e.workspace_id = $1 AND ((e.entity_type = 'story' AND e.entity_id = $2)
-		   OR (e.entity_type = 'placement' AND e.entity_id IN (SELECT id FROM placements WHERE story_id = $2)))`,
-		before, limit, workspaceID, storyID)
+		`e.workspace_id = $1 AND ((e.entity_type = 'step' AND e.entity_id = $2)
+		   OR (e.entity_type = 'placement' AND e.entity_id IN (SELECT id FROM placements WHERE step_id = $2)))`,
+		before, limit, workspaceID, stepID)
 }

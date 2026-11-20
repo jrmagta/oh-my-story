@@ -50,24 +50,24 @@ func TestMapRoundTrip(t *testing.T) {
 	me := str(owner.must(200, "GET", "/api/me", nil).body, "user", "id")
 	b := buildMap(owner)
 
-	created := owner.must(201, "POST", b.path+"/stories", map[string]any{"title": "Email field", "activityId": b.act1})
-	story := str(created.body, "story", "id")
-	if str(created.body, "story", "key") != "STORY-1" || str(created.body, "story", "statusId") != b.todo {
-		t.Errorf("created story = %v", created.body)
+	created := owner.must(201, "POST", b.path+"/steps", map[string]any{"title": "Email field", "activityId": b.act1})
+	step := str(created.body, "step", "id")
+	if str(created.body, "step", "key") != "ACME-1" || str(created.body, "step", "statusId") != b.todo {
+		t.Errorf("created step = %v", created.body)
 	}
-	second := str(owner.must(201, "POST", b.path+"/stories", map[string]any{"title": "Second", "activityId": b.act1, "beforeId": story}).body, "story", "id")
+	second := str(owner.must(201, "POST", b.path+"/steps", map[string]any{"title": "Second", "activityId": b.act1, "beforeId": step}).body, "step", "id")
 
-	patched := owner.must(200, "PATCH", b.path+"/stories/"+story, map[string]any{
+	patched := owner.must(200, "PATCH", b.path+"/steps/"+step, map[string]any{
 		"title": "Email input", "descriptionMd": "## Notes", "statusId": b.doneID, "assigneeId": me,
 	})
 	if str(patched.body, "title") != "Email input" || str(patched.body, "assigneeId") != me || patched.body["version"] != 1.0 {
-		t.Errorf("patched story = %v", patched.body)
+		t.Errorf("patched step = %v", patched.body)
 	}
-	if r := owner.must(200, "PATCH", b.path+"/stories/"+story, map[string]any{"assigneeId": nil}); r.body["assigneeId"] != nil {
+	if r := owner.must(200, "PATCH", b.path+"/steps/"+step, map[string]any{"assigneeId": nil}); r.body["assigneeId"] != nil {
 		t.Errorf("assignee not cleared: %v", r.body)
 	}
 
-	moved := owner.must(200, "POST", b.path+"/stories/"+story+"/move",
+	moved := owner.must(200, "POST", b.path+"/steps/"+step+"/move",
 		map[string]any{"activityId": b.act2, "releaseId": b.rel, "version": 0})
 	if moved.body["stale"] != true || str(moved.body, "placement", "releaseId") != b.rel {
 		t.Errorf("move = %v", moved.body)
@@ -77,14 +77,14 @@ func TestMapRoundTrip(t *testing.T) {
 	if got := titles(view, "nodes", "title"); len(got) != 3 {
 		t.Errorf("nodes = %v", got)
 	}
-	if got := titles(view, "stories", "title"); !slices.Equal(got, []string{"Email input", "Second"}) {
-		t.Errorf("stories = %v", got)
+	if got := titles(view, "steps", "title"); !slices.Equal(got, []string{"Email input", "Second"}) {
+		t.Errorf("steps = %v", got)
 	}
 	if view["lastEventId"].(float64) < 1 || str(view, "map", "name") != "Onboarding" {
 		t.Errorf("view map/lastEventId = %v / %v", view["map"], view["lastEventId"])
 	}
 	for _, p := range view["placements"].([]any) {
-		if str(p, "storyId") == story && (str(p, "activityId") != b.act2 || str(p, "releaseId") != b.rel) {
+		if str(p, "stepId") == step && (str(p, "activityId") != b.act2 || str(p, "releaseId") != b.rel) {
 			t.Errorf("placement = %v", p)
 		}
 	}
@@ -104,19 +104,19 @@ func TestMapRoundTrip(t *testing.T) {
 	owner.must(200, "PATCH", b.path+"/nodes/"+b.act2, map[string]any{"title": "Check inbox", "colour": "#FCB131"})
 	owner.must(200, "POST", b.path+"/nodes/"+b.act2+"/move", map[string]any{"parentId": b.obj, "beforeId": b.act1})
 
-	owner.must(204, "DELETE", b.path+"/stories/"+second, nil)
-	if got := titles(owner.must(200, "GET", b.path, nil).body, "stories", "title"); !slices.Equal(got, []string{"Email input"}) {
+	owner.must(204, "DELETE", b.path+"/steps/"+second, nil)
+	if got := titles(owner.must(200, "GET", b.path, nil).body, "steps", "title"); !slices.Equal(got, []string{"Email input"}) {
 		t.Errorf("after delete: %v", got)
 	}
-	owner.must(200, "POST", b.path+"/stories/"+second+"/restore", map[string]any{})
+	owner.must(200, "POST", b.path+"/steps/"+second+"/restore", map[string]any{})
 
 	owner.must(204, "DELETE", b.path+"/nodes/"+b.obj, nil)
 	view = owner.must(200, "GET", b.path, nil).body
-	if len(view["stories"].([]any)) != 0 || len(view["nodes"].([]any)) != 0 {
-		t.Errorf("after deleting the objective: nodes %v stories %v", view["nodes"], view["stories"])
+	if len(view["steps"].([]any)) != 0 || len(view["nodes"].([]any)) != 0 {
+		t.Errorf("after deleting the objective: nodes %v steps %v", view["nodes"], view["steps"])
 	}
 	owner.must(200, "POST", b.path+"/nodes/"+b.obj+"/restore", map[string]any{})
-	if got := titles(owner.must(200, "GET", b.path, nil).body, "stories", "title"); len(got) != 2 {
+	if got := titles(owner.must(200, "GET", b.path, nil).body, "steps", "title"); len(got) != 2 {
 		t.Errorf("after restore: %v", got)
 	}
 
@@ -131,7 +131,7 @@ func TestWorkflowRoundTrip(t *testing.T) {
 	h := newHarness(t, harnessOpts{})
 	owner := h.bootstrap()
 	b := buildMap(owner)
-	story := str(owner.must(201, "POST", b.path+"/stories", map[string]any{"title": "s", "activityId": b.act1}).body, "story", "id")
+	step := str(owner.must(201, "POST", b.path+"/steps", map[string]any{"title": "s", "activityId": b.act1}).body, "step", "id")
 
 	wf := owner.must(201, "POST", acme+"/workflows", map[string]any{"name": "Design"})
 	wfID := str(wf.body, "id")
@@ -153,19 +153,19 @@ func TestWorkflowRoundTrip(t *testing.T) {
 	}
 	owner.must(204, "DELETE", acme+"/statuses/"+reviewID, nil)
 
-	// The story's status is in use: deleting needs a replacement from the same workflow.
+	// The step's status is in use: deleting needs a replacement from the same workflow.
 	if r := owner.must(400, "DELETE", acme+"/statuses/"+b.todo, nil); r.errCode() != "bad_request" {
 		t.Errorf("delete in use = %s", r.raw)
 	}
 	owner.must(400, "DELETE", acme+"/statuses/"+b.todo+"?replacementId="+first, nil)
 	owner.must(204, "DELETE", acme+"/statuses/"+b.todo+"?replacementId="+b.doing, nil)
-	for _, s := range owner.must(200, "GET", b.path, nil).body["stories"].([]any) {
-		if str(s, "id") == story && str(s, "statusId") != b.doing {
-			t.Errorf("story status after reassignment = %v", s)
+	for _, s := range owner.must(200, "GET", b.path, nil).body["steps"].([]any) {
+		if str(s, "id") == step && str(s, "statusId") != b.doing {
+			t.Errorf("step status after reassignment = %v", s)
 		}
 	}
 
-	// A map can use a non-default workflow, and stories then take its statuses.
+	// A map can use a non-default workflow, and steps then take its statuses.
 	m2 := owner.must(201, "POST", acme+"/maps", map[string]any{"name": "Design", "workflowId": wfID})
 	if str(m2.body, "workflowId") != wfID {
 		t.Errorf("map workflow = %v", m2.body)
@@ -173,8 +173,8 @@ func TestWorkflowRoundTrip(t *testing.T) {
 	p2 := acme + "/maps/" + str(m2.body, "id")
 	obj := str(owner.must(201, "POST", p2+"/nodes", map[string]any{"level": "objective", "title": "O"}).body, "id")
 	act := str(owner.must(201, "POST", p2+"/nodes", map[string]any{"level": "activity", "title": "A", "parentId": obj}).body, "id")
-	s2 := str(owner.must(201, "POST", p2+"/stories", map[string]any{"title": "s", "activityId": act}).body, "story", "id")
-	owner.must(400, "PATCH", p2+"/stories/"+s2, map[string]any{"statusId": b.doneID})
+	s2 := str(owner.must(201, "POST", p2+"/steps", map[string]any{"title": "s", "activityId": act}).body, "step", "id")
+	owner.must(400, "PATCH", p2+"/steps/"+s2, map[string]any{"statusId": b.doneID})
 }
 
 func TestMapRoles(t *testing.T) {
@@ -198,7 +198,7 @@ func TestMapRoles(t *testing.T) {
 
 			want := map[bool]int{true: 201, false: 403}
 			u.must(want[c.edit], "POST", b.path+"/nodes", map[string]any{"level": "activity", "title": "x", "parentId": b.obj})
-			u.must(want[c.edit], "POST", b.path+"/stories", map[string]any{"title": "x", "activityId": b.act1})
+			u.must(want[c.edit], "POST", b.path+"/steps", map[string]any{"title": "x", "activityId": b.act1})
 			u.must(want[c.edit], "POST", acme+"/maps", map[string]any{"name": "x"})
 			u.must(want[c.workflow], "POST", acme+"/workflows", map[string]any{"name": "wf-" + c.role})
 			u.must(map[bool]int{true: 200, false: 403}[c.workflow], "PATCH", acme+"/statuses/"+b.todo, map[string]any{"colour": "#000000"})
@@ -245,8 +245,8 @@ func TestMapValidation(t *testing.T) {
 		{"POST", b.path + "/nodes", map[string]any{"level": "step", "title": "x", "parentId": b.act1}},
 		{"POST", b.path + "/nodes/" + b.act1 + "/move", map[string]any{"afterId": b.act2}},
 		{"POST", b.path + "/releases", map[string]any{"name": "x", "targetDate": "31/12/2026"}},
-		{"POST", b.path + "/stories", map[string]any{"title": "x"}},
-		{"POST", b.path + "/stories", map[string]any{"title": "x", "activityId": b.obj}},
+		{"POST", b.path + "/steps", map[string]any{"title": "x"}},
+		{"POST", b.path + "/steps", map[string]any{"title": "x", "activityId": b.obj}},
 		{"POST", acme + "/workflows/" + b.act1 + "/statuses", map[string]any{"name": "x", "category": "later"}},
 	}
 	for _, c := range cases {
@@ -258,19 +258,19 @@ func TestMapValidation(t *testing.T) {
 	// Malformed ids are not found, like ids that do not exist.
 	owner.must(404, "POST", b.path+"/nodes/not-a-uuid/move", map[string]any{"parentId": nil})
 
-	story := str(owner.must(201, "POST", b.path+"/stories", map[string]any{"title": "x", "activityId": b.act1}).body, "story", "id")
+	step := str(owner.must(201, "POST", b.path+"/steps", map[string]any{"title": "x", "activityId": b.act1}).body, "step", "id")
 	for _, body := range []map[string]any{
 		{"activityId": b.act1, "releaseId": nil},                                 // no version
 		{"activityId": b.act1, "version": 0},                                     // no releaseId
 		{"releaseId": nil, "version": 0},                                         // no activityId
-		{"activityId": b.act1, "releaseId": nil, "version": 0, "afterId": b.obj}, // anchor is not a story in the cell
+		{"activityId": b.act1, "releaseId": nil, "version": 0, "afterId": b.obj}, // anchor is not a step in the cell
 	} {
-		if r := owner.do("POST", b.path+"/stories/"+story+"/move", body); r.status != 400 {
+		if r := owner.do("POST", b.path+"/steps/"+step+"/move", body); r.status != 400 {
 			t.Errorf("move %v: status %d: %s", body, r.status, r.raw)
 		}
 	}
-	if r := owner.do("POST", b.path+"/stories/00000000-0000-7000-8000-000000000000/move",
+	if r := owner.do("POST", b.path+"/steps/00000000-0000-7000-8000-000000000000/move",
 		map[string]any{"activityId": b.act1, "releaseId": nil, "version": 0}); r.status != 404 {
-		t.Errorf("move of unknown story: %d", r.status)
+		t.Errorf("move of unknown step: %d", r.status)
 	}
 }

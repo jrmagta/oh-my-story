@@ -11,7 +11,7 @@ import { nodeStyle, palette } from '../map/colours'
 import { applyMove, type Move } from '../map/moves'
 import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toasts, type ToastMessage } from '../ui'
 import { PageBand } from './app'
-import { StoryPanel } from './story-panel'
+import { StepPanel } from './step-panel'
 
 export const mapKey = (slug: string, mapId: string) => ['ws', slug, 'map', mapId] as const
 
@@ -20,12 +20,12 @@ interface MapCtx {
   view: MapView
   canEdit: boolean
   statuses: Map<string, Status>
-  /** Story counts and estimate sums for the map, each node and each release. */
+  /** Step counts and estimate sums for the map, each node and each release. */
   totals: Totals
   /** Runs a write, then reloads the map. undo, when given, is offered in a notice. */
   run: (write: () => Promise<unknown>, opts?: { done?: string; undo?: () => Promise<unknown> }) => Promise<boolean>
-  selectedStory: string | null
-  openStory: (id: string | null) => void
+  selectedStep: string | null
+  openStep: (id: string | null) => void
   /** Shows a move at once, saves it, and puts things back if saving fails. */
   move: (m: Move) => void
   /** The open add-node input, as "level:parentId"; see useAddNode. */
@@ -93,16 +93,16 @@ export function MapPage() {
       qc.setQueryData<MapView>(key, applyMove(before, m))
       const save = async () => {
         switch (m.kind) {
-          case 'story': {
-            const story = before.stories.find((s) => s.id === m.storyId)
-            const r = await api.moveStory(ws.slug, mapId, m.storyId, {
+          case 'step': {
+            const step = before.steps.find((s) => s.id === m.stepId)
+            const r = await api.moveStep(ws.slug, mapId, m.stepId, {
               activityId: m.activityId,
               releaseId: m.releaseId,
-              version: story?.version ?? 0,
+              version: step?.version ?? 0,
               ...m.position,
             })
-            if (r.stale && story) {
-              toast({ text: `${story.key} was changed by someone else while you moved it. It is in its new place.`, tone: 'info' })
+            if (r.stale && step) {
+              toast({ text: `${step.key} was changed by someone else while you moved it. It is in its new place.`, tone: 'info' })
             }
             return
           }
@@ -126,14 +126,14 @@ export function MapPage() {
   )
 
   const [adding, setAdding] = useState<string | null>(null)
-  const selectedStory = search.get('story')
-  const openStory = useCallback(
+  const selectedStep = search.get('step')
+  const openStep = useCallback(
     (id: string | null) =>
       setSearch(
         (s) => {
           const n = new URLSearchParams(s)
-          if (id) n.set('story', id)
-          else n.delete('story')
+          if (id) n.set('step', id)
+          else n.delete('step')
           return n
         },
         { replace: true },
@@ -151,13 +151,13 @@ export function MapPage() {
       statuses,
       totals: totals(query.data, statuses),
       run,
-      selectedStory,
-      openStory,
+      selectedStep,
+      openStep,
       move,
       adding,
       setAdding,
     }
-  }, [ws, query.data, run, selectedStory, openStory, move, adding])
+  }, [ws, query.data, run, selectedStep, openStep, move, adding])
 
   if (query.isPending) return <Loading />
   if (!ctx) {
@@ -174,10 +174,10 @@ export function MapPage() {
       </>
     )
   }
-  // One side panel at a time: the open story, else the activity feed.
-  const storyOpen = !!selectedStory && ctx.view.stories.some((s) => s.id === selectedStory)
-  const activityOpen = !storyOpen && search.has('activity')
-  const panelOpen = storyOpen || activityOpen
+  // One side panel at a time: the open step, else the activity feed.
+  const stepOpen = !!selectedStep && ctx.view.steps.some((s) => s.id === selectedStep)
+  const activityOpen = !stepOpen && search.has('activity')
+  const panelOpen = stepOpen || activityOpen
   const toggleActivity = () =>
     setSearch(
       (s) => {
@@ -185,7 +185,7 @@ export function MapPage() {
         if (activityOpen) n.delete('activity')
         else {
           n.set('activity', '')
-          n.delete('story')
+          n.delete('step')
         }
         return n
       },
@@ -199,7 +199,7 @@ export function MapPage() {
           <MapGrid />
         </MapDnd>
       </div>
-      {storyOpen && <StoryPanel storyId={selectedStory} />}
+      {stepOpen && <StepPanel stepId={selectedStep} />}
       {activityOpen && <ActivityPanel onClose={toggleActivity} />}
       <Toasts items={toasts} dismiss={dismiss} />
     </Ctx.Provider>
@@ -217,9 +217,9 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`
 }
 
-/** "8 points" plus how many stories lack an estimate; empty when nothing is estimated yet. */
+/** "8 points" plus how many steps lack an estimate; empty when nothing is estimated yet. */
 function estimated(t: Total, unit: string): string {
-  if (t.stories === t.unestimated) return ''
+  if (t.steps === t.unestimated) return ''
   return t.unestimated ? `${amount(t.hundredths, unit)} (${t.unestimated} unestimated)` : amount(t.hundredths, unit)
 }
 
@@ -257,7 +257,7 @@ function MapHeader(props: {
   const facts = [
     plural(count('objective'), 'objective'),
     plural(count('activity'), 'activity').replace('activitys', 'activities'),
-    plural(view.stories.length, 'story').replace('storys', 'stories'),
+    plural(view.steps.length, 'step'),
     estimated(totals.map, ws.estimateUnit),
   ].filter(Boolean)
   return (
@@ -284,7 +284,7 @@ function MapHeader(props: {
           Activity
         </button>
       </div>
-      <div className="kpis" aria-label="Stories by status">
+      <div className="kpis" aria-label="Steps by status">
         {categoryOrder.map((c) => (
           <div className="kpi" key={c.category}>
             <span className={`ring-disc ${c.ring}`}>{totals.map.byCategory[c.category]}</span>
@@ -613,7 +613,7 @@ function BandHeader({ release, index, total }: { release: Release | null; index:
       </span>
       {release && <TargetDate release={release} />}
       <span className="r">
-        <span>{[plural(total?.stories ?? 0, 'story').replace('storys', 'stories'), total && estimated(total, ws.estimateUnit)].filter(Boolean).join(' · ')}</span>
+        <span>{[plural(total?.steps ?? 0, 'step'), total && estimated(total, ws.estimateUnit)].filter(Boolean).join(' · ')}</span>
         {total && <Meter total={total} />}
         {release && canEdit && (
           <button type="button" className="btn btn-xs btn-ol drag-handle" title="Move" {...drag.handle}>
@@ -627,7 +627,7 @@ function BandHeader({ release, index, total }: { release: Release | null; index:
             aria-label={`Delete release ${release.name}`}
             onClick={() =>
               run(() => api.deleteRelease(ws.slug, view.map.id, release.id), {
-                done: `Deleted release “${release.name}”. Its stories moved to Unscheduled.`,
+                done: `Deleted release “${release.name}”. Its steps moved to Unscheduled.`,
               })
             }
           >
@@ -639,15 +639,15 @@ function BandHeader({ release, index, total }: { release: Release | null; index:
   )
 }
 
-/** Share of the release's stories done, in progress and blocked. */
+/** Share of the release's steps done, in progress and blocked. */
 function Meter({ total }: { total: Total }) {
-  const pct = (n: number) => `${(100 * n) / total.stories}%`
+  const pct = (n: number) => `${(100 * n) / total.steps}%`
   const done = total.byCategory.done
   return (
     <span
       className="meter"
       role="img"
-      aria-label={`${done} of ${total.stories} done, ${total.byCategory.doing} in progress, ${total.byCategory.blocked} blocked`}
+      aria-label={`${done} of ${total.steps} done, ${total.byCategory.doing} in progress, ${total.byCategory.blocked} blocked`}
     >
       <b className="done" style={{ width: pct(done) }} />
       <b className="doing" style={{ width: pct(total.byCategory.doing) }} />
@@ -725,30 +725,30 @@ function Cell(props: { column: number; activity: MapNode; release: Release | nul
     <div
       ref={drop.ref}
       role="group"
-      aria-label={`Stories in ${where}`}
+      aria-label={`Steps in ${where}`}
       className={`map-cell ${drop.over ? 'drop' : ''}`}
       style={{ gridColumn: props.column }}
     >
       {cards.map((c) => (
-        <StoryCard key={c.story.id} card={c} />
+        <StepCard key={c.step.id} card={c} />
       ))}
       {canEdit &&
         (adding ? (
           <TextInput
-            label={`New story in ${where}`}
-            placeholder="Story title"
+            label={`New step in ${where}`}
+            placeholder="Step title"
             keepOpen
             onDone={async (title) => {
               if (!title) {
                 setAdding(false)
                 return
               }
-              await run(() => api.createStory(ws.slug, view.map.id, { title, activityId: activity.id, releaseId: release?.id ?? null }))
+              await run(() => api.createStep(ws.slug, view.map.id, { title, activityId: activity.id, releaseId: release?.id ?? null }))
             }}
           />
         ) : (
-          <button type="button" className="add-story" aria-label={`Add story to ${where}`} onClick={() => setAdding(true)}>
-            + Story
+          <button type="button" className="add-step" aria-label={`Add step to ${where}`} onClick={() => setAdding(true)}>
+            + Step
           </button>
         ))}
     </div>
@@ -759,18 +759,18 @@ export function StatusLabel({ status }: { status: Status | undefined }) {
   return <span className={`st ${status?.category ?? 'todo'}`}>{status?.name ?? 'No status'}</span>
 }
 
-function StoryCard({ card }: { card: Card }) {
-  const { ws, canEdit, statuses, selectedStory, openStory } = useMap()
-  const { story, placement } = card
-  const status = statuses.get(story.statusId)
-  const selected = selectedStory === story.id
-  const label = `${story.key} ${story.title}`
-  const drag = useDrag(`story:${story.id}`, { kind: 'story', storyId: story.id, placement, label }, !canEdit)
-  const drop = useDrop(`story:${story.id}`, { kind: 'story', storyId: story.id, placement, label })
+function StepCard({ card }: { card: Card }) {
+  const { ws, canEdit, statuses, selectedStep, openStep } = useMap()
+  const { step, placement } = card
+  const status = statuses.get(step.statusId)
+  const selected = selectedStep === step.id
+  const label = `${step.key} ${step.title}`
+  const drag = useDrag(`step:${step.id}`, { kind: 'step', stepId: step.id, placement, label }, !canEdit)
+  const drop = useDrop(`step:${step.id}`, { kind: 'step', stepId: step.id, placement, label })
   return (
     <div
       ref={refs(drag.ref, drop.ref)}
-      className={`story-card ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''}`}
+      className={`step-card ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''}`}
       {...drag.pointer}
     >
       <button
@@ -778,15 +778,15 @@ function StoryCard({ card }: { card: Card }) {
         className="card-open"
         aria-current={selected}
         aria-label={label}
-        onClick={() => openStory(selected ? null : story.id)}
+        onClick={() => openStep(selected ? null : step.id)}
       >
-        <span>{story.title}</span>
+        <span>{step.title}</span>
         <span className="meta">
           <StatusLabel status={status} />
-          <span className="text-muted ml-auto text-[11px] font-extrabold">{story.key}</span>
-          {story.estimate !== null && (
-            <span className={`ring-disc est ${status?.category ?? 'todo'}`} title={amount(story.estimate * 100, ws.estimateUnit)}>
-              {formatEstimate(story.estimate)}
+          <span className="text-muted ml-auto text-[11px] font-extrabold">{step.key}</span>
+          {step.estimate !== null && (
+            <span className={`ring-disc est ${status?.category ?? 'todo'}`} title={amount(step.estimate * 100, ws.estimateUnit)}>
+              {formatEstimate(step.estimate)}
             </span>
           )}
         </span>
@@ -802,9 +802,9 @@ function StoryCard({ card }: { card: Card }) {
 
 /** Everything that happened on the map, newest first. */
 function ActivityPanel({ onClose }: { onClose: () => void }) {
-  const { ws, view, openStory } = useMap()
+  const { ws, view, openStep } = useMap()
   return (
-    <aside className="story-panel" aria-label="Map activity">
+    <aside className="step-panel" aria-label="Map activity">
       <div className="hd flex items-center">
         <h2 className="flex-1" style={{ marginTop: 0 }}>
           Activity
@@ -819,7 +819,7 @@ function ActivityPanel({ onClose }: { onClose: () => void }) {
         queryKey={[...mapKey(ws.slug, view.map.id), 'history']}
         page={(before) => api.mapHistory(ws.slug, view.map.id, before)}
         label="Map activity"
-        onStory={openStory}
+        onStep={openStep}
       />
     </aside>
   )
