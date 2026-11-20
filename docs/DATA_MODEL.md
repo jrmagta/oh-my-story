@@ -184,7 +184,7 @@ persona_nodes (                                  -- personas linked to objective
   primary key (persona_id, node_id)
 )
 
-labels ( id uuid pk, workspace_id fk, name citext not null, colour text, unique (workspace_id, name) )
+labels ( id uuid pk, workspace_id fk, name citext not null, colour text not null, unique (workspace_id, name) )
 step_labels ( step_id fk, label_id fk, primary key (step_id, label_id) )
 
 comments (
@@ -277,9 +277,10 @@ Retention: keep forever in v1. Partition by month if volume demands it.
 | 0001 | extensions (`citext`, `pg_trgm`), `users`, `identities`, `sessions`, `workspaces`, `workspace_members`, `invites` | M0 |
 | 0002 | `workflows`, `statuses`, `maps`, `nodes`, `releases`, `steps`, `placements`, `events` | M1 |
 | 0003 | `password_resets` | M1 |
-| 0004 | `personas`, `persona_nodes`, `labels`, `step_labels`, `comments`, `mentions`, `saved_views` | M2 |
-| 0005 | `share_links` | M3 |
-| 0006 | `dependencies`, `api_tokens`, `webhooks`, `webhook_deliveries`, `integrations` | M4 |
+| 0004 | `labels`, `step_labels` | M2 phase 2 |
+| later | `personas`, `persona_nodes`, `saved_views`, `comments`, `mentions`: one migration per M2 phase that needs them | M2 |
+| later | `share_links` | M3 |
+| later | `dependencies`, `api_tokens`, `webhooks`, `webhook_deliveries`, `integrations` | M4 |
 
 M0 migrates only 0001. The rest are specified here so M1 does not reshape M0 tables.
 

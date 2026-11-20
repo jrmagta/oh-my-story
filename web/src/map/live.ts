@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient, type QueryKey } from '@tanstack/react-query'
-import type { MapNode, MapView, Placement, Release, Step } from '../api'
+import type { Label, MapNode, MapView, Placement, Release, Step } from '../api'
 
 /** One row of the event log, as the live socket sends it (docs/API.md, Live). */
 export interface LiveEvent {
@@ -39,6 +39,17 @@ export function applyEvent(view: MapView, ev: LiveEvent): MapView | null {
   switch (`${ev.entity}:${ev.action}`) {
     case 'map:update':
       return { ...view, map: { ...view.map, ...after } }
+    case 'label:create':
+      return { ...view, labels: add(view.labels, after as unknown as Label) }
+    case 'label:update':
+      return { ...view, labels: patch(view.labels, ev.entityId, after) }
+    case 'label:delete':
+      // Deleting a label takes it off every step, with no step events of its own.
+      return {
+        ...view,
+        labels: view.labels.filter((l) => l.id !== ev.entityId),
+        steps: view.steps.map((s) => (s.labelIds.includes(ev.entityId) ? { ...s, labelIds: s.labelIds.filter((id) => id !== ev.entityId) } : s)),
+      }
     case 'node:create':
       return { ...view, nodes: add(view.nodes, { version: 0, ...after } as unknown as MapNode) }
     case 'node:update':

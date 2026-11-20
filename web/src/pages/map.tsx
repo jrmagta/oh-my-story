@@ -759,6 +759,28 @@ export function StatusLabel({ status }: { status: Status | undefined }) {
   return <span className={`st ${status?.category ?? 'todo'}`}>{status?.name ?? 'No status'}</span>
 }
 
+/** A step's labels as small chips, in name order; ids of deleted labels are skipped. */
+export function LabelChips({ ids, onRemove }: { ids: string[]; onRemove?: (id: string) => void }) {
+  const { view } = useMap()
+  const chips = view.labels.filter((l) => ids.includes(l.id)).sort((a, b) => a.name.localeCompare(b.name))
+  if (chips.length === 0) return null
+  return (
+    <span className="chips">
+      {chips.map((l) => (
+        <span key={l.id} className="tag">
+          <i style={{ background: l.colour }} aria-hidden />
+          {l.name}
+          {onRemove && (
+            <button type="button" className="tag-x" aria-label={`Remove label ${l.name}`} onClick={() => onRemove(l.id)}>
+              ✕
+            </button>
+          )}
+        </span>
+      ))}
+    </span>
+  )
+}
+
 function StepCard({ card }: { card: Card }) {
   const { ws, canEdit, statuses, selectedStep, openStep } = useMap()
   const { step, placement } = card
@@ -781,6 +803,7 @@ function StepCard({ card }: { card: Card }) {
         onClick={() => openStep(selected ? null : step.id)}
       >
         <span>{step.title}</span>
+        <LabelChips ids={step.labelIds} />
         <span className="meta">
           <StatusLabel status={status} />
           <span className="text-muted ml-auto text-[11px] font-extrabold">{step.key}</span>

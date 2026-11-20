@@ -28,6 +28,11 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 		{"POST " + ws + "/statuses/{id}/move", role.ManageSettings, s.moveStatus},
 		{"DELETE " + ws + "/statuses/{id}", role.ManageSettings, s.deleteStatus},
 
+		{"GET " + ws + "/labels", role.View, s.listLabels},
+		{"POST " + ws + "/labels", role.Edit, s.createLabel},
+		{"PATCH " + ws + "/labels/{id}", role.ManageSettings, s.patchLabel},
+		{"DELETE " + ws + "/labels/{id}", role.ManageSettings, s.deleteLabel},
+
 		{"GET " + ws + "/maps", role.View, s.listMaps},
 		{"POST " + ws + "/maps", role.Edit, s.createMap},
 		{"GET " + m, role.View, s.getMap},
@@ -445,19 +450,32 @@ func (s *Server) createStep(q mapRequest) (int, any, error) {
 }
 
 // patchStep unassigns when assigneeId is null and clears the estimate when
-// estimate is null.
+// estimate is null. labelIds replaces the step's labels.
 func (s *Server) patchStep(q mapRequest) (int, any, error) {
 	var in struct {
 		Title, DescriptionMD *string
 		StatusID             *uuid.UUID
 		AssigneeID           optional[uuid.UUID]
 		Estimate             optional[float64]
+		LabelIDs             *[]uuid.UUID
 	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
 	}
 	p := store.StepPatch{StatusID: in.StatusID, SetAssignee: in.AssigneeID.Set, AssigneeID: in.AssigneeID.Value,
-		SetEstimate: in.Estimate.Set, Estimate: in.Estimate.Value}
+		SetEstimate: in.Estimate.Set, Estimate: in.Estimate.Value, LabelIDs: in.LabelIDs}
+	if in.LabelIDs != nil {
+		seen := map[uuid.UUID]bool{}
+		for _, id := range *in.LabelIDs {
+			if seen[id] {
+				return 0, nil, errBadRequest("labelIds must not repeat a label")
+			}
+			seen[id] = true
+		}
+		if len(seen) > maxStepLabels {
+			return 0, nil, errBadRequest("a step takes at most 20 labels")
+		}
+	}
 	var err error
 	if p.Estimate != nil {
 		if err := parseEstimate(*p.Estimate); err != nil {

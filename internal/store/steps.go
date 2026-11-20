@@ -9,14 +9,15 @@ import (
 )
 
 type Step struct {
-	ID            uuid.UUID  `json:"id"`
-	Key           string     `json:"key"`
-	Title         string     `json:"title"`
-	DescriptionMD string     `json:"descriptionMd"`
-	StatusID      uuid.UUID  `json:"statusId"`
-	AssigneeID    *uuid.UUID `json:"assigneeId"`
-	Estimate      *float64   `json:"estimate"`
-	Version       int        `json:"version"`
+	ID            uuid.UUID   `json:"id"`
+	Key           string      `json:"key"`
+	Title         string      `json:"title"`
+	DescriptionMD string      `json:"descriptionMd"`
+	StatusID      uuid.UUID   `json:"statusId"`
+	AssigneeID    *uuid.UUID  `json:"assigneeId"`
+	Estimate      *float64    `json:"estimate"`
+	LabelIDs      []uuid.UUID `json:"labelIds"` // sorted, never null
+	Version       int         `json:"version"`
 }
 
 // Placement is where a step sits on a map: an activity, a release (nil for
@@ -29,11 +30,16 @@ type Placement struct {
 	Rank       string     `json:"rank"`
 }
 
-const stepCols = `s.id, s.key, s.title, s.description_md, s.status_id, s.assignee_id, s.estimate, s.version`
+// stepCols reads a step aliased s, with its label ids. In UPDATE ... RETURNING
+// the label subquery sees step_labels as it was before that statement, so
+// change labels first.
+const stepCols = `s.id, s.key, s.title, s.description_md, s.status_id, s.assignee_id, s.estimate,
+	coalesce((SELECT array_agg(sl.label_id ORDER BY sl.label_id) FROM step_labels sl WHERE sl.step_id = s.id), '{}'),
+	s.version`
 
 func scanStep(row pgx.Row) (Step, error) {
 	var st Step
-	err := row.Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.Version)
+	err := row.Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.LabelIDs, &st.Version)
 	return st, notFound(err)
 }
 
@@ -73,7 +79,7 @@ func mapStep(ctx context.Context, tx pgx.Tx, mapID, stepID uuid.UUID) (Step, Pla
 		`SELECT `+stepCols+`, p.id, p.step_id, p.activity_id, p.release_id, p.rank
 		 FROM steps s JOIN placements p ON p.step_id = s.id
 		 WHERE s.id = $1 AND p.map_id = $2 AND s.deleted_at IS NULL FOR UPDATE OF s`, stepID, mapID).
-		Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.Version,
+		Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.LabelIDs, &st.Version,
 			&p.ID, &p.StepID, &p.ActivityID, &p.ReleaseID, &p.Rank)
 	return st, p, notFound(err)
 }
@@ -87,7 +93,7 @@ type StepInput struct {
 // CreateStep adds a step to the workspace and places it on the map. It gets
 // the next workspace key and the first status of the map's workflow.
 func (s *Store) CreateStep(ctx context.Context, actor, workspaceID, mapID uuid.UUID, in StepInput, pos Position) (Step, Placement, error) {
-	st := Step{ID: newID(), Title: in.Title, DescriptionMD: in.DescriptionMD}
+	st := Step{ID: newID(), Title: in.Title, DescriptionMD: in.DescriptionMD, LabelIDs: []uuid.UUID{}}
 	p := Placement{ID: newID(), StepID: st.ID, ActivityID: in.ActivityID, ReleaseID: in.ReleaseID}
 	err := s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
 		if err := checkCell(ctx, tx, mapID, in.ActivityID, in.ReleaseID); err != nil {
@@ -128,11 +134,12 @@ func (s *Store) CreateStep(ctx context.Context, actor, workspaceID, mapID uuid.U
 
 type StepPatch struct {
 	Title, DescriptionMD *string
-	StatusID             *uuid.UUID // a status of the map's workflow
-	SetAssignee          bool       // AssigneeID is applied only when set; nil unassigns
-	AssigneeID           *uuid.UUID // a member of the workspace
-	SetEstimate          bool       // Estimate is applied only when set; nil clears it
-	Estimate             *float64   // 0 to 9999.99, at most two decimals
+	StatusID             *uuid.UUID   // a status of the map's workflow
+	SetAssignee          bool         // AssigneeID is applied only when set; nil unassigns
+	AssigneeID           *uuid.UUID   // a member of the workspace
+	SetEstimate          bool         // Estimate is applied only when set; nil clears it
+	Estimate             *float64     // 0 to 9999.99, at most two decimals
+	LabelIDs             *[]uuid.UUID // replaces the step's labels; labels of the workspace, no duplicates
 }
 
 func (s *Store) UpdateStep(ctx context.Context, actor, workspaceID, mapID, stepID uuid.UUID, p StepPatch) (Step, error) {
@@ -157,6 +164,11 @@ func (s *Store) UpdateStep(ctx context.Context, actor, workspaceID, mapID, stepI
 				workspaceID, *p.AssigneeID).Scan(&ok)
 			if err != nil {
 				return nil, fmt.Errorf("%w: assignee is not a member of this workspace", ErrInvalid)
+			}
+		}
+		if p.LabelIDs != nil {
+			if err := setStepLabels(ctx, tx, workspaceID, stepID, *p.LabelIDs); err != nil {
+				return nil, err
 			}
 		}
 		if st, err = scanStep(tx.QueryRow(ctx,
@@ -258,4 +270,23 @@ func (s *Store) RestoreStep(ctx context.Context, actor, workspaceID, mapID, step
 		return []change{gone(mapID, "step", stepID, "restore", map[string]any{"key": st.Key, "title": st.Title})}, nil
 	})
 	return st, err
+}
+
+// setStepLabels replaces a step's labels with ids, which must all be labels of
+// the workspace.
+func setStepLabels(ctx context.Context, tx pgx.Tx, workspaceID, stepID uuid.UUID, ids []uuid.UUID) error {
+	var found int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM labels WHERE workspace_id = $1 AND id = ANY($2)`, workspaceID, ids).
+		Scan(&found); err != nil {
+		return err
+	}
+	if found != len(ids) {
+		return fmt.Errorf("%w: labelIds must be labels of this workspace", ErrInvalid)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM step_labels WHERE step_id = $1 AND NOT (label_id = ANY($2))`, stepID, ids); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO step_labels (step_id, label_id) SELECT $1, unnest($2::uuid[]) ON CONFLICT DO NOTHING`, stepID, ids)
+	return err
 }
