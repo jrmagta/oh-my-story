@@ -10,6 +10,7 @@ import { InvitePage } from './pages/invite'
 import { MapPage } from './pages/map'
 import { MapsPage } from './pages/maps'
 import { MembersPage } from './pages/members'
+import { WorkflowsPage } from './pages/workflows'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,6 +41,7 @@ const router = createBrowserRouter([
               { path: 'maps', element: <MapsPage /> },
               { path: 'maps/:mapId', element: <MapPage /> },
               { path: 'members', element: <MembersPage /> },
+              { path: 'workflows', element: <WorkflowsPage /> },
             ],
           },
         ],

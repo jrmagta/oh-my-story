@@ -199,6 +199,17 @@ export const api = {
   revokeInvite: (slug: string, id: string) => request<void>('DELETE', `${ws(slug)}/invites/${encodeURIComponent(id)}`),
 
   workflows: (slug: string) => request<Workflow[]>('GET', `${ws(slug)}/workflows`),
+  createWorkflow: (slug: string, b: { name: string }) => request<Workflow>('POST', `${ws(slug)}/workflows`, b),
+  renameWorkflow: (slug: string, id: string, b: { name: string }) =>
+    request<Workflow>('PATCH', `${ws(slug)}/workflows/${encodeURIComponent(id)}`, b),
+  createStatus: (slug: string, workflowId: string, b: { name: string; category: Category; colour?: string } & Position) =>
+    request<Status>('POST', `${ws(slug)}/workflows/${encodeURIComponent(workflowId)}/statuses`, b),
+  patchStatus: (slug: string, id: string, b: { name?: string; category?: Category; colour?: string }) =>
+    request<Status>('PATCH', `${ws(slug)}/statuses/${encodeURIComponent(id)}`, b),
+  moveStatus: (slug: string, id: string, b: Position) => request<Status>('POST', `${ws(slug)}/statuses/${encodeURIComponent(id)}/move`, b),
+  /** Stories in the status move to the replacement, another status of the same workflow. */
+  deleteStatus: (slug: string, id: string, replacementId: string) =>
+    request<void>('DELETE', `${ws(slug)}/statuses/${encodeURIComponent(id)}?replacementId=${encodeURIComponent(replacementId)}`),
   maps: (slug: string) => request<StoryMap[]>('GET', `${ws(slug)}/maps`),
   createMap: (slug: string, b: { name: string; levels: 3 | 4; description?: string; workflowId?: string }) =>
     request<StoryMap>('POST', `${ws(slug)}/maps`, b),

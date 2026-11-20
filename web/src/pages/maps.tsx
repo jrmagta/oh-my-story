@@ -4,6 +4,7 @@ import { Link, useNavigate, useOutletContext } from 'react-router'
 import { api, atLeast, type Membership, type StoryMap } from '../api'
 import { ConfirmButton, ErrorAlert, Field, Loading } from '../ui'
 import { PageBand } from './app'
+import { workflowsKey } from './workflows'
 
 export const mapsKey = (slug: string) => ['ws', slug, 'maps'] as const
 
@@ -75,7 +76,7 @@ function MapRow({ ws, m, canEdit }: { ws: Membership; m: StoryMap; canEdit: bool
 function CreateMap({ ws }: { ws: Membership }) {
   const qc = useQueryClient()
   const navigate = useNavigate()
-  const workflows = useQuery({ queryKey: ['ws', ws.slug, 'workflows'], queryFn: () => api.workflows(ws.slug) })
+  const workflows = useQuery({ queryKey: workflowsKey(ws.slug), queryFn: () => api.workflows(ws.slug) })
   const [name, setName] = useState('')
   const [levels, setLevels] = useState<3 | 4>(4)
   const [workflowId, setWorkflowId] = useState('')
