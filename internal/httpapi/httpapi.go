@@ -66,6 +66,9 @@ func New(cfg config.Config, pool *pgxpool.Pool, sender mail.Sender, oidc *OIDC, 
 	mux.HandleFunc("GET /api/workspaces/{slug}/invites", s.inWorkspace(role.ManageMembers, s.listInvites))
 	mux.HandleFunc("POST /api/workspaces/{slug}/invites", s.inWorkspace(role.ManageMembers, s.createInvite))
 	mux.HandleFunc("DELETE /api/workspaces/{slug}/invites/{id}", s.inWorkspace(role.ManageMembers, s.revokeInvite))
+	mux.HandleFunc("POST /api/auth/reset", s.requestReset)
+	mux.HandleFunc("GET /api/auth/reset/{token}", s.getReset)
+	mux.HandleFunc("POST /api/auth/reset/{token}", s.resetPassword)
 	mux.HandleFunc("GET /api/invites/{token}", s.getInvite)
 	mux.HandleFunc("POST /api/invites/{token}/accept", s.acceptInvite)
 	s.mapRoutes(mux)
@@ -220,7 +223,7 @@ func writeError(w http.ResponseWriter, err error) {
 		e = errBadRequest(err.Error())
 	case errors.Is(err, store.ErrConflict):
 		e = &apiError{http.StatusConflict, "conflict", "already exists"}
-	case errors.Is(err, store.ErrInviteUsed), errors.Is(err, store.ErrBootstrapped):
+	case errors.Is(err, store.ErrInviteUsed), errors.Is(err, store.ErrBootstrapped), errors.Is(err, store.ErrResetUsed):
 		e = &apiError{http.StatusGone, "gone", err.Error()}
 	case errors.Is(err, store.ErrWrongUser):
 		e = &apiError{http.StatusForbidden, "forbidden", "this invite is for a different email address"}

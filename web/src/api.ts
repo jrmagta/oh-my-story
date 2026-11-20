@@ -178,6 +178,12 @@ export const api = {
   login: (b: { email: string; password: string }) => request<User>('POST', '/api/auth/login', b),
   logout: () => request<void>('POST', '/api/auth/logout', {}),
   providers: () => request<Providers>('GET', '/api/auth/providers'),
+  /** Always succeeds; an email goes out only if a local account has that address. */
+  requestReset: (b: { email: string }) => request<void>('POST', '/api/auth/reset', b),
+  resetPreview: (token: string) => request<{ email: string }>('GET', `/api/auth/reset/${encodeURIComponent(token)}`),
+  /** Sets the password, ends the user's other sessions and signs this browser in. */
+  resetPassword: (token: string, b: { password: string }) =>
+    request<User>('POST', `/api/auth/reset/${encodeURIComponent(token)}`, b),
 
   /** The signed-in user, or null when there is no session. */
   me: async (): Promise<Me | null> => {
