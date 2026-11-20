@@ -1,0 +1,546 @@
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
+import { api, ApiError, atLeast, type Category, type Level, type MapNode, type MapView, type Membership, type Release, type Status } from '../api'
+import { backbone, bands, cellKey, cells, type Band, type Card, type Column } from '../map/layout'
+import { ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toasts, type ToastMessage } from '../ui'
+import { PageBand } from './app'
+import { StoryPanel } from './story-panel'
+
+export const mapKey = (slug: string, mapId: string) => ['ws', slug, 'map', mapId] as const
+
+interface MapCtx {
+  ws: Membership
+  view: MapView
+  canEdit: boolean
+  statuses: Map<string, Status>
+  /** Runs a write, then reloads the map. undo, when given, is offered in a notice. */
+  run: (write: () => Promise<unknown>, opts?: { done?: string; undo?: () => Promise<unknown> }) => Promise<boolean>
+  selectedStory: string | null
+  openStory: (id: string | null) => void
+  /** The open add-node input, as "level:parentId"; see useAddNode. */
+  adding: string | null
+  setAdding: (key: string | null) => void
+}
+
+const Ctx = createContext<MapCtx | null>(null)
+
+export function useMap(): MapCtx {
+  const c = useContext(Ctx)
+  if (!c) throw new Error('useMap outside MapPage')
+  return c
+}
+
+export function MapPage() {
+  const ws = useOutletContext<Membership>()
+  const { mapId = '' } = useParams()
+  const qc = useQueryClient()
+  const [search, setSearch] = useSearchParams()
+  const key = useMemo(() => mapKey(ws.slug, mapId), [ws.slug, mapId])
+  const query = useQuery({ queryKey: key, queryFn: () => api.map(ws.slug, mapId), retry: false })
+
+  const [toasts, setToasts] = useState<ToastMessage[]>([])
+  const nextToast = useRef(1)
+  const toast = useCallback((t: Omit<ToastMessage, 'id'>) => setToasts((ts) => [...ts, { ...t, id: nextToast.current++ }]), [])
+  const dismiss = useCallback((id: number) => setToasts((ts) => ts.filter((t) => t.id !== id)), [])
+
+  const run = useCallback<MapCtx['run']>(
+    async (write, opts) => {
+      try {
+        await write()
+        if (opts?.done) {
+          const undo = opts.undo
+          toast({
+            text: opts.done,
+            tone: 'info',
+            action: undo && {
+              label: 'Undo',
+              run: () => {
+                undo()
+                  .catch((e: unknown) => toast({ text: errorMessage(e), tone: 'error' }))
+                  .finally(() => qc.invalidateQueries({ queryKey: key }))
+              },
+            },
+          })
+        }
+        return true
+      } catch (e) {
+        toast({ text: errorMessage(e), tone: 'error' })
+        return false
+      } finally {
+        await qc.invalidateQueries({ queryKey: key })
+      }
+    },
+    [qc, toast, key],
+  )
+
+  const [adding, setAdding] = useState<string | null>(null)
+  const selectedStory = search.get('story')
+  const openStory = useCallback(
+    (id: string | null) =>
+      setSearch(
+        (s) => {
+          const n = new URLSearchParams(s)
+          if (id) n.set('story', id)
+          else n.delete('story')
+          return n
+        },
+        { replace: true },
+      ),
+    [setSearch],
+  )
+
+  const ctx = useMemo<MapCtx | null>(
+    () =>
+      query.data
+        ? {
+            ws,
+            view: query.data,
+            canEdit: atLeast(ws.role, 'editor'),
+            statuses: new Map(query.data.workflow.statuses.map((s) => [s.id, s])),
+            run,
+            selectedStory,
+            openStory,
+            adding,
+            setAdding,
+          }
+        : null,
+    [ws, query.data, run, selectedStory, openStory, adding],
+  )
+
+  if (query.isPending) return <Loading />
+  if (!ctx) {
+    const notFound = query.error instanceof ApiError && query.error.status === 404
+    return (
+      <>
+        <PageBand kicker={`${ws.name} › Story maps`} title={notFound ? 'Not found' : 'Error'} />
+        <main className="mx-auto max-w-5xl px-7 py-10">
+          {notFound ? <p className="text-muted mb-6 font-medium">This map doesn't exist or was deleted.</p> : <ErrorAlert error={query.error} />}
+          <Link className="btn btn-primary" to={`/w/${ws.slug}/maps`}>
+            All maps
+          </Link>
+        </main>
+      </>
+    )
+  }
+  const panelOpen = !!selectedStory && ctx.view.stories.some((s) => s.id === selectedStory)
+  return (
+    <Ctx.Provider value={ctx}>
+      <MapHeader panelOpen={panelOpen} />
+      <div className={`map-scroll ${panelOpen ? 'with-panel' : ''}`}>
+        <MapGrid />
+      </div>
+      {panelOpen && <StoryPanel storyId={selectedStory} />}
+      <Toasts items={toasts} dismiss={dismiss} />
+    </Ctx.Provider>
+  )
+}
+
+const categoryOrder: { category: Category; label: string; ring: string }[] = [
+  { category: 'done', label: 'Done', ring: 'green' },
+  { category: 'doing', label: 'In progress', ring: 'amber' },
+  { category: 'blocked', label: 'Blocked', ring: 'red' },
+  { category: 'todo', label: 'To do', ring: 'todo' },
+]
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`
+}
+
+function MapHeader({ panelOpen }: { panelOpen: boolean }) {
+  const { ws, view, canEdit, statuses, run } = useMap()
+  const count = (level: Level) => view.nodes.filter((n) => n.level === level).length
+  const byCategory = new Map<Category, number>()
+  for (const s of view.stories) {
+    const c = statuses.get(s.statusId)?.category ?? 'todo'
+    byCategory.set(c, (byCategory.get(c) ?? 0) + 1)
+  }
+  const facts = [
+    `${view.map.levels}-level map`,
+    ...(view.map.levels === 4 ? [plural(count('objective'), 'objective')] : []),
+    plural(count('activity'), 'activity').replace('activitys', 'activities'),
+    plural(count('step'), 'step'),
+    plural(view.stories.length, 'story').replace('storys', 'stories'),
+  ]
+  return (
+    <section className={`mhead ${panelOpen ? 'with-panel' : ''}`}>
+      <div className="min-w-0">
+        <Link to={`/w/${ws.slug}/maps`} className="label-up hover:underline">
+          {ws.name} › Story maps
+        </Link>
+        {/* The title can be a rename button; the heading still reads as the map's name. */}
+        <h1 className="mt-1" aria-label={view.map.name}>
+          <InlineText
+            value={view.map.name}
+            label="map"
+            editable={canEdit}
+            maxLength={100}
+            onSave={(name) => run(() => api.patchMap(ws.slug, view.map.id, { name }))}
+          />
+        </h1>
+        <p className="text-muted mt-1.5 text-sm font-semibold">{facts.join(' · ')}</p>
+      </div>
+      <div className="kpis" aria-label="Stories by status">
+        {categoryOrder.map((c) => (
+          <div className="kpi" key={c.category}>
+            <span className={`ring-disc ${c.ring}`}>{byCategory.get(c.category) ?? 0}</span>
+            {c.label}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+const levelLabel: Record<Level, string> = { objective: 'Objective', activity: 'Activity', step: 'Step' }
+
+function MapGrid() {
+  const { view, canEdit } = useMap()
+  const bb = useMemo(() => backbone(view), [view])
+  const bs = useMemo(() => bands(view), [view])
+  const byCell = useMemo(() => cells(view), [view])
+  const four = view.map.levels === 4
+  const topLevel: Level = four ? 'objective' : 'activity'
+
+  if (bb.columns.length === 0) {
+    return (
+      <div className="max-w-xl py-10">
+        <p className="up mb-2 text-2xl">An empty map</p>
+        <p className="text-muted mb-6 font-medium">
+          {four
+            ? 'Start the backbone with an objective, then add the activities and steps under it.'
+            : 'Start the backbone with an activity, then add the steps under it.'}
+        </p>
+        {canEdit && <AddNode level={topLevel} parent={null} label={`Add ${topLevel}`} />}
+      </div>
+    )
+  }
+
+  // Columns: row labels, one per backbone column, and one for adding at the end.
+  const style = { gridTemplateColumns: `132px repeat(${bb.columns.length}, 184px)${canEdit ? ' 150px' : ''}` }
+  const col = (start: number, span = 1) => ({ gridColumn: `${start + 2} / span ${span}` })
+  const trailing = { gridColumn: `${bb.columns.length + 2}` }
+
+  return (
+    <div className="map-grid" style={style}>
+      {four && (
+        <>
+          <div className="map-lbl">Objective</div>
+          {bb.objectives.map((o) => (
+            <div key={o.node.id} className="map-obj up" style={col(o.start, o.span)}>
+              <NodeHead node={o.node} child="activity" />
+            </div>
+          ))}
+          {canEdit && (
+            <div style={trailing}>
+              <AddNode level="objective" parent={null} label="Add objective" />
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="map-lbl" style={{ gridColumn: 1 }}>
+        Activity
+      </div>
+      {bb.activities.map((a) => (
+        <div key={a.node.id} className="map-act" style={col(a.start, a.span)}>
+          <NodeHead node={a.node} child="step" bold />
+        </div>
+      ))}
+      {bb.columns.map((c, i) =>
+        !c.activity && c.objective ? (
+          <div key={c.key} style={col(i)}>
+            {canEdit && <AddNode level="activity" parent={c.objective} label={`Add activity to ${c.objective.title}`} short="Add activity" />}
+          </div>
+        ) : null,
+      )}
+      {canEdit && !four && (
+        <div style={trailing}>
+          <AddNode level="activity" parent={null} label="Add activity" />
+        </div>
+      )}
+
+      <div className="map-lbl" style={{ gridColumn: 1 }}>
+        Step
+      </div>
+      {bb.columns.map((c, i) => (
+        <div key={c.key} style={col(i)}>
+          {c.step ? (
+            <div className="map-step">
+              <NodeHead node={c.step} />
+            </div>
+          ) : (
+            c.activity &&
+            canEdit && <AddNode level="step" parent={c.activity} label={`Add step to ${c.activity.title}`} short="Add step" />
+          )}
+        </div>
+      ))}
+
+      {bs.map((b, i) => (
+        <BandRows key={b.key} band={b} index={i} columns={bb.columns} byCell={byCell} isLast={i === bs.length - 1} />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Title, rename and delete for a backbone node. child is the level below; its
+ * add button shows once the node has children, since until then an empty
+ * column below offers the first one.
+ */
+function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: boolean }) {
+  const { ws, view, canEdit, run } = useMap()
+  const label = `${node.level} ${node.title}`
+  const hasChildren = view.nodes.some((n) => n.parentId === node.id)
+  return (
+    <div className="node-head">
+      <InlineText
+        value={node.title}
+        label={label}
+        editable={canEdit}
+        className={bold ? 'up text-[15px]' : undefined}
+        onSave={(title) => run(() => api.patchNode(ws.slug, view.map.id, node.id, { title }))}
+      />
+      {canEdit && (
+        <span className="node-tools">
+          {child && hasChildren && <AddNodeIcon level={child} parent={node} />}
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={`Delete ${label}`}
+            title="Delete"
+            onClick={() =>
+              run(() => api.deleteNode(ws.slug, view.map.id, node.id), {
+                done: `Deleted ${node.level} “${node.title}”`,
+                undo: () => api.restoreNode(ws.slug, view.map.id, node.id),
+              })
+            }
+          >
+            <span>✕</span>
+          </button>
+        </span>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Adding backbone nodes. Which add input is open lives in the map context, not
+ * in the button, because the button that opened it can unmount mid-entry: the
+ * empty column that offers a first step becomes that step. The input then
+ * reappears at the parent's own add button, still open.
+ */
+function useAddNode(level: Level, parent: MapNode | null) {
+  const { ws, view, run, adding, setAdding } = useMap()
+  const key = `${level}:${parent?.id ?? ''}`
+  return {
+    open: adding === key,
+    setOpen: (on: boolean) => setAdding(on ? key : null),
+    input: (
+      <TextInput
+        label={`New ${level}${parent ? ` in ${parent.title}` : ''}`}
+        placeholder={`${levelLabel[level]} name`}
+        keepOpen
+        onDone={(title) => {
+          if (!title) setAdding(null)
+          else run(() => api.createNode(ws.slug, view.map.id, { level, title, ...(parent ? { parentId: parent.id } : {}) }))
+        }}
+      />
+    ),
+  }
+}
+
+function AddNodeIcon({ level, parent }: { level: Level; parent: MapNode }) {
+  const add = useAddNode(level, parent)
+  if (add.open) return <span className="node-popup">{add.input}</span>
+  return (
+    <button type="button" className="icon-btn" aria-label={`Add ${level} to ${parent.title}`} title={`Add ${level}`} onClick={() => add.setOpen(true)}>
+      <span>+</span>
+    </button>
+  )
+}
+
+function AddNode({ level, parent, label, short }: { level: Level; parent: MapNode | null; label: string; short?: string }) {
+  const add = useAddNode(level, parent)
+  if (add.open) return add.input
+  return (
+    <button type="button" className="add-slot w-full" aria-label={label} onClick={() => add.setOpen(true)}>
+      + {short ?? label}
+    </button>
+  )
+}
+
+function BandRows(props: { band: Band; index: number; columns: Column[]; byCell: Map<string, Card[]>; isLast: boolean }) {
+  const { canEdit } = useMap()
+  const { band, columns, byCell } = props
+  const stories = columns.reduce((n, c) => n + (c.step ? (byCell.get(cellKey(c.step.id, band.release?.id ?? null))?.length ?? 0) : 0), 0)
+  const name = band.release?.name ?? 'Unscheduled'
+  return (
+    <>
+      {props.isLast && canEdit && <AddRelease />}
+      <BandHeader release={band.release} index={props.index} stories={stories} />
+      <div className="map-lbl" style={{ gridColumn: 1 }} />
+      {columns.map((c, i) => (
+        <div key={c.key} style={{ gridColumn: i + 2 }} className={c.step ? 'map-cell' : undefined}>
+          {c.step && <Cell step={c.step} release={band.release} bandName={name} cards={byCell.get(cellKey(c.step.id, band.release?.id ?? null)) ?? []} />}
+        </div>
+      ))}
+    </>
+  )
+}
+
+function formatDate(d: string): string {
+  return new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function BandHeader({ release, index, stories }: { release: Release | null; index: number; stories: number }) {
+  const { ws, view, canEdit, run } = useMap()
+  const tone = release ? (index % 2 === 0 ? 'green' : 'amber') : ''
+  const name = release?.name ?? 'Unscheduled'
+  return (
+    <div className={`band-row ${tone}`} role="heading" aria-level={2} aria-label={`Release ${name}`}>
+      <span className="n">
+        {release ? (
+          <InlineText
+            value={release.name}
+            label={`release ${release.name}`}
+            editable={canEdit}
+            maxLength={100}
+            onSave={(n) => run(() => api.patchRelease(ws.slug, view.map.id, release.id, { name: n }))}
+          />
+        ) : (
+          name
+        )}
+      </span>
+      {release && <TargetDate release={release} />}
+      <span className="r">
+        {plural(stories, 'story').replace('storys', 'stories')}
+        {release && canEdit && (
+          <button
+            type="button"
+            className="btn btn-xs btn-ol"
+            aria-label={`Delete release ${release.name}`}
+            onClick={() =>
+              run(() => api.deleteRelease(ws.slug, view.map.id, release.id), {
+                done: `Deleted release “${release.name}”. Its stories moved to Unscheduled.`,
+              })
+            }
+          >
+            Delete
+          </button>
+        )}
+      </span>
+    </div>
+  )
+}
+
+function TargetDate({ release }: { release: Release }) {
+  const { ws, view, canEdit, run } = useMap()
+  const [editing, setEditing] = useState(false)
+  const text = release.targetDate ? formatDate(release.targetDate) : 'No date'
+  if (!canEdit) return <span className="d">{text}</span>
+  if (!editing) {
+    return (
+      <button type="button" className="date-btn" aria-label={`Target date for ${release.name}: ${text}`} onClick={() => setEditing(true)}>
+        {text}
+      </button>
+    )
+  }
+  return (
+    <input
+      type="date"
+      autoFocus
+      aria-label={`Target date for ${release.name}`}
+      defaultValue={release.targetDate ?? ''}
+      onBlur={() => setEditing(false)}
+      onKeyDown={(e) => e.key === 'Escape' && setEditing(false)}
+      onChange={(e) => {
+        // Typing fires a change per field; only save a complete date or a cleared one.
+        const v = e.target.value
+        if (v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+          run(() => api.patchRelease(ws.slug, view.map.id, release.id, { targetDate: v || null }))
+        }
+      }}
+    />
+  )
+}
+
+function AddRelease() {
+  const { ws, view, run } = useMap()
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{ gridColumn: '2 / span 2', marginTop: 22 }}>
+      {open ? (
+        <TextInput
+          label="New release name"
+          placeholder="Release name"
+          onDone={(name) => {
+            setOpen(false)
+            if (name) run(() => api.createRelease(ws.slug, view.map.id, { name }))
+          }}
+        />
+      ) : (
+        <button type="button" className="add-slot w-full" onClick={() => setOpen(true)}>
+          + Add release
+        </button>
+      )}
+    </div>
+  )
+}
+
+function Cell({ step, release, bandName, cards }: { step: MapNode; release: Release | null; bandName: string; cards: Card[] }) {
+  const { ws, view, canEdit, run } = useMap()
+  const [adding, setAdding] = useState(false)
+  const where = `${step.title} / ${bandName}`
+  return (
+    <div role="group" aria-label={`Stories in ${where}`} className="contents">
+      {cards.map((c) => (
+        <StoryCard key={c.story.id} card={c} />
+      ))}
+      {canEdit &&
+        (adding ? (
+          <TextInput
+            label={`New story in ${where}`}
+            placeholder="Story title"
+            keepOpen
+            onDone={async (title) => {
+              if (!title) {
+                setAdding(false)
+                return
+              }
+              await run(() => api.createStory(ws.slug, view.map.id, { title, stepId: step.id, releaseId: release?.id ?? null }))
+            }}
+          />
+        ) : (
+          <button type="button" className="add-story" aria-label={`Add story to ${where}`} onClick={() => setAdding(true)}>
+            + Story
+          </button>
+        ))}
+    </div>
+  )
+}
+
+export function StatusLabel({ status }: { status: Status | undefined }) {
+  return <span className={`st ${status?.category ?? 'todo'}`}>{status?.name ?? 'No status'}</span>
+}
+
+function StoryCard({ card }: { card: Card }) {
+  const { statuses, selectedStory, openStory } = useMap()
+  const { story } = card
+  const selected = selectedStory === story.id
+  return (
+    <button
+      type="button"
+      className="story-card"
+      aria-current={selected}
+      aria-label={`${story.key} ${story.title}`}
+      onClick={() => openStory(selected ? null : story.id)}
+    >
+      <span>{story.title}</span>
+      <span className="meta">
+        <StatusLabel status={statuses.get(story.statusId)} />
+        <span className="text-muted ml-auto text-[11px] font-extrabold">{story.key}</span>
+      </span>
+    </button>
+  )
+}

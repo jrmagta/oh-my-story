@@ -79,6 +79,10 @@
 
 /* Surfaces daisyUI has no slot for. */
 [data-theme="blink-dark"] {
+  --oms-cell: rgba(255, 255, 255, 0.035);
+  --oms-obj-bg: #F2F2F2;
+  --oms-obj-fg: #111111;
+  --oms-doing-text: #FCB131;
   --oms-muted: #A1A1AA;
   --oms-line: #3A3A40;
   --oms-card: #26262A;
@@ -88,6 +92,10 @@
   --oms-field-line: #5A5A62;
 }
 [data-theme="blink-light"] {
+  --oms-cell: #F2F2F2;
+  --oms-obj-bg: #000000;
+  --oms-obj-fg: #F2F2F2;
+  --oms-doing-text: #B7790C;
   --oms-muted: #5F5F68;
   --oms-line: #D4D4D8;
   --oms-card: #FFFFFF;
@@ -217,6 +225,349 @@
   .rows > li:first-child {
     @apply border-t border-line;
   }
+
+  /* ---- story map (docs/mockup/map-v3.html) ---- */
+  .mhead {
+    @apply bg-base-200 border-b border-line;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    padding: 24px 28px 20px;
+  }
+  .mhead h1 {
+    font-size: 44px;
+    line-height: 1;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    word-spacing: 0.14em;
+  }
+  .kpis {
+    display: flex;
+    gap: 18px;
+    margin-left: auto;
+  }
+  .kpi {
+    @apply text-muted;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 800;
+  }
+  .kpi .ring-disc {
+    width: 58px;
+    height: 58px;
+    font-size: 22px;
+    border-width: 3px;
+    outline-width: 4px;
+  }
+  .ring-disc.todo { color: #fff; }
+
+  .map-scroll {
+    overflow: auto;
+    padding: 22px 28px 60px;
+  }
+  .map-scroll.with-panel {
+    margin-right: 360px;
+  }
+  .mhead.with-panel {
+    padding-right: 388px;
+  }
+  .map-grid {
+    display: grid;
+    column-gap: 8px;
+    row-gap: 8px;
+    width: max-content;
+  }
+  .map-lbl {
+    @apply text-muted;
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--color-base-100);
+    align-self: center;
+    font-size: 12px;
+    text-transform: uppercase;
+    font-weight: 800;
+    word-spacing: 0.14em;
+  }
+  .map-obj {
+    background: var(--oms-obj-bg);
+    color: var(--oms-obj-fg);
+    padding: 10px 14px;
+    font-size: 17px;
+  }
+  .map-act {
+    border: 2px solid var(--color-base-content);
+    padding: 8px 12px;
+  }
+  .map-step {
+    border-bottom: 2px solid var(--color-base-content);
+    padding: 8px 2px;
+    font-weight: 700;
+  }
+  .node-head {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .node-head > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+  .node-popup {
+    position: absolute;
+    left: 0;
+    top: calc(100% + 6px);
+    width: 14rem;
+    z-index: 10;
+  }
+  .node-tools {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+  }
+  .node-head:hover .node-tools,
+  .node-head:focus-within .node-tools {
+    opacity: 1;
+  }
+  .icon-btn {
+    font-weight: 800;
+    line-height: 1;
+    padding: 2px 5px;
+    border: 1.5px solid currentColor;
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+  .icon-btn:hover {
+    background: currentColor;
+  }
+  .icon-btn:hover > span {
+    filter: invert(1);
+  }
+  .add-slot {
+    @apply text-muted;
+    border: 2px dashed var(--oms-line);
+    padding: 8px 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    font-size: 12px;
+    text-align: left;
+    word-spacing: 0.14em;
+  }
+  .add-slot:hover {
+    color: var(--color-base-content);
+    border-color: currentColor;
+  }
+
+  /* Release bands: green first, amber alternate, ink for Unscheduled. */
+  .band-row {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 18px;
+    margin-top: 22px;
+    background: #000;
+    color: #F2F2F2;
+    position: sticky;
+    left: 0;
+  }
+  .band-row.green { background: var(--color-brand-green); color: #fff; }
+  .band-row.amber { background: var(--color-brand-amber); color: #000; }
+  .band-row .n {
+    font-size: 24px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: -0.01em;
+    word-spacing: 0.14em;
+  }
+  .band-row .d { font-weight: 700; opacity: 0.85; }
+  .band-row .r {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-weight: 700;
+  }
+  .band-row .btn-ol { --btn-fg: currentColor; }
+  .band-row .date-btn {
+    font-weight: 700;
+    opacity: 0.85;
+    text-decoration: underline dotted;
+    text-underline-offset: 4px;
+  }
+  .band-row input[type="date"] {
+    background: transparent;
+    color: inherit;
+    border: 1.5px solid currentColor;
+    padding: 1px 6px;
+    font-weight: 700;
+    color-scheme: inherit;
+  }
+
+  .map-cell {
+    min-height: 68px;
+    background: var(--oms-cell);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .story-card {
+    background: var(--oms-card);
+    border: 1px solid var(--oms-card-line);
+    padding: 9px 10px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    text-align: left;
+    width: 100%;
+  }
+  [data-theme="blink-light"] .story-card { border-width: 2px; }
+  .story-card[aria-current="true"] {
+    outline: 3px solid var(--color-brand-amber);
+    outline-offset: 1px;
+  }
+  .story-card .meta {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .add-story {
+    @apply text-muted;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    word-spacing: 0.14em;
+    padding: 2px 4px;
+    opacity: 0;
+  }
+  .map-cell:hover .add-story,
+  .add-story:focus-visible {
+    opacity: 1;
+  }
+  .add-story:hover { color: var(--color-base-content); }
+
+  .pill {
+    display: inline-block;
+    border: 1.5px solid currentColor;
+    border-radius: 999px;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 18px;
+    text-transform: uppercase;
+    word-spacing: 0.14em;
+  }
+  /* Status text: the label always says the status; colour only reinforces it. */
+  .st {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    word-spacing: 0.14em;
+  }
+  .st.todo { color: var(--oms-muted); }
+  .st.doing { color: var(--oms-doing-text); }
+  .st.done { color: var(--oms-done-text); }
+  .st.blocked { color: var(--oms-blocked-text); }
+
+  /* Story panel. */
+  .story-panel {
+    position: fixed;
+    right: 0;
+    top: 78px;
+    bottom: 0;
+    width: 360px;
+    @apply bg-base-200 border-l border-line;
+    overflow: auto;
+    z-index: 5;
+  }
+  .story-panel .hd { padding: 18px 20px; background: #000; color: #F2F2F2; }
+  .story-panel .hd.blocked { background: var(--color-brand-red); color: #fff; }
+  .story-panel .hd.done { background: var(--color-brand-green); color: #fff; }
+  .story-panel .hd.doing { background: var(--color-brand-amber); color: #000; }
+  .story-panel .hd h2 {
+    font-size: 24px;
+    line-height: 1.05;
+    font-weight: 800;
+    text-transform: uppercase;
+    margin-top: 8px;
+    letter-spacing: -0.01em;
+    word-spacing: 0.14em;
+  }
+  .story-panel .hd .inline-edit { text-align: left; }
+  .story-panel .row {
+    @apply border-b border-line;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    font-weight: 700;
+  }
+  .story-panel .row dt {
+    @apply text-muted;
+    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 800;
+    word-spacing: 0.14em;
+  }
+  .markdown { line-height: 1.55; font-weight: 500; }
+  .markdown h1, .markdown h2, .markdown h3 { font-weight: 800; margin: 0.8em 0 0.3em; text-transform: uppercase; }
+  .markdown p, .markdown ul, .markdown ol, .markdown pre { margin: 0.5em 0; }
+  .markdown ul { list-style: disc; padding-left: 1.3em; }
+  .markdown ol { list-style: decimal; padding-left: 1.3em; }
+  .markdown a { text-decoration: underline; }
+  .markdown code { font-family: ui-monospace, monospace; font-size: 0.92em; }
+
+  /* Editable titles keep the look of the text they replace (buttons reset it),
+     unless the title carries its own .up styling. */
+  .inline-edit {
+    cursor: text;
+    text-align: inherit;
+  }
+  .inline-edit:not(.up) {
+    text-transform: inherit;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    word-spacing: inherit;
+    line-height: inherit;
+  }
+  .inline-edit:hover {
+    text-decoration: underline dotted;
+    text-underline-offset: 4px;
+  }
+
+  .toasts {
+    position: fixed;
+    left: 24px;
+    bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 20;
+    max-width: 420px;
+  }
+  .toast-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    font-weight: 700;
+    background: #000;
+    color: #F2F2F2;
+    border: 2px solid #F2F2F2;
+  }
+  .toast-item.error { background: var(--color-brand-red); color: #fff; border-color: #fff; }
+  .toast-item .btn-ol { --btn-fg: currentColor; }
 
   .label-up {
     @apply text-muted;
