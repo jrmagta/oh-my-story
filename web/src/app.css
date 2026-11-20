@@ -243,7 +243,6 @@
     word-spacing: 0.14em;
   }
   .presence {
-    margin-left: auto;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
@@ -570,6 +569,24 @@
     word-spacing: 0.14em;
   }
   .story-panel .hd .inline-edit { text-align: left; }
+  .story-tabs {
+    @apply border-b border-line;
+    display: flex;
+  }
+  .story-tabs [role="tab"] {
+    @apply text-muted;
+    flex: 1;
+    padding: 10px 0;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    word-spacing: 0.14em;
+    border-bottom: 3px solid transparent;
+  }
+  .story-tabs [role="tab"][aria-selected="true"] {
+    color: var(--color-base-content);
+    border-bottom-color: var(--color-brand-amber);
+  }
   .story-panel .row {
     @apply border-b border-line;
     display: flex;

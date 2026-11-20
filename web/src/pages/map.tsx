@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { api, ApiError, atLeast, type Category, type Level, type MapNode, type MapView, type Membership, type Release, type Status } from '../api'
 import { MapDnd, refs, useDrag, useDrop } from '../map/dnd'
+import { HistoryList } from '../map/HistoryList'
 import { useLiveMap, type LiveState, type PresentUser } from '../map/live'
 import { backbone, bands, cellKey, cells, type Band, type Card, type Column } from '../map/layout'
 import { applyMove, type Move } from '../map/moves'
@@ -170,16 +171,33 @@ export function MapPage() {
       </>
     )
   }
-  const panelOpen = !!selectedStory && ctx.view.stories.some((s) => s.id === selectedStory)
+  // One side panel at a time: the open story, else the activity feed.
+  const storyOpen = !!selectedStory && ctx.view.stories.some((s) => s.id === selectedStory)
+  const activityOpen = !storyOpen && search.has('activity')
+  const panelOpen = storyOpen || activityOpen
+  const toggleActivity = () =>
+    setSearch(
+      (s) => {
+        const n = new URLSearchParams(s)
+        if (activityOpen) n.delete('activity')
+        else {
+          n.set('activity', '')
+          n.delete('story')
+        }
+        return n
+      },
+      { replace: true },
+    )
   return (
     <Ctx.Provider value={ctx}>
-      <MapHeader panelOpen={panelOpen} users={live.users} state={live.state} />
+      <MapHeader panelOpen={panelOpen} users={live.users} state={live.state} activityOpen={activityOpen} toggleActivity={toggleActivity} />
       <div className={`map-scroll ${panelOpen ? 'with-panel' : ''}`}>
         <MapDnd view={ctx.view} onMove={move}>
           <MapGrid />
         </MapDnd>
       </div>
-      {panelOpen && <StoryPanel storyId={selectedStory} />}
+      {storyOpen && <StoryPanel storyId={selectedStory} />}
+      {activityOpen && <ActivityPanel onClose={toggleActivity} />}
       <Toasts items={toasts} dismiss={dismiss} />
     </Ctx.Provider>
   )
@@ -217,7 +235,14 @@ function Presence({ users, state }: { users: PresentUser[]; state: LiveState }) 
   )
 }
 
-function MapHeader({ panelOpen, users, state }: { panelOpen: boolean; users: PresentUser[]; state: LiveState }) {
+function MapHeader(props: {
+  panelOpen: boolean
+  users: PresentUser[]
+  state: LiveState
+  activityOpen: boolean
+  toggleActivity: () => void
+}) {
+  const { panelOpen, users, state } = props
   const { ws, view, canEdit, statuses, run } = useMap()
   const count = (level: Level) => view.nodes.filter((n) => n.level === level).length
   const byCategory = new Map<Category, number>()
@@ -250,7 +275,12 @@ function MapHeader({ panelOpen, users, state }: { panelOpen: boolean; users: Pre
         </h1>
         <p className="text-muted mt-1.5 text-sm font-semibold">{facts.join(' · ')}</p>
       </div>
-      <Presence users={users} state={state} />
+      <div className="flex flex-col items-end gap-3" style={{ marginLeft: 'auto' }}>
+        <Presence users={users} state={state} />
+        <button type="button" className="btn btn-xs btn-ol" aria-pressed={props.activityOpen} onClick={props.toggleActivity}>
+          Activity
+        </button>
+      </div>
       <div className="kpis" aria-label="Stories by status">
         {categoryOrder.map((c) => (
           <div className="kpi" key={c.category}>
@@ -694,5 +724,30 @@ function StoryCard({ card }: { card: Card }) {
         </button>
       )}
     </div>
+  )
+}
+
+/** Everything that happened on the map, newest first. */
+function ActivityPanel({ onClose }: { onClose: () => void }) {
+  const { ws, view, openStory } = useMap()
+  return (
+    <aside className="story-panel" aria-label="Map activity">
+      <div className="hd flex items-center">
+        <h2 className="flex-1" style={{ marginTop: 0 }}>
+          Activity
+        </h2>
+        <button type="button" className="icon-btn" aria-label="Close activity" onClick={onClose}>
+          <span>✕</span>
+        </button>
+      </div>
+      <HistoryList
+        slug={ws.slug}
+        view={view}
+        queryKey={[...mapKey(ws.slug, view.map.id), 'history']}
+        page={(before) => api.mapHistory(ws.slug, view.map.id, before)}
+        label="Map activity"
+        onStory={openStory}
+      />
+    </aside>
   )
 }

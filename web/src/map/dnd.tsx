@@ -27,7 +27,23 @@ const targetOf = (d: unknown) => (d as { target?: DropTarget } | undefined)?.tar
  * With a pointer, the smallest target under it wins, so a card beats the cell
  * around it. The keyboard has no pointer; it moves between enabled targets.
  */
-const collisions: CollisionDetection = (args) => {
+/**
+ * Targets stay enabled through a drag, so dnd-kit measures them all when it
+ * starts. (Enabling them only once a drag had started left a gap before they
+ * were measured; an arrow key pressed in it found nothing.) Whether a target
+ * can take the item is decided here instead: the item's own place, so a drag
+ * starts over itself, and anywhere accepts allows.
+ */
+function usable(args: { active: { data: { current?: unknown } } }) {
+  const item = itemOf(args.active.data.current)
+  return (entry: { data: { current?: unknown } }) => {
+    const t = targetOf(entry.data.current)
+    return !!t && (accepts(t, item) || isSelf(t, item))
+  }
+}
+
+const collisions: CollisionDetection = (raw) => {
+  const args = { ...raw, droppableContainers: raw.droppableContainers.filter(usable(raw)) }
   const under = pointerWithin(args)
   if (under.length > 0) {
     const area = (id: string | number) => {
@@ -52,7 +68,9 @@ const keyboardCoordinates: KeyboardCoordinateGetter = (event, { context }) => {
   if (!active || !collisionRect) return undefined
   const cx = collisionRect.left + collisionRect.width / 2
   const cy = collisionRect.top + collisionRect.height / 2
+  const ok = usable({ active })
   const candidates = droppableContainers.getEnabled().filter((entry) => {
+    if (!ok(entry)) return false
     const r = droppableRects.get(entry.id)
     if (!r) return false
     const around = r.left <= cx && cx <= r.right && r.top <= cy && cy <= r.bottom
@@ -139,17 +157,11 @@ export function useDrag(id: string, item: DragItem, disabled: boolean) {
   }
 }
 
-/**
- * A place to drop. It turns itself off for drags it cannot take, except the
- * dragged item's own place: a drag starts over itself, so picking something up
- * and dropping it straight away moves nothing.
- */
+/** A place to drop. It only highlights for drags it can take. */
 export function useDrop(id: string, target: DropTarget) {
   const { active } = useDndContext()
-  const item = itemOf(active?.data.current)
-  const ok = accepts(target, item)
-  const d = useDroppable({ id: `drop:${id}`, data: { target }, disabled: !ok && !isSelf(target, item) })
-  return { ref: d.setNodeRef, over: d.isOver && ok }
+  const d = useDroppable({ id: `drop:${id}`, data: { target } })
+  return { ref: d.setNodeRef, over: d.isOver && accepts(target, itemOf(active?.data.current)) }
 }
 
 /** One ref callback that sets several refs, for an element that is dragged and dropped on. */

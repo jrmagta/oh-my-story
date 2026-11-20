@@ -1,5 +1,7 @@
 // Client for the HTTP API in docs/API.md.
 
+import type { HistoryPage } from './map/history'
+
 export type Role = 'owner' | 'admin' | 'editor' | 'commenter' | 'viewer'
 
 export const roles: readonly Role[] = ['owner', 'admin', 'editor', 'commenter', 'viewer']
@@ -217,6 +219,12 @@ export const api = {
   patchMap: (slug: string, mapId: string, b: { name?: string; description?: string }) =>
     request<StoryMap>('PATCH', mp(slug, mapId), b),
   deleteMap: (slug: string, mapId: string) => request<void>('DELETE', mp(slug, mapId)),
+
+  /** before: the next cursor of the previous page; omit for the newest. */
+  mapHistory: (slug: string, mapId: string, before?: number) =>
+    request<HistoryPage>('GET', `${mp(slug, mapId)}/history${before ? `?before=${before}` : ''}`),
+  storyHistory: (slug: string, mapId: string, id: string, before?: number) =>
+    request<HistoryPage>('GET', `${mp(slug, mapId)}/stories/${id}/history${before ? `?before=${before}` : ''}`),
 
   createNode: (slug: string, mapId: string, b: { level: Level; title: string; parentId?: string } & Position) =>
     request<MapNode>('POST', `${mp(slug, mapId)}/nodes`, b),

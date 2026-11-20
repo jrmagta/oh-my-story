@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/google/uuid"
 
@@ -54,6 +55,8 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 		mux.HandleFunc(rt.pattern, s.inWorkspace(rt.action, mapEndpoint(rt.h)))
 	}
 	mux.HandleFunc("GET "+m+"/live", s.inWorkspace(role.View, s.liveMap))
+	mux.HandleFunc("GET "+m+"/history", s.inWorkspace(role.View, mapEndpoint(s.mapHistory)))
+	mux.HandleFunc("GET "+m+"/stories/{id}/history", s.inWorkspace(role.View, mapEndpoint(s.storyHistory)))
 }
 
 // mapRequest is what every map handler needs: the caller, the workspace and
@@ -495,4 +498,41 @@ func (s *Server) deleteStory(q mapRequest) (int, any, error) {
 func (s *Server) restoreStory(q mapRequest) (int, any, error) {
 	out, err := s.store.RestoreStory(q.r.Context(), q.user, q.ws, q.mapID, q.id)
 	return http.StatusOK, out, err
+}
+
+// ---- history ----
+
+// historyPage reads ?before=<event id>&limit=<1..200, default 50>.
+func historyPage(r *http.Request) (before int64, limit int, err error) {
+	q := r.URL.Query()
+	limit = 50
+	if v := q.Get("limit"); v != "" {
+		if limit, err = strconv.Atoi(v); err != nil || limit < 1 || limit > 200 {
+			return 0, 0, errBadRequest("limit must be 1 to 200")
+		}
+	}
+	if v := q.Get("before"); v != "" {
+		if before, err = strconv.ParseInt(v, 10, 64); err != nil || before < 1 {
+			return 0, 0, errBadRequest("before must be an event id from a previous page")
+		}
+	}
+	return before, limit, nil
+}
+
+func (s *Server) mapHistory(q mapRequest) (int, any, error) {
+	before, limit, err := historyPage(q.r)
+	if err != nil {
+		return 0, nil, err
+	}
+	h, err := s.store.MapHistory(q.r.Context(), q.ws, q.mapID, before, limit)
+	return http.StatusOK, h, err
+}
+
+func (s *Server) storyHistory(q mapRequest) (int, any, error) {
+	before, limit, err := historyPage(q.r)
+	if err != nil {
+		return 0, nil, err
+	}
+	h, err := s.store.StoryHistory(q.r.Context(), q.ws, q.mapID, q.id, before, limit)
+	return http.StatusOK, h, err
 }

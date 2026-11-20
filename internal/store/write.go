@@ -137,6 +137,19 @@ func created(mapID uuid.UUID, entity string, id uuid.UUID, v any) change {
 	return change{mapID: mapID, entity: entity, id: id, action: "create", after: fields(v)}
 }
 
+// gone builds a delete or restore. label holds the fields that name the row
+// (a title, a key), so history can say what went or came back: before for a
+// delete, after for a restore.
+func gone(mapID uuid.UUID, entity string, id uuid.UUID, action string, label map[string]any) change {
+	c := change{mapID: mapID, entity: entity, id: id, action: action}
+	if action == "restore" {
+		c.after = label
+	} else {
+		c.before = label
+	}
+	return c
+}
+
 // updated returns false when before and after are equal, so no-op writes leave no event.
 func updated(mapID uuid.UUID, entity string, id uuid.UUID, action string, before, after any) (change, bool) {
 	b, a := diff(before, after)

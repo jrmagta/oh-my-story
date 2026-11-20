@@ -297,3 +297,35 @@ test('two people on one map see each other and each other’s edits live', async
   await ctx.close()
   await expect(present(page)).not.toContainText(viewer.name)
 })
+
+test('the story history and the map activity say who changed what', async ({ page }) => {
+  await signIn(page)
+  await page.goto(mapUrl)
+  await card(page, 'STORY-1 Register with email').click()
+  const story = panel(page)
+  await story.getByLabel('Status').selectOption({ label: 'Blocked' })
+  await expect(card(page, 'STORY-1 Register with email')).toContainText('Blocked')
+  await story.getByRole('button', { name: 'Rename story' }).click()
+  await story.getByRole('textbox', { name: 'New name for story' }).fill('Register with an email')
+  await page.keyboard.press('Enter')
+  await expect(card(page, 'STORY-1 Register with an email')).toBeVisible()
+
+  await story.getByRole('tab', { name: 'History' }).click()
+  const history = story.getByRole('list', { name: 'History of STORY-1' })
+  await expect(history.getByRole('listitem').first()).toContainText(
+    'Olive Owner renamed STORY-1 from “Register with email” to “Register with an email”',
+  )
+  await expect(history).toContainText('Olive Owner set STORY-1 to Blocked')
+  await expect(history).toContainText('Olive Owner added STORY-1 “Register with email”')
+  await expect(history).toContainText('just now')
+
+  await page.getByRole('button', { name: 'Activity', exact: true }).click()
+  await expect(story).toHaveCount(0)
+  const feed = page.getByRole('list', { name: 'Map activity' })
+  await expect(feed.getByRole('listitem').first()).toContainText('Olive Owner renamed STORY-1')
+  await expect(feed).toContainText('Olive Owner set STORY-1 to Blocked')
+
+  // Entries link to their story.
+  await feed.getByRole('listitem').first().getByRole('button', { name: 'Open story' }).click()
+  await expect(panel(page)).toBeVisible()
+})
