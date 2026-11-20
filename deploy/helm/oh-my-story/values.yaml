@@ -1,0 +1,90 @@
+image:
+  repository: ghcr.io/jrmagta/oh-my-story
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Public origin users reach the app on, e.g. https://story.example.com.
+# Required. Cookies are marked Secure when it is https.
+baseURL: ""
+
+# Ignored when autoscaling is enabled.
+replicaCount: 2
+
+# A Secret you manage, holding the keys below. Leave empty to have the chart
+# create one from the values in this file.
+#   database-url        unless cloudnativepg.enabled
+#   oidc-client-secret  when oidc.issuer is set
+#   smtp-password       optional
+existingSecret: ""
+
+database:
+  # postgres:// URL. Used when existingSecret is empty and
+  # cloudnativepg.enabled is false.
+  url: ""
+
+# Run Postgres in the cluster with CloudNativePG. The operator must already be
+# installed. The app reads the connection URL from the operator's
+# <release>-db-app Secret.
+cloudnativepg:
+  enabled: false
+  instances: 1
+  storage:
+    size: 1Gi
+    # Empty: the cluster's default StorageClass.
+    storageClass: ""
+
+smtp:
+  # host:port. Empty: emails are logged, not sent.
+  addr: ""
+  username: ""
+  password: ""
+  from: ""
+
+oidc:
+  # Empty: SSO is off.
+  issuer: ""
+  # Defaults to the issuer.
+  discoveryURL: ""
+  clientID: ""
+  clientSecret: ""
+  # Label on the sign-in button.
+  name: ""
+
+migration:
+  backoffLimit: 6
+  activeDeadlineSeconds: 600
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  # Defaults to the host of baseURL.
+  host: ""
+  tls:
+    enabled: false
+    secretName: ""
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

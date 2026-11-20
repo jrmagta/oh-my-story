@@ -1,0 +1,19 @@
+{{- if .Values.cloudnativepg.enabled }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "oms.cnpgCluster" . }}
+  labels:
+    {{- include "oms.labels" . | nindent 4 }}
+spec:
+  instances: {{ .Values.cloudnativepg.instances }}
+  bootstrap:
+    initdb:
+      database: oms
+      owner: oms
+  storage:
+    size: {{ .Values.cloudnativepg.storage.size }}
+    {{- with .Values.cloudnativepg.storage.storageClass }}
+    storageClass: {{ . }}
+    {{- end }}
+{{- end }}

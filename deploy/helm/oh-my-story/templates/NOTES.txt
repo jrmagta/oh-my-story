@@ -1,0 +1,8 @@
+oh-my-story is starting at {{ .Values.baseURL }}
+
+The first person to open it creates the admin account.
+{{- if not .Values.ingress.enabled }}
+
+No Ingress is enabled. To reach it locally:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "oms.fullname" . }} 8080:{{ .Values.service.port }}
+{{- end }}
