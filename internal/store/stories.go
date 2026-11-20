@@ -202,10 +202,18 @@ func (s *Store) MoveStory(ctx context.Context, actor, workspaceID, mapID, storyI
 			p.ID, p.StepID, p.ReleaseID, p.Rank); err != nil {
 			return nil, err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE stories SET version = version + 1, updated_at = now() WHERE id = $1`, storyID); err != nil {
+		var version int
+		if err := tx.QueryRow(ctx, `UPDATE stories SET version = version + 1, updated_at = now() WHERE id = $1 RETURNING version`,
+			storyID).Scan(&version); err != nil {
 			return nil, err
 		}
 		c, _ := updated(mapID, "placement", p.ID, "move", before, p)
+		// A move changes the story's version even when it lands where it was
+		// (the same rank); live clients need the new version either way.
+		if c.before == nil {
+			c.before, c.after = map[string]any{}, map[string]any{}
+		}
+		c.before["storyVersion"], c.after["storyVersion"] = st.Version, version
 		return []change{c}, nil
 	})
 	return p, stale, err

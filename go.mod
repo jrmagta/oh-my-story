@@ -6,6 +6,7 @@ go 1.26.0
 ignore ./web/node_modules
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.13.0

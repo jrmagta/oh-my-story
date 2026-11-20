@@ -15,6 +15,7 @@ import (
 	"github.com/jrmagta/oh-my-story/internal/config"
 	"github.com/jrmagta/oh-my-story/internal/db"
 	"github.com/jrmagta/oh-my-story/internal/httpapi"
+	"github.com/jrmagta/oh-my-story/internal/live"
 	"github.com/jrmagta/oh-my-story/internal/mail"
 	"github.com/jrmagta/oh-my-story/web"
 )
@@ -102,9 +103,14 @@ func serve(ctx context.Context, cfg config.Config) error {
 		slog.Info("sso enabled", "issuer", cfg.OIDC.Issuer)
 	}
 
+	hub := live.New(pool)
+	if err := hub.Start(ctx); err != nil {
+		return fmt.Errorf("start live updates: %w", err)
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.New(cfg, pool, sender, sso, web.Handler(web.Dist())),
+		Handler:           httpapi.New(cfg, pool, sender, sso, hub, web.Handler(web.Dist())),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errc := make(chan error, 1)

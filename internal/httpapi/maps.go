@@ -53,6 +53,7 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 	for _, rt := range routes {
 		mux.HandleFunc(rt.pattern, s.inWorkspace(rt.action, mapEndpoint(rt.h)))
 	}
+	mux.HandleFunc("GET "+m+"/live", s.inWorkspace(role.View, s.liveMap))
 }
 
 // mapRequest is what every map handler needs: the caller, the workspace and

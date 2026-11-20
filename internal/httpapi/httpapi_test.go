@@ -12,6 +12,7 @@ import (
 	"github.com/jrmagta/oh-my-story/internal/config"
 	"github.com/jrmagta/oh-my-story/internal/db"
 	"github.com/jrmagta/oh-my-story/internal/httpapi"
+	"github.com/jrmagta/oh-my-story/internal/live"
 )
 
 func TestHealthz(t *testing.T) {
@@ -27,7 +28,8 @@ func TestHealthz(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer dead.Close()
-	srv := httptest.NewServer(httpapi.New(config.Config{BaseURL: "http://x"}, dead, &recorder{}, nil, nil))
+	// The hub is not started: nothing here reaches it.
+	srv := httptest.NewServer(httpapi.New(config.Config{BaseURL: "http://x"}, dead, &recorder{}, nil, live.New(dead), nil))
 	defer srv.Close()
 	res, err := http.Get(srv.URL + "/healthz")
 	if err != nil {
@@ -348,7 +350,7 @@ func TestWorkspaceValidation(t *testing.T) {
 // Unknown /api paths stay JSON 404s; other GETs go to the web app, except /auth.
 func TestFallbackRoutes(t *testing.T) {
 	ui := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ui")) })
-	h := httpapi.New(config.Config{BaseURL: "http://localhost"}, nil, nil, nil, ui)
+	h := httpapi.New(config.Config{BaseURL: "http://localhost"}, nil, nil, nil, nil, ui)
 	for _, c := range []struct {
 		method, path string
 		status       int

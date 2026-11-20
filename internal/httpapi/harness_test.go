@@ -19,6 +19,7 @@ import (
 	"github.com/jrmagta/oh-my-story/internal/db"
 	"github.com/jrmagta/oh-my-story/internal/db/dbtest"
 	"github.com/jrmagta/oh-my-story/internal/httpapi"
+	"github.com/jrmagta/oh-my-story/internal/live"
 	"github.com/jrmagta/oh-my-story/internal/mail"
 )
 
@@ -64,23 +65,28 @@ func (r *recorder) inviteToken(t *testing.T, addr string) string {
 }
 
 type harness struct {
-	t    *testing.T
-	base string
-	mail *recorder
+	t        *testing.T
+	base     string
+	mail     *recorder
+	database string
 }
 
 type harnessOpts struct {
-	listen string // fixed address, needed when an identity provider must redirect back
-	base   string
-	oidc   *config.OIDC
+	listen   string // fixed address, needed when an identity provider must redirect back
+	base     string
+	oidc     *config.OIDC
+	database string // share another harness's database, like a second app replica
 }
 
 func newHarness(t *testing.T, opts harnessOpts) *harness {
 	t.Helper()
 	ctx := context.Background()
-	url := dbtest.NewDatabase(t)
-	if _, err := db.Migrate(ctx, url); err != nil {
-		t.Fatal(err)
+	url := opts.database
+	if url == "" {
+		url = dbtest.NewDatabase(t)
+		if _, err := db.Migrate(ctx, url); err != nil {
+			t.Fatal(err)
+		}
 	}
 	pool, err := db.Open(ctx, url)
 	if err != nil {
@@ -107,11 +113,19 @@ func newHarness(t *testing.T, opts harnessOpts) *harness {
 			t.Fatal(err)
 		}
 	}
+	hubCtx, stopHub := context.WithCancel(ctx)
+	hub := live.New(pool)
+	if err := hub.Start(hubCtx); err != nil {
+		t.Fatal(err)
+	}
 	rec := &recorder{}
-	srv.Config.Handler = httpapi.New(cfg, pool, rec, sso, nil)
+	srv.Config.Handler = httpapi.New(cfg, pool, rec, sso, hub, nil)
 	srv.Start()
+	// Cleanups run last-in first-out: close the server (and its sockets), then
+	// stop the hub, then the pool closes.
+	t.Cleanup(stopHub)
 	t.Cleanup(srv.Close)
-	return &harness{t: t, base: base, mail: rec}
+	return &harness{t: t, base: base, mail: rec, database: url}
 }
 
 // client is one browser: its own cookie jar.
