@@ -211,6 +211,8 @@ export const api = {
     request<MapNode>('POST', `${mp(slug, mapId)}/nodes`, b),
   patchNode: (slug: string, mapId: string, id: string, b: { title?: string; description?: string }) =>
     request<MapNode>('PATCH', `${mp(slug, mapId)}/nodes/${id}`, b),
+  moveNode: (slug: string, mapId: string, id: string, b: { parentId: string | null } & Position) =>
+    request<MapNode>('POST', `${mp(slug, mapId)}/nodes/${id}/move`, b),
   deleteNode: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/nodes/${id}`),
   restoreNode: (slug: string, mapId: string, id: string) =>
     request<MapNode>('POST', `${mp(slug, mapId)}/nodes/${id}/restore`, {}),
@@ -219,6 +221,8 @@ export const api = {
     request<Release>('POST', `${mp(slug, mapId)}/releases`, b),
   patchRelease: (slug: string, mapId: string, id: string, b: { name?: string; targetDate?: string | null }) =>
     request<Release>('PATCH', `${mp(slug, mapId)}/releases/${id}`, b),
+  moveRelease: (slug: string, mapId: string, id: string, b: Position) =>
+    request<Release>('POST', `${mp(slug, mapId)}/releases/${id}/move`, b),
   deleteRelease: (slug: string, mapId: string, id: string) =>
     request<void>('DELETE', `${mp(slug, mapId)}/releases/${id}`),
 
@@ -230,6 +234,9 @@ export const api = {
     id: string,
     b: { title?: string; descriptionMd?: string; statusId?: string; assigneeId?: string | null },
   ) => request<Story>('PATCH', `${mp(slug, mapId)}/stories/${id}`, b),
+  /** version is the story version the client showed; stale says someone changed it since. */
+  moveStory: (slug: string, mapId: string, id: string, b: { stepId: string; releaseId: string | null; version: number } & Position) =>
+    request<{ placement: Placement; stale: boolean }>('POST', `${mp(slug, mapId)}/stories/${id}/move`, b),
   deleteStory: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/stories/${id}`),
   restoreStory: (slug: string, mapId: string, id: string) =>
     request<Story>('POST', `${mp(slug, mapId)}/stories/${id}/restore`, {}),

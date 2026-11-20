@@ -1,8 +1,10 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { api, ApiError, atLeast, type Category, type Level, type MapNode, type MapView, type Membership, type Release, type Status } from '../api'
+import { MapDnd, refs, useDrag, useDrop } from '../map/dnd'
 import { backbone, bands, cellKey, cells, type Band, type Card, type Column } from '../map/layout'
+import { applyMove, type Move } from '../map/moves'
 import { ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toasts, type ToastMessage } from '../ui'
 import { PageBand } from './app'
 import { StoryPanel } from './story-panel'
@@ -18,6 +20,8 @@ interface MapCtx {
   run: (write: () => Promise<unknown>, opts?: { done?: string; undo?: () => Promise<unknown> }) => Promise<boolean>
   selectedStory: string | null
   openStory: (id: string | null) => void
+  /** Shows a move at once, saves it, and puts things back if saving fails. */
+  move: (m: Move) => void
   /** The open add-node input, as "level:parentId"; see useAddNode. */
   adding: string | null
   setAdding: (key: string | null) => void
@@ -74,6 +78,46 @@ export function MapPage() {
     [qc, toast, key],
   )
 
+  const move = useCallback(
+    (m: Move) => {
+      const before = qc.getQueryData<MapView>(key)
+      if (!before) return
+      void qc.cancelQueries({ queryKey: key })
+      qc.setQueryData<MapView>(key, applyMove(before, m))
+      const save = async () => {
+        switch (m.kind) {
+          case 'story': {
+            const story = before.stories.find((s) => s.id === m.storyId)
+            const r = await api.moveStory(ws.slug, mapId, m.storyId, {
+              stepId: m.stepId,
+              releaseId: m.releaseId,
+              version: story?.version ?? 0,
+              ...m.position,
+            })
+            if (r.stale && story) {
+              toast({ text: `${story.key} was changed by someone else while you moved it. It is in its new place.`, tone: 'info' })
+            }
+            return
+          }
+          case 'node':
+            await api.moveNode(ws.slug, mapId, m.nodeId, { parentId: m.parentId, ...m.position })
+            return
+          case 'release':
+            await api.moveRelease(ws.slug, mapId, m.releaseId, m.position)
+        }
+      }
+      void run(async () => {
+        try {
+          await save()
+        } catch (e) {
+          qc.setQueryData(key, before)
+          throw e
+        }
+      })
+    },
+    [qc, key, run, toast, ws.slug, mapId],
+  )
+
   const [adding, setAdding] = useState<string | null>(null)
   const selectedStory = search.get('story')
   const openStory = useCallback(
@@ -101,11 +145,12 @@ export function MapPage() {
             run,
             selectedStory,
             openStory,
+            move,
             adding,
             setAdding,
           }
         : null,
-    [ws, query.data, run, selectedStory, openStory, adding],
+    [ws, query.data, run, selectedStory, openStory, move, adding],
   )
 
   if (query.isPending) return <Loading />
@@ -128,7 +173,9 @@ export function MapPage() {
     <Ctx.Provider value={ctx}>
       <MapHeader panelOpen={panelOpen} />
       <div className={`map-scroll ${panelOpen ? 'with-panel' : ''}`}>
-        <MapGrid />
+        <MapDnd view={ctx.view} onMove={move}>
+          <MapGrid />
+        </MapDnd>
       </div>
       {panelOpen && <StoryPanel storyId={selectedStory} />}
       <Toasts items={toasts} dismiss={dismiss} />
@@ -249,9 +296,9 @@ function MapGrid() {
       ))}
       {bb.columns.map((c, i) =>
         !c.activity && c.objective ? (
-          <div key={c.key} style={col(i)}>
+          <Slot key={c.key} style={col(i)} level="activity" parent={c.objective}>
             {canEdit && <AddNode level="activity" parent={c.objective} label={`Add activity to ${c.objective.title}`} short="Add activity" />}
-          </div>
+          </Slot>
         ) : null,
       )}
       {canEdit && !four && (
@@ -263,18 +310,19 @@ function MapGrid() {
       <div className="map-lbl" style={{ gridColumn: 1 }}>
         Step
       </div>
-      {bb.columns.map((c, i) => (
-        <div key={c.key} style={col(i)}>
-          {c.step ? (
-            <div className="map-step">
-              <NodeHead node={c.step} />
-            </div>
-          ) : (
-            c.activity &&
-            canEdit && <AddNode level="step" parent={c.activity} label={`Add step to ${c.activity.title}`} short="Add step" />
-          )}
-        </div>
-      ))}
+      {bb.columns.map((c, i) =>
+        c.step ? (
+          <div key={c.key} style={col(i)} className="map-step">
+            <NodeHead node={c.step} />
+          </div>
+        ) : c.activity ? (
+          <Slot key={c.key} style={col(i)} level="step" parent={c.activity}>
+            {canEdit && <AddNode level="step" parent={c.activity} label={`Add step to ${c.activity.title}`} short="Add step" />}
+          </Slot>
+        ) : (
+          <div key={c.key} style={col(i)} />
+        ),
+      )}
 
       {bs.map((b, i) => (
         <BandRows key={b.key} band={b} index={i} columns={bb.columns} byCell={byCell} isLast={i === bs.length - 1} />
@@ -292,8 +340,14 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
   const { ws, view, canEdit, run } = useMap()
   const label = `${node.level} ${node.title}`
   const hasChildren = view.nodes.some((n) => n.parentId === node.id)
+  const drag = useDrag(`node:${node.id}`, { kind: 'node', node, label }, !canEdit)
+  const drop = useDrop(`node:${node.id}`, { kind: 'node', node, label })
   return (
-    <div className="node-head">
+    <div
+      ref={refs(drag.ref, drop.ref)}
+      className={`node-head ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''}`}
+      {...drag.pointer}
+    >
       <InlineText
         value={node.title}
         label={label}
@@ -304,6 +358,9 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
       {canEdit && (
         <span className="node-tools">
           {child && hasChildren && <AddNodeIcon level={child} parent={node} />}
+          <button type="button" className="icon-btn drag-handle" title="Move" {...drag.handle}>
+            <span>⠿</span>
+          </button>
           <button
             type="button"
             className="icon-btn"
@@ -370,6 +427,21 @@ function AddNode({ level, parent, label, short }: { level: Level; parent: MapNod
   )
 }
 
+/** An empty column under a node: a place to add, or drop, its first child. */
+function Slot(props: { style: CSSProperties; level: Level; parent: MapNode; children: ReactNode }) {
+  const drop = useDrop(`slot:${props.level}:${props.parent.id}`, {
+    kind: 'slot',
+    level: props.level,
+    parentId: props.parent.id,
+    label: `the empty ${props.level} column of ${props.parent.title}`,
+  })
+  return (
+    <div ref={drop.ref} style={props.style} className={drop.over ? 'drop' : undefined}>
+      {props.children}
+    </div>
+  )
+}
+
 function BandRows(props: { band: Band; index: number; columns: Column[]; byCell: Map<string, Card[]>; isLast: boolean }) {
   const { canEdit } = useMap()
   const { band, columns, byCell } = props
@@ -380,11 +452,20 @@ function BandRows(props: { band: Band; index: number; columns: Column[]; byCell:
       {props.isLast && canEdit && <AddRelease />}
       <BandHeader release={band.release} index={props.index} stories={stories} />
       <div className="map-lbl" style={{ gridColumn: 1 }} />
-      {columns.map((c, i) => (
-        <div key={c.key} style={{ gridColumn: i + 2 }} className={c.step ? 'map-cell' : undefined}>
-          {c.step && <Cell step={c.step} release={band.release} bandName={name} cards={byCell.get(cellKey(c.step.id, band.release?.id ?? null)) ?? []} />}
-        </div>
-      ))}
+      {columns.map((c, i) =>
+        c.step ? (
+          <Cell
+            key={c.key}
+            column={i + 2}
+            step={c.step}
+            release={band.release}
+            bandName={name}
+            cards={byCell.get(cellKey(c.step.id, band.release?.id ?? null)) ?? []}
+          />
+        ) : (
+          <div key={c.key} style={{ gridColumn: i + 2 }} />
+        ),
+      )}
     </>
   )
 }
@@ -397,8 +478,23 @@ function BandHeader({ release, index, stories }: { release: Release | null; inde
   const { ws, view, canEdit, run } = useMap()
   const tone = release ? (index % 2 === 0 ? 'green' : 'amber') : ''
   const name = release?.name ?? 'Unscheduled'
+  const label = `release ${name}`
+  // Unscheduled stays last: a release dropped on it moves to the end of the releases.
+  const placeholder = { id: 'unscheduled', name, description: '', targetDate: null, rank: '' }
+  const drag = useDrag(`release:${release?.id ?? 'unscheduled'}`, { kind: 'release', release: release ?? placeholder, label }, !canEdit || !release)
+  const drop = useDrop(
+    `release:${release?.id ?? 'unscheduled'}`,
+    release ? { kind: 'release', release, label } : { kind: 'unscheduled', label: 'the end of the releases' },
+  )
   return (
-    <div className={`band-row ${tone}`} role="heading" aria-level={2} aria-label={`Release ${name}`}>
+    <div
+      ref={refs(drag.ref, drop.ref)}
+      className={`band-row ${tone} ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''}`}
+      role="heading"
+      aria-level={2}
+      aria-label={`Release ${name}`}
+      {...(release ? drag.pointer : {})}
+    >
       <span className="n">
         {release ? (
           <InlineText
@@ -415,6 +511,11 @@ function BandHeader({ release, index, stories }: { release: Release | null; inde
       {release && <TargetDate release={release} />}
       <span className="r">
         {plural(stories, 'story').replace('storys', 'stories')}
+        {release && canEdit && (
+          <button type="button" className="btn btn-xs btn-ol drag-handle" title="Move" {...drag.handle}>
+            ⠿
+          </button>
+        )}
         {release && canEdit && (
           <button
             type="button"
@@ -488,12 +589,25 @@ function AddRelease() {
   )
 }
 
-function Cell({ step, release, bandName, cards }: { step: MapNode; release: Release | null; bandName: string; cards: Card[] }) {
+function Cell(props: { column: number; step: MapNode; release: Release | null; bandName: string; cards: Card[] }) {
+  const { step, release, bandName, cards } = props
   const { ws, view, canEdit, run } = useMap()
   const [adding, setAdding] = useState(false)
   const where = `${step.title} / ${bandName}`
+  const drop = useDrop(`cell:${cellKey(step.id, release?.id ?? null)}`, {
+    kind: 'cell',
+    stepId: step.id,
+    releaseId: release?.id ?? null,
+    label: `the end of ${where}`,
+  })
   return (
-    <div role="group" aria-label={`Stories in ${where}`} className="contents">
+    <div
+      ref={drop.ref}
+      role="group"
+      aria-label={`Stories in ${where}`}
+      className={`map-cell ${drop.over ? 'drop' : ''}`}
+      style={{ gridColumn: props.column }}
+    >
       {cards.map((c) => (
         <StoryCard key={c.story.id} card={c} />
       ))}
@@ -525,22 +639,36 @@ export function StatusLabel({ status }: { status: Status | undefined }) {
 }
 
 function StoryCard({ card }: { card: Card }) {
-  const { statuses, selectedStory, openStory } = useMap()
-  const { story } = card
+  const { canEdit, statuses, selectedStory, openStory } = useMap()
+  const { story, placement } = card
   const selected = selectedStory === story.id
+  const label = `${story.key} ${story.title}`
+  const drag = useDrag(`story:${story.id}`, { kind: 'story', storyId: story.id, placement, label }, !canEdit)
+  const drop = useDrop(`story:${story.id}`, { kind: 'story', storyId: story.id, placement, label })
   return (
-    <button
-      type="button"
-      className="story-card"
-      aria-current={selected}
-      aria-label={`${story.key} ${story.title}`}
-      onClick={() => openStory(selected ? null : story.id)}
+    <div
+      ref={refs(drag.ref, drop.ref)}
+      className={`story-card ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''}`}
+      {...drag.pointer}
     >
-      <span>{story.title}</span>
-      <span className="meta">
-        <StatusLabel status={statuses.get(story.statusId)} />
-        <span className="text-muted ml-auto text-[11px] font-extrabold">{story.key}</span>
-      </span>
-    </button>
+      <button
+        type="button"
+        className="card-open"
+        aria-current={selected}
+        aria-label={label}
+        onClick={() => openStory(selected ? null : story.id)}
+      >
+        <span>{story.title}</span>
+        <span className="meta">
+          <StatusLabel status={statuses.get(story.statusId)} />
+          <span className="text-muted ml-auto text-[11px] font-extrabold">{story.key}</span>
+        </span>
+      </button>
+      {canEdit && (
+        <button type="button" className="icon-btn drag-handle card-handle" title="Move" {...drag.handle}>
+          <span>⠿</span>
+        </button>
+      )}
+    </div>
   )
 }
