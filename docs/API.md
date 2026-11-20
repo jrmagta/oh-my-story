@@ -107,17 +107,30 @@ Labels belong to the workspace and are shared by its maps. A label is `{id, name
 
 A step's labels are its `labelIds`, set with `PATCH .../steps/{id}`. Label events have no map, so every open map in the workspace gets them.
 
+### Personas
+
+Personas belong to the workspace and link to objectives. A persona is `{id, name, description, colour}`.
+
+| Endpoint | Role | Body → response |
+|---|---|---|
+| `GET /personas` | viewer | → `[persona]`, by name |
+| `POST /personas` | editor | `{name, description?, colour?}` → `201` persona. `name` 1 to 100 characters, `409` when taken ignoring case; `description` up to 2,000; `colour` defaults to `#8A8A93` |
+| `PATCH /personas/{id}` | editor | `{name?, description?, colour?}` → persona |
+| `DELETE /personas/{id}` | editor | → `204`. Unlinks it from every objective, with one `persona` delete event |
+
+An objective's personas are its `personaIds`, set with `PATCH .../nodes/{id}`; activities refuse them.
+
 ### Maps, nodes, releases, steps
 
 | Method and path | Body → response |
 |---|---|
 | `GET /maps` | → `[map]` |
 | `POST /maps` | `{name, description?, workflowId?}` → `201` map. The workflow defaults to the workspace default and cannot change later |
-| `GET /maps/{mapId}` | → `{map, workflow, nodes, releases, steps, placements, lastEventId}`: the whole map, deleted items left out. `lastEventId` is the newest event included, for resuming the live feed |
+| `GET /maps/{mapId}` | → `{map, workflow, labels, personas, nodes, releases, steps, placements, lastEventId}`: the whole map, deleted items left out. `lastEventId` is the newest event included, for resuming the live feed |
 | `PATCH /maps/{mapId}` | `{name?, description?}` → map |
 | `DELETE /maps/{mapId}` | → `204` (soft delete) |
 | `POST /maps/{mapId}/nodes` | `{level, title, parentId?, description?, colour?, afterId?, beforeId?}` → `201` node. `level` is `objective` (no parent) or `activity` (`parentId` an objective) |
-| `PATCH /maps/{mapId}/nodes/{id}` | `{title?, description?, colour?}` → node. `colour`: `#RRGGBB`; null clears it, giving the level's default look |
+| `PATCH /maps/{mapId}/nodes/{id}` | `{title?, description?, colour?, personaIds?}` → node. `colour`: `#RRGGBB`; null clears it, giving the level's default look. `personaIds` replaces an objective's personas: personas of this workspace, no repeats, at most 20; `bad_request` on an activity |
 | `POST /maps/{mapId}/nodes/{id}/move` | `{parentId, afterId?, beforeId?}` → node. `parentId` is required: an objective for an activity, `null` for an objective; a node keeps its level |
 | `DELETE /maps/{mapId}/nodes/{id}` | → `204`. Deletes the node, the activities under it and their steps |
 | `POST /maps/{mapId}/nodes/{id}/restore` | `{}` → node. Restores what that delete removed; the parent must not be deleted |
@@ -131,7 +144,7 @@ A step's labels are its `labelIds`, set with `PATCH .../steps/{id}`. Label event
 | `DELETE /maps/{mapId}/steps/{id}` | → `204` (soft delete) |
 | `POST /maps/{mapId}/steps/{id}/restore` | `{}` → step. Its activity must not be deleted |
 
-Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, title, description, colour, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; step `{id, key, title, descriptionMd, statusId, assigneeId, estimate, labelIds, version}` with `estimate` a number or null and `labelIds` sorted; placement `{id, stepId, activityId, releaseId, rank}`.
+Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, title, description, colour, personaIds, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; step `{id, key, title, descriptionMd, statusId, assigneeId, estimate, labelIds, version}` with `estimate` a number or null and `labelIds` sorted; placement `{id, stepId, activityId, releaseId, rank}`.
 
 Limits: names 1 to 100 characters, titles 1 to 500, descriptions up to 50,000; colours are `#RRGGBB`.
 

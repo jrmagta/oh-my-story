@@ -6,7 +6,7 @@ import { ConfirmButton, InlineText } from '../ui'
 import { HistoryList } from '../map/HistoryList'
 import { amount, formatEstimate } from '../map/estimates'
 import { LabelChips, mapKey, StatusLabel, useMap } from './map'
-import { colourFor, LabelPicker } from '../map/LabelPicker'
+import { colourFor, TagPicker } from '../map/TagPicker'
 
 /** The open step, beside the map. Editors change it in place; everyone else reads. */
 export function StepPanel({ stepId }: { stepId: string }) {
@@ -123,8 +123,9 @@ export function StepPanel({ stepId }: { stepId: string }) {
                   onRemove={canEdit ? (id) => patch({ labelIds: step.labelIds.filter((x) => x !== id) }) : undefined}
                 />
                 {canEdit && (
-                  <LabelPicker
-                    labels={view.labels}
+                  <TagPicker
+                    noun="label"
+                    tags={view.labels}
                     selected={step.labelIds}
                     onToggle={(id) =>
                       patch({ labelIds: step.labelIds.includes(id) ? step.labelIds.filter((x) => x !== id) : [...step.labelIds, id] })

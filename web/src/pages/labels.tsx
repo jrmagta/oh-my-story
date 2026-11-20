@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useOutletContext } from 'react-router'
 import { api, atLeast, type Label, type Membership } from '../api'
-import { colourFor } from '../map/LabelPicker'
+import { colourFor } from '../map/TagPicker'
 import { ConfirmButton, ErrorAlert, Field, InlineText, Loading } from '../ui'
 import { PageBand } from './app'
 

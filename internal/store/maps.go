@@ -17,14 +17,15 @@ type Map struct {
 }
 
 type Node struct {
-	ID          uuid.UUID  `json:"id"`
-	ParentID    *uuid.UUID `json:"parentId"`
-	Level       string     `json:"level"`
-	Title       string     `json:"title"`
-	Description string     `json:"description"`
-	Colour      *string    `json:"colour"`
-	Rank        string     `json:"rank"`
-	Version     int        `json:"version"`
+	ID          uuid.UUID   `json:"id"`
+	ParentID    *uuid.UUID  `json:"parentId"`
+	Level       string      `json:"level"`
+	Title       string      `json:"title"`
+	Description string      `json:"description"`
+	Colour      *string     `json:"colour"`
+	PersonaIDs  []uuid.UUID `json:"personaIds"` // objectives only; sorted, never null
+	Rank        string      `json:"rank"`
+	Version     int         `json:"version"`
 }
 
 type Release struct {
@@ -114,11 +115,16 @@ func (s *Store) DeleteMap(ctx context.Context, actor, workspaceID, mapID uuid.UU
 
 // ---- backbone nodes ----
 
-const nodeCols = `id, parent_id, level, title, description, colour, rank, version`
+// nodeCols reads a node from the nodes table (unaliased), with its persona
+// ids. In UPDATE ... RETURNING the subquery sees persona_nodes as it was
+// before that statement, so change personas first.
+const nodeCols = `id, parent_id, level, title, description, colour,
+	coalesce((SELECT array_agg(pn.persona_id ORDER BY pn.persona_id) FROM persona_nodes pn WHERE pn.node_id = nodes.id), '{}'),
+	rank, version`
 
 func scanNode(row pgx.Row) (Node, error) {
 	var n Node
-	err := row.Scan(&n.ID, &n.ParentID, &n.Level, &n.Title, &n.Description, &n.Colour, &n.Rank, &n.Version)
+	err := row.Scan(&n.ID, &n.ParentID, &n.Level, &n.Title, &n.Description, &n.Colour, &n.PersonaIDs, &n.Rank, &n.Version)
 	return n, notFound(err)
 }
 
@@ -152,7 +158,8 @@ type NodeInput struct {
 // CreateNode adds a backbone node. The database checks that an activity's
 // parent is an objective and that objectives have none.
 func (s *Store) CreateNode(ctx context.Context, actor, workspaceID, mapID uuid.UUID, in NodeInput, pos Position) (Node, error) {
-	n := Node{ID: newID(), ParentID: in.ParentID, Level: in.Level, Title: in.Title, Description: in.Description, Colour: in.Colour}
+	n := Node{ID: newID(), ParentID: in.ParentID, Level: in.Level, Title: in.Title, Description: in.Description, Colour: in.Colour,
+		PersonaIDs: []uuid.UUID{}}
 	err := s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
 		if err := checkParent(ctx, tx, mapID, in.ParentID); err != nil {
 			return nil, err
@@ -174,8 +181,9 @@ func (s *Store) CreateNode(ctx context.Context, actor, workspaceID, mapID uuid.U
 
 type NodePatch struct {
 	Title, Description *string
-	SetColour          bool    // Colour is applied only when set; nil clears it
-	Colour             *string // #RRGGBB
+	SetColour          bool         // Colour is applied only when set; nil clears it
+	Colour             *string      // #RRGGBB
+	PersonaIDs         *[]uuid.UUID // replaces an objective's personas; personas of the workspace
 }
 
 func (s *Store) UpdateNode(ctx context.Context, actor, workspaceID, mapID, nodeID uuid.UUID, p NodePatch) (Node, error) {
@@ -184,6 +192,14 @@ func (s *Store) UpdateNode(ctx context.Context, actor, workspaceID, mapID, nodeI
 		before, err := liveNode(ctx, tx, mapID, nodeID)
 		if err != nil {
 			return nil, err
+		}
+		if p.PersonaIDs != nil {
+			if before.Level != "objective" {
+				return nil, fmt.Errorf("%w: only objectives have personas", ErrInvalid)
+			}
+			if err := setNodePersonas(ctx, tx, workspaceID, nodeID, *p.PersonaIDs); err != nil {
+				return nil, err
+			}
 		}
 		if n, err = scanNode(tx.QueryRow(ctx,
 			`UPDATE nodes SET title = COALESCE($2, title), description = COALESCE($3, description),
@@ -431,4 +447,23 @@ func (s *Store) DeleteRelease(ctx context.Context, actor, workspaceID, mapID, re
 		}
 		return append(changes, gone(mapID, "release", releaseID, "delete", map[string]any{"name": rel.Name})), nil
 	})
+}
+
+// setNodePersonas replaces an objective's personas with ids, which must all be
+// personas of the workspace.
+func setNodePersonas(ctx context.Context, tx pgx.Tx, workspaceID, nodeID uuid.UUID, ids []uuid.UUID) error {
+	var found int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM personas WHERE workspace_id = $1 AND id = ANY($2)`, workspaceID, ids).
+		Scan(&found); err != nil {
+		return err
+	}
+	if found != len(ids) {
+		return fmt.Errorf("%w: personaIds must be personas of this workspace", ErrInvalid)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM persona_nodes WHERE node_id = $1 AND NOT (persona_id = ANY($2))`, nodeID, ids); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO persona_nodes (persona_id, node_id) SELECT unnest($2::uuid[]), $1 ON CONFLICT DO NOTHING`, nodeID, ids)
+	return err
 }

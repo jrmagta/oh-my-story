@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient, type QueryKey } from '@tanstack/react-query'
-import type { Label, MapNode, MapView, Placement, Release, Step } from '../api'
+import type { Label, MapNode, MapView, Persona, Placement, Release, Step } from '../api'
 
 /** One row of the event log, as the live socket sends it (docs/API.md, Live). */
 export interface LiveEvent {
@@ -39,6 +39,17 @@ export function applyEvent(view: MapView, ev: LiveEvent): MapView | null {
   switch (`${ev.entity}:${ev.action}`) {
     case 'map:update':
       return { ...view, map: { ...view.map, ...after } }
+    case 'persona:create':
+      return { ...view, personas: add(view.personas, after as unknown as Persona) }
+    case 'persona:update':
+      return { ...view, personas: patch(view.personas, ev.entityId, after) }
+    case 'persona:delete':
+      // Deleting a persona unlinks it from every objective, with no node events of its own.
+      return {
+        ...view,
+        personas: view.personas.filter((p) => p.id !== ev.entityId),
+        nodes: view.nodes.map((n) => (n.personaIds.includes(ev.entityId) ? { ...n, personaIds: n.personaIds.filter((id) => id !== ev.entityId) } : n)),
+      }
     case 'label:create':
       return { ...view, labels: add(view.labels, after as unknown as Label) }
     case 'label:update':
@@ -51,7 +62,7 @@ export function applyEvent(view: MapView, ev: LiveEvent): MapView | null {
         steps: view.steps.map((s) => (s.labelIds.includes(ev.entityId) ? { ...s, labelIds: s.labelIds.filter((id) => id !== ev.entityId) } : s)),
       }
     case 'node:create':
-      return { ...view, nodes: add(view.nodes, { version: 0, ...after } as unknown as MapNode) }
+      return { ...view, nodes: add(view.nodes, { version: 0, personaIds: [], ...after } as unknown as MapNode) }
     case 'node:update':
     case 'node:move':
       return { ...view, nodes: patch(view.nodes, ev.entityId, after) }

@@ -177,7 +177,8 @@ placements (                                     -- where a step sits on a map
 
 ```sql
 personas (
-  id uuid pk, workspace_id fk, name text not null, description text, colour text
+  id uuid pk, workspace_id fk, name citext not null, description text not null default '', colour text not null,
+  unique (workspace_id, name)
 )
 persona_nodes (                                  -- personas linked to objectives
   persona_id fk, node_id fk,                     -- node.level = 'objective'
@@ -278,7 +279,8 @@ Retention: keep forever in v1. Partition by month if volume demands it.
 | 0002 | `workflows`, `statuses`, `maps`, `nodes`, `releases`, `steps`, `placements`, `events` | M1 |
 | 0003 | `password_resets` | M1 |
 | 0004 | `labels`, `step_labels` | M2 phase 2 |
-| later | `personas`, `persona_nodes`, `saved_views`, `comments`, `mentions`: one migration per M2 phase that needs them | M2 |
+| 0005 | `personas`, `persona_nodes` | M2 phase 3 |
+| later | `saved_views`, `comments`, `mentions`: one migration per M2 phase that needs them | M2 |
 | later | `share_links` | M3 |
 | later | `dependencies`, `api_tokens`, `webhooks`, `webhook_deliveries`, `integrations` | M4 |
 
