@@ -238,7 +238,7 @@ export const api = {
 
   createNode: (slug: string, mapId: string, b: { level: Level; title: string; parentId?: string } & Position) =>
     request<MapNode>('POST', `${mp(slug, mapId)}/nodes`, b),
-  patchNode: (slug: string, mapId: string, id: string, b: { title?: string; description?: string }) =>
+  patchNode: (slug: string, mapId: string, id: string, b: { title?: string; description?: string; colour?: string | null }) =>
     request<MapNode>('PATCH', `${mp(slug, mapId)}/nodes/${id}`, b),
   moveNode: (slug: string, mapId: string, id: string, b: { parentId: string | null } & Position) =>
     request<MapNode>('POST', `${mp(slug, mapId)}/nodes/${id}/move`, b),

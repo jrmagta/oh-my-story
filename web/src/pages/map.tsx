@@ -7,6 +7,7 @@ import { HistoryList } from '../map/HistoryList'
 import { useLiveMap, type LiveState, type PresentUser } from '../map/live'
 import { backbone, bands, cellKey, cells, type Band, type Card, type Column } from '../map/layout'
 import { amount, formatEstimate, totals, type Total, type Totals } from '../map/estimates'
+import { nodeStyle, palette } from '../map/colours'
 import { applyMove, type Move } from '../map/moves'
 import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toasts, type ToastMessage } from '../ui'
 import { PageBand } from './app'
@@ -322,7 +323,7 @@ function MapGrid() {
   }
 
   // Columns: row labels, one per backbone column, and one for adding at the end.
-  const style = { gridTemplateColumns: `132px repeat(${bb.columns.length}, 184px)${canEdit ? ' 150px' : ''}` }
+  const style = { gridTemplateColumns: `max-content repeat(${bb.columns.length}, 184px)${canEdit ? ' 150px' : ''}` }
   const col = (start: number, span = 1) => ({ gridColumn: `${start + 2} / span ${span}` })
   const trailing = { gridColumn: `${bb.columns.length + 2}` }
 
@@ -332,7 +333,7 @@ function MapGrid() {
         <>
           <div className="map-lbl">Objective</div>
           {bb.objectives.map((o) => (
-            <div key={o.node.id} className="map-obj up" style={col(o.start, o.span)}>
+            <div key={o.node.id} className={`map-obj up ${o.node.colour ? 'coloured' : ''}`} style={{ ...col(o.start, o.span), ...nodeStyle(o.node.colour) }}>
               <NodeHead node={o.node} child="activity" />
             </div>
           ))}
@@ -348,7 +349,7 @@ function MapGrid() {
         Activity
       </div>
       {bb.activities.map((a) => (
-        <div key={a.node.id} className="map-act" style={col(a.start, a.span)}>
+        <div key={a.node.id} className={`map-act ${a.node.colour ? 'coloured' : ''}`} style={{ ...col(a.start, a.span), ...nodeStyle(a.node.colour) }}>
           <NodeHead node={a.node} child="step" bold />
         </div>
       ))}
@@ -370,7 +371,7 @@ function MapGrid() {
       </div>
       {bb.columns.map((c, i) =>
         c.step ? (
-          <div key={c.key} style={col(i)} className="map-step">
+          <div key={c.key} style={{ ...col(i), ...nodeStyle(c.step.colour) }} className={`map-step ${c.step.colour ? 'coloured' : ''}`}>
             <NodeHead node={c.step} />
           </div>
         ) : c.activity ? (
@@ -425,6 +426,7 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
       {canEdit && (
         <span className="node-tools">
           {child && hasChildren && <AddNodeIcon level={child} parent={node} />}
+          <ColourMenu node={node} label={label} />
           <button type="button" className="icon-btn drag-handle" title="Move" {...drag.handle}>
             <span>⠿</span>
           </button>
@@ -445,6 +447,68 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
         </span>
       )}
     </div>
+  )
+}
+
+/** Picks a backbone card's colour: a swatch, any colour, or the level's default look. */
+function ColourMenu({ node, label }: { node: MapNode; label: string }) {
+  const { ws, view, run } = useMap()
+  const [open, setOpen] = useState(false)
+  const set = (colour: string | null) => {
+    setOpen(false)
+    if (colour !== node.colour) void run(() => api.patchNode(ws.slug, view.map.id, node.id, { colour }))
+  }
+  return (
+    <span
+      className="relative"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') setOpen(false)
+      }}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false)
+      }}
+    >
+      <button
+        type="button"
+        className="icon-btn"
+        aria-label={`Colour of ${label}`}
+        aria-expanded={open}
+        title="Colour"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span>◐</span>
+      </button>
+      {open && (
+        <div className="colour-pop" role="group" aria-label={`Colours for ${label}`}>
+          {palette.map((c) => (
+            <button
+              key={c.hex}
+              type="button"
+              className="swatch"
+              style={{ background: c.hex }}
+              aria-label={c.name}
+              aria-pressed={node.colour?.toUpperCase() === c.hex}
+              title={c.name}
+              onClick={() => set(c.hex)}
+            />
+          ))}
+          <label className="swatch custom" title="Any colour">
+            {/* React's onChange fires on every move in the picker; the native change event fires once, when it closes. */}
+            <input
+              type="color"
+              aria-label="Any colour"
+              defaultValue={(node.colour ?? '#8A8A93').toLowerCase()}
+              ref={(el) => {
+                if (el) el.onchange = () => set(el.value.toUpperCase())
+              }}
+            />
+          </label>
+          <button type="button" className="btn btn-xs btn-ol col-span-full" aria-pressed={!node.colour} onClick={() => set(null)}>
+            Default
+          </button>
+        </div>
+      )}
+    </span>
   )
 }
 
