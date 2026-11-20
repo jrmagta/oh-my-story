@@ -45,18 +45,18 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 		{"POST " + m + "/releases/{id}/move", role.Edit, s.moveRelease},
 		{"DELETE " + m + "/releases/{id}", role.Edit, s.deleteRelease},
 
-		{"POST " + m + "/stories", role.Edit, s.createStory},
-		{"PATCH " + m + "/stories/{id}", role.Edit, s.patchStory},
-		{"POST " + m + "/stories/{id}/move", role.Edit, s.moveStory},
-		{"DELETE " + m + "/stories/{id}", role.Edit, s.deleteStory},
-		{"POST " + m + "/stories/{id}/restore", role.Edit, s.restoreStory},
+		{"POST " + m + "/steps", role.Edit, s.createStep},
+		{"PATCH " + m + "/steps/{id}", role.Edit, s.patchStep},
+		{"POST " + m + "/steps/{id}/move", role.Edit, s.moveStep},
+		{"DELETE " + m + "/steps/{id}", role.Edit, s.deleteStep},
+		{"POST " + m + "/steps/{id}/restore", role.Edit, s.restoreStep},
 	}
 	for _, rt := range routes {
 		mux.HandleFunc(rt.pattern, s.inWorkspace(rt.action, mapEndpoint(rt.h)))
 	}
 	mux.HandleFunc("GET "+m+"/live", s.inWorkspace(role.View, s.liveMap))
 	mux.HandleFunc("GET "+m+"/history", s.inWorkspace(role.View, mapEndpoint(s.mapHistory)))
-	mux.HandleFunc("GET "+m+"/stories/{id}/history", s.inWorkspace(role.View, mapEndpoint(s.storyHistory)))
+	mux.HandleFunc("GET "+m+"/steps/{id}/history", s.inWorkspace(role.View, mapEndpoint(s.stepHistory)))
 }
 
 // mapRequest is what every map handler needs: the caller, the workspace and
@@ -202,7 +202,7 @@ func (s *Server) moveStatus(q mapRequest) (int, any, error) {
 	return http.StatusOK, out, err
 }
 
-// deleteStatus takes ?replacementId=<status> when stories use the status.
+// deleteStatus takes ?replacementId=<status> when steps use the status.
 func (s *Server) deleteStatus(q mapRequest) (int, any, error) {
 	var replacement *uuid.UUID
 	if v := q.r.URL.Query().Get("replacementId"); v != "" {
@@ -225,22 +225,18 @@ func (s *Server) listMaps(q mapRequest) (int, any, error) {
 func (s *Server) createMap(q mapRequest) (int, any, error) {
 	var in struct {
 		Name, Description string
-		Levels            int
 		WorkflowID        *uuid.UUID
 	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
 	}
-	mi := store.MapInput{Levels: in.Levels, WorkflowID: in.WorkflowID}
+	mi := store.MapInput{WorkflowID: in.WorkflowID}
 	var err error
 	if mi.Name, err = text("name", in.Name, maxName, false); err != nil {
 		return 0, nil, err
 	}
 	if mi.Description, err = text("description", in.Description, maxDescription, true); err != nil {
 		return 0, nil, err
-	}
-	if in.Levels != 3 && in.Levels != 4 {
-		return 0, nil, errBadRequest("levels must be 3 or 4")
 	}
 	m, err := s.store.CreateMap(q.r.Context(), q.user, q.ws, mi)
 	return http.StatusCreated, m, err
@@ -254,21 +250,17 @@ func (s *Server) getMap(q mapRequest) (int, any, error) {
 func (s *Server) patchMap(q mapRequest) (int, any, error) {
 	var in struct {
 		Name, Description *string
-		Levels            *int
 	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
 	}
-	p := store.MapPatch{Levels: in.Levels}
+	var p store.MapPatch
 	var err error
 	if p.Name, err = textPtr("name", in.Name, maxName, false); err != nil {
 		return 0, nil, err
 	}
 	if p.Description, err = textPtr("description", in.Description, maxDescription, true); err != nil {
 		return 0, nil, err
-	}
-	if in.Levels != nil && *in.Levels != 3 && *in.Levels != 4 {
-		return 0, nil, errBadRequest("levels must be 3 or 4")
 	}
 	m, err := s.store.UpdateMap(q.r.Context(), q.user, q.ws, q.mapID, p)
 	return http.StatusOK, m, err
@@ -292,7 +284,7 @@ func (s *Server) createNode(q mapRequest) (int, any, error) {
 	}
 	n := store.NodeInput{ParentID: in.ParentID}
 	var err error
-	if n.Level, err = oneOf("level", in.Level, "objective", "activity", "step"); err != nil {
+	if n.Level, err = oneOf("level", in.Level, "objective", "activity"); err != nil {
 		return 0, nil, err
 	}
 	if n.Title, err = text("title", in.Title, maxTitle, false); err != nil {
@@ -420,24 +412,24 @@ func (s *Server) deleteRelease(q mapRequest) (int, any, error) {
 	return 0, nil, s.store.DeleteRelease(q.r.Context(), q.user, q.ws, q.mapID, q.id)
 }
 
-// ---- stories ----
+// ---- steps ----
 
-type storyAndPlacement struct {
-	Story     store.Story     `json:"story"`
+type stepAndPlacement struct {
+	Step      store.Step      `json:"step"`
 	Placement store.Placement `json:"placement"`
 }
 
-func (s *Server) createStory(q mapRequest) (int, any, error) {
+func (s *Server) createStep(q mapRequest) (int, any, error) {
 	var in struct {
 		Title, DescriptionMD string
-		StepID               uuid.UUID
+		ActivityID           uuid.UUID
 		ReleaseID            *uuid.UUID
 		positionIn
 	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
 	}
-	si := store.StoryInput{StepID: in.StepID, ReleaseID: in.ReleaseID}
+	si := store.StepInput{ActivityID: in.ActivityID, ReleaseID: in.ReleaseID}
 	var err error
 	if si.Title, err = text("title", in.Title, maxTitle, false); err != nil {
 		return 0, nil, err
@@ -445,16 +437,16 @@ func (s *Server) createStory(q mapRequest) (int, any, error) {
 	if si.DescriptionMD, err = text("descriptionMd", in.DescriptionMD, maxDescription, true); err != nil {
 		return 0, nil, err
 	}
-	if in.StepID == uuid.Nil {
-		return 0, nil, errBadRequest("stepId is required")
+	if in.ActivityID == uuid.Nil {
+		return 0, nil, errBadRequest("activityId is required")
 	}
-	st, p, err := s.store.CreateStory(q.r.Context(), q.user, q.ws, q.mapID, si, in.position())
-	return http.StatusCreated, storyAndPlacement{st, p}, err
+	st, p, err := s.store.CreateStep(q.r.Context(), q.user, q.ws, q.mapID, si, in.position())
+	return http.StatusCreated, stepAndPlacement{st, p}, err
 }
 
-// patchStory unassigns when assigneeId is null and clears the estimate when
+// patchStep unassigns when assigneeId is null and clears the estimate when
 // estimate is null.
-func (s *Server) patchStory(q mapRequest) (int, any, error) {
+func (s *Server) patchStep(q mapRequest) (int, any, error) {
 	var in struct {
 		Title, DescriptionMD *string
 		StatusID             *uuid.UUID
@@ -464,7 +456,7 @@ func (s *Server) patchStory(q mapRequest) (int, any, error) {
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
 	}
-	p := store.StoryPatch{StatusID: in.StatusID, SetAssignee: in.AssigneeID.Set, AssigneeID: in.AssigneeID.Value,
+	p := store.StepPatch{StatusID: in.StatusID, SetAssignee: in.AssigneeID.Set, AssigneeID: in.AssigneeID.Value,
 		SetEstimate: in.Estimate.Set, Estimate: in.Estimate.Value}
 	var err error
 	if p.Estimate != nil {
@@ -478,37 +470,37 @@ func (s *Server) patchStory(q mapRequest) (int, any, error) {
 	if p.DescriptionMD, err = textPtr("descriptionMd", in.DescriptionMD, maxDescription, true); err != nil {
 		return 0, nil, err
 	}
-	out, err := s.store.UpdateStory(q.r.Context(), q.user, q.ws, q.mapID, q.id, p)
+	out, err := s.store.UpdateStep(q.r.Context(), q.user, q.ws, q.mapID, q.id, p)
 	return http.StatusOK, out, err
 }
 
-// moveStory places a story in a cell; releaseId null is Unscheduled. version
-// is the story version the client showed; the reply says whether it was stale.
-func (s *Server) moveStory(q mapRequest) (int, any, error) {
+// moveStep places a step in a cell; releaseId null is Unscheduled. version
+// is the step version the client showed; the reply says whether it was stale.
+func (s *Server) moveStep(q mapRequest) (int, any, error) {
 	var in struct {
-		StepID    uuid.UUID
-		ReleaseID optional[uuid.UUID]
-		Version   *int
+		ActivityID uuid.UUID
+		ReleaseID  optional[uuid.UUID]
+		Version    *int
 		positionIn
 	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
 	}
-	if in.StepID == uuid.Nil || !in.ReleaseID.Set || in.Version == nil {
-		return 0, nil, errBadRequest("stepId, releaseId (null for Unscheduled) and version are required")
+	if in.ActivityID == uuid.Nil || !in.ReleaseID.Set || in.Version == nil {
+		return 0, nil, errBadRequest("activityId, releaseId (null for Unscheduled) and version are required")
 	}
-	p, stale, err := s.store.MoveStory(q.r.Context(), q.user, q.ws, q.mapID, q.id, store.StoryMove{
-		StepID: in.StepID, ReleaseID: in.ReleaseID.Value, Position: in.position(), SeenVersion: *in.Version,
+	p, stale, err := s.store.MoveStep(q.r.Context(), q.user, q.ws, q.mapID, q.id, store.StepMove{
+		ActivityID: in.ActivityID, ReleaseID: in.ReleaseID.Value, Position: in.position(), SeenVersion: *in.Version,
 	})
 	return http.StatusOK, map[string]any{"placement": p, "stale": stale}, err
 }
 
-func (s *Server) deleteStory(q mapRequest) (int, any, error) {
-	return 0, nil, s.store.DeleteStory(q.r.Context(), q.user, q.ws, q.mapID, q.id)
+func (s *Server) deleteStep(q mapRequest) (int, any, error) {
+	return 0, nil, s.store.DeleteStep(q.r.Context(), q.user, q.ws, q.mapID, q.id)
 }
 
-func (s *Server) restoreStory(q mapRequest) (int, any, error) {
-	out, err := s.store.RestoreStory(q.r.Context(), q.user, q.ws, q.mapID, q.id)
+func (s *Server) restoreStep(q mapRequest) (int, any, error) {
+	out, err := s.store.RestoreStep(q.r.Context(), q.user, q.ws, q.mapID, q.id)
 	return http.StatusOK, out, err
 }
 
@@ -540,11 +532,11 @@ func (s *Server) mapHistory(q mapRequest) (int, any, error) {
 	return http.StatusOK, h, err
 }
 
-func (s *Server) storyHistory(q mapRequest) (int, any, error) {
+func (s *Server) stepHistory(q mapRequest) (int, any, error) {
 	before, limit, err := historyPage(q.r)
 	if err != nil {
 		return 0, nil, err
 	}
-	h, err := s.store.StoryHistory(q.r.Context(), q.ws, q.mapID, q.id, before, limit)
+	h, err := s.store.StepHistory(q.r.Context(), q.ws, q.mapID, q.id, before, limit)
 	return http.StatusOK, h, err
 }

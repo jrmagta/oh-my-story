@@ -16,7 +16,7 @@ import (
 )
 
 // ErrInvalid wraps a rejected change: a wrong parent level, a reference to a
-// row the change may not use, or a rule such as fixed map levels.
+// row the change may not use, or a rule the schema enforces.
 var ErrInvalid = errors.New("invalid")
 
 // change is one row for the event log. before and after hold changed fields

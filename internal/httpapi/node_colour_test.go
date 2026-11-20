@@ -6,7 +6,7 @@ func TestNodeColour(t *testing.T) {
 	h := newHarness(t, harnessOpts{})
 	owner := h.bootstrap()
 	b := buildMap(owner)
-	path := b.path + "/nodes/" + b.act
+	path := b.path + "/nodes/" + b.act1
 
 	if r := owner.must(200, "PATCH", path, map[string]any{"colour": "#3B82C4"}); r.body["colour"] != "#3B82C4" {
 		t.Errorf("colour not set: %v", r.body)

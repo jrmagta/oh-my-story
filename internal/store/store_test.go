@@ -210,3 +210,17 @@ func TestOIDCDeactivatedUser(t *testing.T) {
 		}
 	}
 }
+
+func TestKeyPrefixFor(t *testing.T) {
+	for slug, want := range map[string]string{
+		"acme":                  "ACME",
+		"acme-corp":             "ACMECORP",
+		"2026-plans":            "PLANS",
+		"oh-my-story-workspace": "OHMYSTORYW",
+		"123":                   "STEP",
+	} {
+		if got := store.KeyPrefixFor(slug); got != want {
+			t.Errorf("KeyPrefixFor(%q) = %q, want %q", slug, got, want)
+		}
+	}
+}

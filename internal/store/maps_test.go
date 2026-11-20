@@ -53,8 +53,8 @@ func must[T any](t *testing.T) func(T, error) T {
 	}
 }
 
-func (f *fixture) newMap(levels int) store.Map {
-	return must[store.Map](f.t)(f.s.CreateMap(ctx, f.user, f.ws, store.MapInput{Name: "Onboarding", Levels: levels}))
+func (f *fixture) newMap() store.Map {
+	return must[store.Map](f.t)(f.s.CreateMap(ctx, f.user, f.ws, store.MapInput{Name: "Onboarding"}))
 }
 
 func (f *fixture) node(mapID uuid.UUID, parent *uuid.UUID, level, title string) store.Node {
@@ -66,41 +66,41 @@ func (f *fixture) node(mapID uuid.UUID, parent *uuid.UUID, level, title string) 
 	return n
 }
 
-// steps builds a 3-level map with one activity and two steps.
-func (f *fixture) steps() (store.Map, store.Node, store.Node, store.Node) {
-	m := f.newMap(3)
-	act := f.node(m.ID, nil, "activity", "Sign up")
-	return m, act, f.node(m.ID, &act.ID, "step", "Enter email"), f.node(m.ID, &act.ID, "step", "Verify")
+// activities builds a map with one objective and two activities.
+func (f *fixture) activities() (store.Map, store.Node, store.Node, store.Node) {
+	m := f.newMap()
+	obj := f.node(m.ID, nil, "objective", "Grow")
+	return m, obj, f.node(m.ID, &obj.ID, "activity", "Sign up"), f.node(m.ID, &obj.ID, "activity", "Verify")
 }
 
-func (f *fixture) story(mapID, stepID uuid.UUID, release *uuid.UUID, title string) store.Story {
+func (f *fixture) step(mapID, activityID uuid.UUID, release *uuid.UUID, title string) store.Step {
 	f.t.Helper()
-	st, _, err := f.s.CreateStory(ctx, f.user, f.ws, mapID, store.StoryInput{Title: title, StepID: stepID, ReleaseID: release}, store.Position{})
+	st, _, err := f.s.CreateStep(ctx, f.user, f.ws, mapID, store.StepInput{Title: title, ActivityID: activityID, ReleaseID: release}, store.Position{})
 	if err != nil {
 		f.t.Fatal(err)
 	}
 	return st
 }
 
-func (f *fixture) storyByTitle(mapID uuid.UUID, title string) store.Story {
+func (f *fixture) stepByTitle(mapID uuid.UUID, title string) store.Step {
 	f.t.Helper()
 	v := must[store.MapView](f.t)(f.s.MapView(ctx, f.ws, mapID))
-	for _, s := range v.Stories {
+	for _, s := range v.Steps {
 		if s.Title == title {
 			return s
 		}
 	}
-	f.t.Fatalf("no story %q", title)
-	return store.Story{}
+	f.t.Fatalf("no step %q", title)
+	return store.Step{}
 }
 
-// cell lists story titles in a cell, in rank order.
-func (f *fixture) cell(mapID, stepID uuid.UUID, release *uuid.UUID) []string {
+// cell lists step titles in a cell, in rank order.
+func (f *fixture) cell(mapID, activityID uuid.UUID, release *uuid.UUID) []string {
 	f.t.Helper()
 	rows, err := f.pool.Query(ctx,
-		`SELECT s.title FROM placements p JOIN stories s ON s.id = p.story_id
-		 WHERE p.map_id = $1 AND p.step_id = $2 AND p.release_id IS NOT DISTINCT FROM $3 AND s.deleted_at IS NULL
-		 ORDER BY p.rank`, mapID, stepID, release)
+		`SELECT s.title FROM placements p JOIN steps s ON s.id = p.step_id
+		 WHERE p.map_id = $1 AND p.activity_id = $2 AND p.release_id IS NOT DISTINCT FROM $3 AND s.deleted_at IS NULL
+		 ORDER BY p.rank`, mapID, activityID, release)
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -155,47 +155,31 @@ func TestNodeParentLevels(t *testing.T) {
 		return err
 	}
 
-	four := f.newMap(4)
-	obj := f.node(four.ID, nil, "objective", "Grow")
-	act := f.node(four.ID, &obj.ID, "activity", "Sign up")
-	step := f.node(four.ID, &act.ID, "step", "Enter email")
-	wantInvalid(t, create(four.ID, nil, "activity"), "activity without objective on a 4-level map")
-	wantInvalid(t, create(four.ID, &obj.ID, "step"), "step under objective")
-	wantInvalid(t, create(four.ID, &act.ID, "objective"), "objective under activity")
-	wantInvalid(t, create(four.ID, &step.ID, "step"), "step under step")
-	wantInvalid(t, create(four.ID, nil, "step"), "step without parent")
+	m := f.newMap()
+	obj := f.node(m.ID, nil, "objective", "Grow")
+	act := f.node(m.ID, &obj.ID, "activity", "Sign up")
+	wantInvalid(t, create(m.ID, nil, "activity"), "activity without objective")
+	wantInvalid(t, create(m.ID, &act.ID, "activity"), "activity under activity")
+	wantInvalid(t, create(m.ID, &obj.ID, "objective"), "objective under objective")
+	wantInvalid(t, create(m.ID, &act.ID, "objective"), "objective under activity")
 
-	three := f.newMap(3)
-	wantInvalid(t, create(three.ID, nil, "objective"), "objective on a 3-level map")
-	f.node(three.ID, nil, "activity", "Browse")
-	wantInvalid(t, create(three.ID, &act.ID, "step"), "parent from another map")
+	other := f.newMap()
+	wantInvalid(t, create(other.ID, &obj.ID, "activity"), "parent from another map")
 
-	_, err := f.s.MoveNode(ctx, f.user, f.ws, four.ID, step.ID, &obj.ID, store.Position{})
-	wantInvalid(t, err, "moving a step under an objective")
-	act2 := f.node(four.ID, &obj.ID, "activity", "Pay")
-	moved := must[store.Node](t)(f.s.MoveNode(ctx, f.user, f.ws, four.ID, step.ID, &act2.ID, store.Position{}))
-	if *moved.ParentID != act2.ID || moved.Version != 1 {
-		t.Errorf("moved step = %+v", moved)
+	_, err := f.s.MoveNode(ctx, f.user, f.ws, m.ID, act.ID, nil, store.Position{})
+	wantInvalid(t, err, "moving an activity to the top level")
+	obj2 := f.node(m.ID, nil, "objective", "Keep")
+	moved := must[store.Node](t)(f.s.MoveNode(ctx, f.user, f.ws, m.ID, act.ID, &obj2.ID, store.Position{}))
+	if *moved.ParentID != obj2.ID || moved.Version != 1 {
+		t.Errorf("moved activity = %+v", moved)
 	}
 }
 
-func TestMapLevelsFixedOnceBackboneExists(t *testing.T) {
+// Steps on different maps of one workspace draw keys from one counter.
+func TestStepKeysConcurrent(t *testing.T) {
 	f := newFixture(t)
-	m := f.newMap(4)
-	three, four := 3, 4
-	if got := must[store.Map](t)(f.s.UpdateMap(ctx, f.user, f.ws, m.ID, store.MapPatch{Levels: &three})); got.Levels != 3 {
-		t.Fatalf("levels = %d", got.Levels)
-	}
-	f.node(m.ID, nil, "activity", "Sign up")
-	_, err := f.s.UpdateMap(ctx, f.user, f.ws, m.ID, store.MapPatch{Levels: &four})
-	wantInvalid(t, err, "changing levels with nodes")
-}
-
-// Stories on different maps of one workspace draw keys from one counter.
-func TestStoryKeysConcurrent(t *testing.T) {
-	f := newFixture(t)
-	m1, _, s1, _ := f.steps()
-	m2, _, s2, _ := f.steps()
+	m1, _, s1, _ := f.activities()
+	m2, _, s2, _ := f.activities()
 	const n = 20
 	keys := make([]string, n)
 	errs := make([]error, n)
@@ -204,12 +188,12 @@ func TestStoryKeysConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			m, step := m1.ID, s1.ID
+			m, act := m1.ID, s1.ID
 			if i%2 == 1 {
-				m, step = m2.ID, s2.ID
+				m, act = m2.ID, s2.ID
 			}
-			var st store.Story
-			st, _, errs[i] = f.s.CreateStory(ctx, f.user, f.ws, m, store.StoryInput{Title: "s", StepID: step}, store.Position{})
+			var st store.Step
+			st, _, errs[i] = f.s.CreateStep(ctx, f.user, f.ws, m, store.StepInput{Title: "s", ActivityID: act}, store.Position{})
 			keys[i] = st.Key
 		}()
 	}
@@ -219,11 +203,11 @@ func TestStoryKeysConcurrent(t *testing.T) {
 		if errs[i] != nil {
 			t.Fatal(errs[i])
 		}
-		want[i] = fmt.Sprintf("STORY-%d", i+1)
+		want[i] = fmt.Sprintf("ACME-%d", i+1)
 	}
 	slices.SortFunc(keys, func(a, b string) int {
-		ai, _ := strconv.Atoi(a[len("STORY-"):])
-		bi, _ := strconv.Atoi(b[len("STORY-"):])
+		ai, _ := strconv.Atoi(a[len("ACME-"):])
+		bi, _ := strconv.Atoi(b[len("ACME-"):])
 		return ai - bi
 	})
 	if !slices.Equal(keys, want) {
@@ -233,7 +217,7 @@ func TestStoryKeysConcurrent(t *testing.T) {
 
 func TestEventsRecordChangedFields(t *testing.T) {
 	f := newFixture(t)
-	m, _, step, _ := f.steps()
+	m, _, act, _ := f.activities()
 
 	listener := must[*pgxpool.Conn](t)(f.pool.Acquire(ctx))
 	defer listener.Release()
@@ -242,16 +226,16 @@ func TestEventsRecordChangedFields(t *testing.T) {
 	}
 
 	start := f.lastEventID()
-	st, p, err := f.s.CreateStory(ctx, f.user, f.ws, m.ID, store.StoryInput{Title: "Old", StepID: step.ID}, store.Position{})
+	st, p, err := f.s.CreateStep(ctx, f.user, f.ws, m.ID, store.StepInput{Title: "Old", ActivityID: act.ID}, store.Position{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	evs := f.eventsAfter(start)
-	if len(evs) != 2 || evs[0].Entity != "story" || evs[1].Entity != "placement" || evs[0].Action != "create" {
+	if len(evs) != 2 || evs[0].Entity != "step" || evs[1].Entity != "placement" || evs[0].Action != "create" {
 		t.Fatalf("create events = %+v", evs)
 	}
 	if evs[0].After["key"] != st.Key || evs[0].Before != nil || *evs[0].MapID != m.ID || evs[1].EntityID != p.ID {
-		t.Errorf("story create event = %+v", evs[0])
+		t.Errorf("step create event = %+v", evs[0])
 	}
 
 	// The notification carries the id of the transaction's last event.
@@ -267,7 +251,7 @@ func TestEventsRecordChangedFields(t *testing.T) {
 
 	start = f.lastEventID()
 	title := "New"
-	if _, err := f.s.UpdateStory(ctx, f.user, f.ws, m.ID, st.ID, store.StoryPatch{Title: &title}); err != nil {
+	if _, err := f.s.UpdateStep(ctx, f.user, f.ws, m.ID, st.ID, store.StepPatch{Title: &title}); err != nil {
 		t.Fatal(err)
 	}
 	evs = f.eventsAfter(start)
@@ -280,7 +264,7 @@ func TestEventsRecordChangedFields(t *testing.T) {
 	}
 
 	start = f.lastEventID()
-	if _, err := f.s.UpdateStory(ctx, f.user, f.ws, m.ID, st.ID, store.StoryPatch{Title: &title}); err != nil {
+	if _, err := f.s.UpdateStep(ctx, f.user, f.ws, m.ID, st.ID, store.StepPatch{Title: &title}); err != nil {
 		t.Fatal(err)
 	}
 	if evs := f.eventsAfter(start); len(evs) != 0 {
@@ -288,14 +272,14 @@ func TestEventsRecordChangedFields(t *testing.T) {
 	}
 }
 
-func TestMoveStory(t *testing.T) {
+func TestMoveStep(t *testing.T) {
 	f := newFixture(t)
-	m, _, a, b := f.steps()
-	s1 := f.story(m.ID, a.ID, nil, "one")
-	f.story(m.ID, a.ID, nil, "two")
-	s3 := f.story(m.ID, a.ID, nil, "three")
+	m, _, a, b := f.activities()
+	s1 := f.step(m.ID, a.ID, nil, "one")
+	f.step(m.ID, a.ID, nil, "two")
+	s3 := f.step(m.ID, a.ID, nil, "three")
 
-	_, stale, err := f.s.MoveStory(ctx, f.user, f.ws, m.ID, s3.ID, store.StoryMove{StepID: a.ID, Position: store.Position{Before: &s1.ID}, SeenVersion: 0})
+	_, stale, err := f.s.MoveStep(ctx, f.user, f.ws, m.ID, s3.ID, store.StepMove{ActivityID: a.ID, Position: store.Position{Before: &s1.ID}, SeenVersion: 0})
 	if err != nil || stale {
 		t.Fatalf("move: stale=%v err=%v", stale, err)
 	}
@@ -305,47 +289,47 @@ func TestMoveStory(t *testing.T) {
 
 	rel := must[store.Release](t)(f.s.CreateRelease(ctx, f.user, f.ws, m.ID, store.ReleaseInput{Name: "MVP"}, store.Position{}))
 	// s3 is now at version 1, so a client that saw version 0 is stale.
-	p, stale, err := f.s.MoveStory(ctx, f.user, f.ws, m.ID, s3.ID, store.StoryMove{StepID: b.ID, ReleaseID: &rel.ID, SeenVersion: 0})
-	if err != nil || !stale || p.StepID != b.ID || *p.ReleaseID != rel.ID {
+	p, stale, err := f.s.MoveStep(ctx, f.user, f.ws, m.ID, s3.ID, store.StepMove{ActivityID: b.ID, ReleaseID: &rel.ID, SeenVersion: 0})
+	if err != nil || !stale || p.ActivityID != b.ID || *p.ReleaseID != rel.ID {
 		t.Fatalf("cross-cell move: %+v stale=%v err=%v", p, stale, err)
 	}
 	if got := f.cell(m.ID, b.ID, &rel.ID); !slices.Equal(got, []string{"three"}) {
 		t.Errorf("target cell = %v", got)
 	}
 
-	_, _, err = f.s.MoveStory(ctx, f.user, f.ws, m.ID, s1.ID, store.StoryMove{StepID: a.ID, Position: store.Position{After: &s3.ID}, SeenVersion: 0})
+	_, _, err = f.s.MoveStep(ctx, f.user, f.ws, m.ID, s1.ID, store.StepMove{ActivityID: a.ID, Position: store.Position{After: &s3.ID}, SeenVersion: 0})
 	wantInvalid(t, err, "anchor in another cell")
 
-	// Moving the last story of a cell to the end again can reuse its rank; the
-	// event still records the story's new version.
+	// Moving the last step of a cell to the end again can reuse its rank; the
+	// event still records the step's new version.
 	start := f.lastEventID()
 	last := f.cell(m.ID, a.ID, nil)
 	if last[len(last)-1] != "two" {
 		t.Fatalf("cell a = %v", last)
 	}
-	two := f.storyByTitle(m.ID, "two")
-	if _, _, err := f.s.MoveStory(ctx, f.user, f.ws, m.ID, two.ID, store.StoryMove{StepID: a.ID, SeenVersion: two.Version}); err != nil {
+	two := f.stepByTitle(m.ID, "two")
+	if _, _, err := f.s.MoveStep(ctx, f.user, f.ws, m.ID, two.ID, store.StepMove{ActivityID: a.ID, SeenVersion: two.Version}); err != nil {
 		t.Fatal(err)
 	}
 	evs := f.eventsAfter(start)
-	if len(evs) != 1 || evs[0].After["storyVersion"] != float64(two.Version+1) {
+	if len(evs) != 1 || evs[0].After["stepVersion"] != float64(two.Version+1) {
 		t.Errorf("move to the same place: %+v", evs)
 	}
-	_, _, err = f.s.MoveStory(ctx, f.user, f.ws, m.ID, s1.ID, store.StoryMove{StepID: m.ID})
-	wantInvalid(t, err, "moving onto a non-step")
+	_, _, err = f.s.MoveStep(ctx, f.user, f.ws, m.ID, s1.ID, store.StepMove{ActivityID: m.ID})
+	wantInvalid(t, err, "moving onto a non-activity")
 }
 
 func TestDeleteStatusNeedsReplacement(t *testing.T) {
 	f := newFixture(t)
-	m, _, step, _ := f.steps()
-	st := f.story(m.ID, step.ID, nil, "s")
+	m, _, act, _ := f.activities()
+	st := f.step(m.ID, act.ID, nil, "s")
 	wfs := must[[]store.Workflow](t)(f.s.Workflows(ctx, f.ws))
 	if len(wfs) != 1 || len(wfs[0].Statuses) != 4 {
 		t.Fatalf("workflows = %+v", wfs)
 	}
 	todo, done := wfs[0].Statuses[0], wfs[0].Statuses[3]
 	if st.StatusID != todo.ID || done.Name != "Done" {
-		t.Fatalf("story status %v, statuses %+v", st.StatusID, wfs[0].Statuses)
+		t.Fatalf("step status %v, statuses %+v", st.StatusID, wfs[0].Statuses)
 	}
 	other := must[store.Workflow](t)(f.s.CreateWorkflow(ctx, f.user, f.ws, "Design"))
 
@@ -358,8 +342,8 @@ func TestDeleteStatusNeedsReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	var status uuid.UUID
-	if err := f.pool.QueryRow(ctx, `SELECT status_id FROM stories WHERE id = $1`, st.ID).Scan(&status); err != nil || status != done.ID {
-		t.Errorf("story status = %v, %v", status, err)
+	if err := f.pool.QueryRow(ctx, `SELECT status_id FROM steps WHERE id = $1`, st.ID).Scan(&status); err != nil || status != done.ID {
+		t.Errorf("step status = %v, %v", status, err)
 	}
 	evs := f.eventsAfter(start)
 	if len(evs) != 2 || evs[0].EntityID != st.ID || evs[0].After["statusId"] != done.ID.String() || *evs[0].MapID != m.ID ||
@@ -378,31 +362,31 @@ func TestDeleteStatusNeedsReplacement(t *testing.T) {
 
 func TestDeleteAndRestoreNode(t *testing.T) {
 	f := newFixture(t)
-	m, act, a, b := f.steps()
-	f.story(m.ID, a.ID, nil, "a1")
-	gone := f.story(m.ID, a.ID, nil, "a2")
-	f.story(m.ID, b.ID, nil, "b1")
-	if err := f.s.DeleteStory(ctx, f.user, f.ws, m.ID, gone.ID); err != nil {
+	m, obj, a, b := f.activities()
+	f.step(m.ID, a.ID, nil, "a1")
+	gone := f.step(m.ID, a.ID, nil, "a2")
+	f.step(m.ID, b.ID, nil, "b1")
+	if err := f.s.DeleteStep(ctx, f.user, f.ws, m.ID, gone.ID); err != nil {
 		t.Fatal(err)
 	}
 
 	start := f.lastEventID()
-	if err := f.s.DeleteNode(ctx, f.user, f.ws, m.ID, act.ID); err != nil {
+	if err := f.s.DeleteNode(ctx, f.user, f.ws, m.ID, obj.ID); err != nil {
 		t.Fatal(err)
 	}
-	if n := len(f.eventsAfter(start)); n != 5 { // activity, two steps, two live stories
+	if n := len(f.eventsAfter(start)); n != 5 { // objective, two activities, two live steps
 		t.Errorf("delete wrote %d events, want 5", n)
 	}
 	if got := f.cell(m.ID, a.ID, nil); len(got) != 0 {
-		t.Errorf("stories survive their step: %v", got)
+		t.Errorf("steps survive their activity: %v", got)
 	}
-	_, err := f.s.CreateNode(ctx, f.user, f.ws, m.ID, store.NodeInput{ParentID: &act.ID, Level: "step", Title: "x"}, store.Position{})
+	_, err := f.s.CreateNode(ctx, f.user, f.ws, m.ID, store.NodeInput{ParentID: &obj.ID, Level: "activity", Title: "x"}, store.Position{})
 	wantInvalid(t, err, "adding under a deleted node")
 
-	if _, err := f.s.RestoreNode(ctx, f.user, f.ws, m.ID, act.ID); err != nil {
+	if _, err := f.s.RestoreNode(ctx, f.user, f.ws, m.ID, obj.ID); err != nil {
 		t.Fatal(err)
 	}
-	// The story deleted on its own before stays deleted.
+	// The step deleted on its own before stays deleted.
 	if got := f.cell(m.ID, a.ID, nil); !slices.Equal(got, []string{"a1"}) {
 		t.Errorf("cell a after restore = %v", got)
 	}
@@ -411,13 +395,13 @@ func TestDeleteAndRestoreNode(t *testing.T) {
 	}
 }
 
-func TestDeleteReleaseUnschedulesItsStories(t *testing.T) {
+func TestDeleteReleaseUnschedulesItsSteps(t *testing.T) {
 	f := newFixture(t)
-	m, _, a, _ := f.steps()
+	m, _, a, _ := f.activities()
 	rel := must[store.Release](t)(f.s.CreateRelease(ctx, f.user, f.ws, m.ID, store.ReleaseInput{Name: "MVP"}, store.Position{}))
-	f.story(m.ID, a.ID, nil, "u1")
-	f.story(m.ID, a.ID, &rel.ID, "r1")
-	f.story(m.ID, a.ID, &rel.ID, "r2")
+	f.step(m.ID, a.ID, nil, "u1")
+	f.step(m.ID, a.ID, &rel.ID, "r1")
+	f.step(m.ID, a.ID, &rel.ID, "r2")
 	if err := f.s.DeleteRelease(ctx, f.user, f.ws, m.ID, rel.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -428,11 +412,11 @@ func TestDeleteReleaseUnschedulesItsStories(t *testing.T) {
 
 func TestOtherWorkspaceIsNotFound(t *testing.T) {
 	f := newFixture(t)
-	m, _, step, _ := f.steps()
-	st := f.story(m.ID, step.ID, nil, "s")
+	m, _, act, _ := f.activities()
+	st := f.step(m.ID, act.ID, nil, "s")
 	other := must[store.Workspace](t)(f.s.CreateWorkspace(ctx, f.user, "Other", "other"))
 	title := "x"
-	if _, err := f.s.UpdateStory(ctx, f.user, other.ID, m.ID, st.ID, store.StoryPatch{Title: &title}); !errors.Is(err, store.ErrNotFound) {
+	if _, err := f.s.UpdateStep(ctx, f.user, other.ID, m.ID, st.ID, store.StepPatch{Title: &title}); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("update through another workspace: %v", err)
 	}
 	if _, err := f.s.CreateNode(ctx, f.user, other.ID, m.ID, store.NodeInput{Level: "activity", Title: "x"}, store.Position{}); !errors.Is(err, store.ErrNotFound) {
@@ -443,14 +427,14 @@ func TestOtherWorkspaceIsNotFound(t *testing.T) {
 // Event payloads use the API's JSON field names, and carry the version.
 func TestEventFieldNames(t *testing.T) {
 	f := newFixture(t)
-	m, _, step, _ := f.steps()
+	m, _, act, _ := f.activities()
 	start := f.lastEventID()
-	f.story(m.ID, step.ID, nil, "s")
+	f.step(m.ID, act.ID, nil, "s")
 	after := f.eventsAfter(start)[0].After
 	b, _ := json.Marshal(after)
 	for _, k := range []string{"id", "key", "title", "descriptionMd", "statusId", "assigneeId", "version"} {
 		if _, ok := after[k]; !ok {
-			t.Errorf("story create event lacks %q: %s", k, b)
+			t.Errorf("step create event lacks %q: %s", k, b)
 		}
 	}
 }

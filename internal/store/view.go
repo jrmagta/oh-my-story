@@ -9,13 +9,13 @@ import (
 
 // MapView is everything the map screen shows, read in one snapshot. Clients
 // keep it current by applying events with ids above LastEventID. Deleted
-// nodes and stories are left out.
+// nodes and steps are left out.
 type MapView struct {
 	Map         Map         `json:"map"`
 	Workflow    Workflow    `json:"workflow"`
 	Nodes       []Node      `json:"nodes"`
 	Releases    []Release   `json:"releases"`
-	Stories     []Story     `json:"stories"`
+	Steps       []Step      `json:"steps"`
 	Placements  []Placement `json:"placements"`
 	LastEventID int64       `json:"lastEventId"`
 }
@@ -48,13 +48,13 @@ func (s *Store) MapView(ctx context.Context, workspaceID, mapID uuid.UUID) (MapV
 			`SELECT `+releaseCols+` FROM releases WHERE map_id = $1 ORDER BY rank`, mapID); err != nil {
 			return err
 		}
-		if v.Stories, err = collect(ctx, tx, scanStory,
-			`SELECT `+storyCols+` FROM stories s JOIN placements p ON p.story_id = s.id
+		if v.Steps, err = collect(ctx, tx, scanStep,
+			`SELECT `+stepCols+` FROM steps s JOIN placements p ON p.step_id = s.id
 			 WHERE p.map_id = $1 AND s.deleted_at IS NULL ORDER BY s.key`, mapID); err != nil {
 			return err
 		}
 		v.Placements, err = collect(ctx, tx, scanPlacement,
-			`SELECT p.id, p.story_id, p.step_id, p.release_id, p.rank FROM placements p JOIN stories s ON s.id = p.story_id
+			`SELECT p.id, p.step_id, p.activity_id, p.release_id, p.rank FROM placements p JOIN steps s ON s.id = p.step_id
 			 WHERE p.map_id = $1 AND s.deleted_at IS NULL ORDER BY p.rank`, mapID)
 		return err
 	})

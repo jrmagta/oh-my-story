@@ -7,44 +7,44 @@ import { HistoryList } from '../map/HistoryList'
 import { amount, formatEstimate } from '../map/estimates'
 import { mapKey, StatusLabel, useMap } from './map'
 
-/** The open story, beside the map. Editors change it in place; everyone else reads. */
-export function StoryPanel({ storyId }: { storyId: string }) {
-  const { ws, view, canEdit, statuses, run, openStory } = useMap()
+/** The open step, beside the map. Editors change it in place; everyone else reads. */
+export function StepPanel({ stepId }: { stepId: string }) {
+  const { ws, view, canEdit, statuses, run, openStep } = useMap()
   const [tab, setTab] = useState<'details' | 'history'>('details')
   const members = useQuery({ queryKey: ['ws', ws.slug, 'members'], queryFn: () => api.members(ws.slug) })
-  const story = view.stories.find((s) => s.id === storyId)
-  if (!story) return null
-  const status = statuses.get(story.statusId)
-  const placement = view.placements.find((p) => p.storyId === story.id)
-  const step = view.nodes.find((n) => n.id === placement?.stepId)
+  const step = view.steps.find((s) => s.id === stepId)
+  if (!step) return null
+  const status = statuses.get(step.statusId)
+  const placement = view.placements.find((p) => p.stepId === step.id)
+  const activity = view.nodes.find((n) => n.id === placement?.activityId)
   const release = view.releases.find((r) => r.id === placement?.releaseId)
-  const assignee = members.data?.find((m) => m.userId === story.assigneeId)
-  const patch = (b: Parameters<typeof api.patchStory>[3]) => run(() => api.patchStory(ws.slug, view.map.id, story.id, b))
+  const assignee = members.data?.find((m) => m.userId === step.assigneeId)
+  const patch = (b: Parameters<typeof api.patchStep>[3]) => run(() => api.patchStep(ws.slug, view.map.id, step.id, b))
 
   return (
-    <aside className="story-panel" aria-label={`Story ${story.key}`}>
+    <aside className="step-panel" aria-label={`Step ${step.key}`}>
       <div className={`hd ${status?.category ?? 'todo'}`}>
         <div className="flex items-center gap-2">
-          <span className="pill">{story.key}</span>
+          <span className="pill">{step.key}</span>
           <span className="pill">{status?.name ?? 'No status'}</span>
           <span className="flex-1" />
-          <button type="button" className="icon-btn" aria-label="Close story" onClick={() => openStory(null)}>
+          <button type="button" className="icon-btn" aria-label="Close step" onClick={() => openStep(null)}>
             <span>✕</span>
           </button>
         </div>
-        <h2 aria-label={story.title}>
-          <InlineText value={story.title} label="story" editable={canEdit} onSave={(title) => patch({ title })} />
+        <h2 aria-label={step.title}>
+          <InlineText value={step.title} label="step" editable={canEdit} onSave={(title) => patch({ title })} />
         </h2>
       </div>
-      <div role="tablist" aria-label="Story" className="story-tabs">
+      <div role="tablist" aria-label="Step" className="step-tabs">
         {(['details', 'history'] as const).map((t) => (
           <button
             key={t}
             type="button"
             role="tab"
-            id={`story-tab-${t}`}
+            id={`step-tab-${t}`}
             aria-selected={tab === t}
-            aria-controls={`story-pane-${t}`}
+            aria-controls={`step-pane-${t}`}
             onClick={() => setTab(t)}
           >
             {t === 'details' ? 'Details' : 'History'}
@@ -52,7 +52,7 @@ export function StoryPanel({ storyId }: { storyId: string }) {
         ))}
       </div>
       {tab === 'details' ? (
-        <div role="tabpanel" id="story-pane-details" aria-labelledby="story-tab-details">
+        <div role="tabpanel" id="step-pane-details" aria-labelledby="step-tab-details">
           <dl>
             <div className="row">
               <dt>Status</dt>
@@ -61,7 +61,7 @@ export function StoryPanel({ storyId }: { storyId: string }) {
                   <select
                     className="select select-sm w-44 font-bold"
                     aria-label="Status"
-                    value={story.statusId}
+                    value={step.statusId}
                     onChange={(e) => patch({ statusId: e.target.value })}
                   >
                     {view.workflow.statuses.map((s) => (
@@ -82,7 +82,7 @@ export function StoryPanel({ storyId }: { storyId: string }) {
                   <select
                     className="select select-sm w-44 font-bold"
                     aria-label="Assignee"
-                    value={story.assigneeId ?? ''}
+                    value={step.assigneeId ?? ''}
                     onChange={(e) => patch({ assigneeId: e.target.value || null })}
                   >
                     <option value="">Unassigned</option>
@@ -102,38 +102,38 @@ export function StoryPanel({ storyId }: { storyId: string }) {
               <dd>
                 {canEdit ? (
                   <EstimateInput
-                    key={`${story.id}:${story.estimate}`}
-                    value={story.estimate}
+                    key={`${step.id}:${step.estimate}`}
+                    value={step.estimate}
                     unit={ws.estimateUnit}
                     onSave={(estimate) => patch({ estimate })}
                   />
-                ) : story.estimate === null ? (
+                ) : step.estimate === null ? (
                   'None'
                 ) : (
-                  amount(story.estimate * 100, ws.estimateUnit)
+                  amount(step.estimate * 100, ws.estimateUnit)
                 )}
               </dd>
             </div>
             <div className="row">
               <dt>Placed in</dt>
               <dd className="text-right">
-                {release?.name ?? 'Unscheduled'} · {step?.title}
+                {release?.name ?? 'Unscheduled'} · {activity?.title}
               </dd>
             </div>
           </dl>
-          <Description key={story.id} text={story.descriptionMd} editable={canEdit} onSave={(descriptionMd) => patch({ descriptionMd })} />
+          <Description key={step.id} text={step.descriptionMd} editable={canEdit} onSave={(descriptionMd) => patch({ descriptionMd })} />
           {canEdit && (
             <div className="p-5">
               <ConfirmButton
-                label="Delete story"
+                label="Delete step"
                 confirm="Confirm delete"
-                name={story.key}
+                name={step.key}
                 busy={false}
                 onConfirm={() => {
-                  openStory(null)
-                  run(() => api.deleteStory(ws.slug, view.map.id, story.id), {
-                    done: `Deleted ${story.key}`,
-                    undo: () => api.restoreStory(ws.slug, view.map.id, story.id),
+                  openStep(null)
+                  run(() => api.deleteStep(ws.slug, view.map.id, step.id), {
+                    done: `Deleted ${step.key}`,
+                    undo: () => api.restoreStep(ws.slug, view.map.id, step.id),
                   })
                 }}
               />
@@ -141,13 +141,13 @@ export function StoryPanel({ storyId }: { storyId: string }) {
           )}
         </div>
       ) : (
-        <div role="tabpanel" id="story-pane-history" aria-labelledby="story-tab-history">
+        <div role="tabpanel" id="step-pane-history" aria-labelledby="step-tab-history">
           <HistoryList
             slug={ws.slug}
             view={view}
-            queryKey={[...mapKey(ws.slug, view.map.id), 'history', story.id]}
-            page={(before) => api.storyHistory(ws.slug, view.map.id, story.id, before)}
-            label={`History of ${story.key}`}
+            queryKey={[...mapKey(ws.slug, view.map.id), 'history', step.id]}
+            page={(before) => api.stepHistory(ws.slug, view.map.id, step.id, before)}
+            label={`History of ${step.key}`}
           />
         </div>
       )}

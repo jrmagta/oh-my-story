@@ -17,7 +17,7 @@ Ordered `owner > admin > editor > commenter > viewer`. An action needs at least 
 |---|---|
 | View workspace, list members | viewer |
 | Comment (M2) | commenter |
-| Edit maps and stories | editor |
+| Edit maps and steps | editor |
 | Invite, change roles, remove members, change settings, edit workflows and statuses | admin |
 | Delete workspace | owner |
 
@@ -72,11 +72,11 @@ Any other `/api/` path is a JSON `not_found`. Any other GET serves the web app (
 
 ## Maps
 
-All paths below start with `/api/workspaces/{slug}`. Reading needs viewer; map, node, release and story writes need editor; workflow and status writes need admin. Ids from another workspace, and malformed ids, return `not_found`. A rule the change breaks (a wrong parent level, an anchor that is not a sibling, a status from another workflow) returns `bad_request` with the reason.
+All paths below start with `/api/workspaces/{slug}`. Reading needs viewer; map, node, release and step writes need editor; workflow and status writes need admin. Ids from another workspace, and malformed ids, return `not_found`. A rule the change breaks (a wrong parent level, an anchor that is not a sibling, a status from another workflow) returns `bad_request` with the reason.
 
 Every write is logged in `events` in the same transaction (see `DATA_MODEL.md`). A write that changes nothing logs nothing.
 
-**Positions.** Ordered things take `afterId` or `beforeId` (not both) to name the neighbour they go next to; with neither they go last. In a story cell the ids are story ids; elsewhere they are ids of the siblings themselves.
+**Positions.** Ordered things take `afterId` or `beforeId` (not both) to name the neighbour they go next to; with neither they go last. In a cell (an activity and release) the ids are step ids; elsewhere they are ids of the siblings themselves.
 
 **Optional nulls.** Where noted, a field that is absent leaves the value alone and `null` clears it.
 
@@ -90,35 +90,35 @@ Every write is logged in `events` in the same transaction (see `DATA_MODEL.md`).
 | `POST /workflows/{id}/statuses` | `{name, category, colour?, afterId?, beforeId?}` → `201` status. Duplicate name: `conflict` |
 | `PATCH /statuses/{id}` | `{name?, category?, colour?}` → status |
 | `POST /statuses/{id}/move` | `{afterId?, beforeId?}` → status |
-| `DELETE /statuses/{id}?replacementId=<status>` | → `204`. Stories in the status move to the replacement, another status of the same workflow; required when any story uses it. A workflow keeps at least one status |
+| `DELETE /statuses/{id}?replacementId=<status>` | → `204`. Steps in the status move to the replacement, another status of the same workflow; required when any step uses it. A workflow keeps at least one status |
 
 A status is `{id, workflowId, name, category, colour, rank}`; `category` is `todo`, `doing`, `done` or `blocked`.
 
-### Maps, nodes, releases, stories
+### Maps, nodes, releases, steps
 
 | Method and path | Body → response |
 |---|---|
 | `GET /maps` | → `[map]` |
-| `POST /maps` | `{name, description?, levels, workflowId?}` → `201` map. `levels` is 3 or 4; the workflow defaults to the workspace default and cannot change later |
-| `GET /maps/{mapId}` | → `{map, workflow, nodes, releases, stories, placements, lastEventId}`: the whole map, deleted items left out. `lastEventId` is the newest event included, for resuming the live feed |
-| `PATCH /maps/{mapId}` | `{name?, description?, levels?}` → map. `levels` cannot change once the map has nodes |
+| `POST /maps` | `{name, description?, workflowId?}` → `201` map. The workflow defaults to the workspace default and cannot change later |
+| `GET /maps/{mapId}` | → `{map, workflow, nodes, releases, steps, placements, lastEventId}`: the whole map, deleted items left out. `lastEventId` is the newest event included, for resuming the live feed |
+| `PATCH /maps/{mapId}` | `{name?, description?}` → map |
 | `DELETE /maps/{mapId}` | → `204` (soft delete) |
-| `POST /maps/{mapId}/nodes` | `{level, title, parentId?, description?, colour?, afterId?, beforeId?}` → `201` node |
+| `POST /maps/{mapId}/nodes` | `{level, title, parentId?, description?, colour?, afterId?, beforeId?}` → `201` node. `level` is `objective` (no parent) or `activity` (`parentId` an objective) |
 | `PATCH /maps/{mapId}/nodes/{id}` | `{title?, description?, colour?}` → node. `colour`: `#RRGGBB`; null clears it, giving the level's default look |
-| `POST /maps/{mapId}/nodes/{id}/move` | `{parentId, afterId?, beforeId?}` → node. `parentId` is required, `null` for the top level; a node keeps its level |
-| `DELETE /maps/{mapId}/nodes/{id}` | → `204`. Deletes the subtree and the stories on its steps |
+| `POST /maps/{mapId}/nodes/{id}/move` | `{parentId, afterId?, beforeId?}` → node. `parentId` is required: an objective for an activity, `null` for an objective; a node keeps its level |
+| `DELETE /maps/{mapId}/nodes/{id}` | → `204`. Deletes the node, the activities under it and their steps |
 | `POST /maps/{mapId}/nodes/{id}/restore` | `{}` → node. Restores what that delete removed; the parent must not be deleted |
 | `POST /maps/{mapId}/releases` | `{name, description?, targetDate?, afterId?, beforeId?}` → `201` release |
 | `PATCH /maps/{mapId}/releases/{id}` | `{name?, description?, targetDate?}` → release. `targetDate`: optional null |
 | `POST /maps/{mapId}/releases/{id}/move` | `{afterId?, beforeId?}` → release |
-| `DELETE /maps/{mapId}/releases/{id}` | → `204`. Its stories go to the end of their step's Unscheduled cell |
-| `POST /maps/{mapId}/stories` | `{title, stepId, releaseId?, descriptionMd?, afterId?, beforeId?}` → `201 {story, placement}`. Gets the next workspace key and the workflow's first status |
-| `PATCH /maps/{mapId}/stories/{id}` | `{title?, descriptionMd?, statusId?, assigneeId?, estimate?}` → story. `assigneeId`: optional null; must be a member. `estimate`: 0 to 9999.99 with at most two decimals, in the workspace's `estimateUnit`; null clears it |
-| `POST /maps/{mapId}/stories/{id}/move` | `{stepId, releaseId, version, afterId?, beforeId?}` → `{placement, stale}`. `releaseId` is required, `null` for Unscheduled. `version` is the story version the client showed; the move applies regardless and `stale` says whether someone changed the story since |
-| `DELETE /maps/{mapId}/stories/{id}` | → `204` (soft delete) |
-| `POST /maps/{mapId}/stories/{id}/restore` | `{}` → story. Its step must not be deleted |
+| `DELETE /maps/{mapId}/releases/{id}` | → `204`. Its steps go to the end of their activity's Unscheduled cell |
+| `POST /maps/{mapId}/steps` | `{title, activityId, releaseId?, descriptionMd?, afterId?, beforeId?}` → `201 {step, placement}`. Gets the next workspace key (`PREFIX-n`) and the workflow's first status |
+| `PATCH /maps/{mapId}/steps/{id}` | `{title?, descriptionMd?, statusId?, assigneeId?, estimate?}` → step. `assigneeId`: optional null; must be a member. `estimate`: 0 to 9999.99 with at most two decimals, in the workspace's `estimateUnit`; null clears it |
+| `POST /maps/{mapId}/steps/{id}/move` | `{activityId, releaseId, version, afterId?, beforeId?}` → `{placement, stale}`. `releaseId` is required, `null` for Unscheduled. `version` is the step version the client showed; the move applies regardless and `stale` says whether someone changed the step since |
+| `DELETE /maps/{mapId}/steps/{id}` | → `204` (soft delete) |
+| `POST /maps/{mapId}/steps/{id}/restore` | `{}` → step. Its activity must not be deleted |
 
-Shapes: map `{id, workflowId, name, description, levels}`; node `{id, parentId, level, title, description, colour, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; story `{id, key, title, descriptionMd, statusId, assigneeId, estimate, version}` with `estimate` a number or null; placement `{id, storyId, stepId, releaseId, rank}`.
+Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, title, description, colour, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; step `{id, key, title, descriptionMd, statusId, assigneeId, estimate, version}` with `estimate` a number or null; placement `{id, stepId, activityId, releaseId, rank}`.
 
 Limits: names 1 to 100 characters, titles 1 to 500, descriptions up to 50,000; colours are `#RRGGBB`.
 
@@ -127,7 +127,7 @@ Limits: names 1 to 100 characters, titles 1 to 500, descriptions up to 50,000; c
 | Method and path | Response |
 |---|---|
 | `GET /maps/{mapId}/history?before=&limit=` | the map's events, newest first |
-| `GET /maps/{mapId}/stories/{id}/history?before=&limit=` | the story's events and its placement moves, newest first; kept after the story is deleted |
+| `GET /maps/{mapId}/steps/{id}/history?before=&limit=` | the step's events and its placement moves, newest first; kept after the step is deleted |
 
 Both need viewer and return `{entries: [event + actorName], next}`. `actorName` is `""` when the account no longer exists. `limit` is 1 to 200 (default 50); pass `next` as `before` for the following page; `next` is null on the last one.
 
@@ -141,7 +141,7 @@ Both need viewer and return `{entries: [event + actorName], next}`. `actorName` 
 | `{type: "presence", users: [{id, name}]}` | Everyone watching the map now, on any instance, each once, sorted by name. Sent whenever it changes |
 | `{type: "resync"}` | The client is too far behind (over 1,000 events, or too slow to read): reload the map and reconnect from its new `lastEventId`. The socket then closes |
 
-An event is `{id, mapId, actorId, entity, entityId, action, before, after, at}`. `entity` is `map`, `node`, `release`, `story`, `placement`, `workflow` or `status`; `action` is `create`, `update`, `move`, `delete` or `restore`. A create carries the whole entity in `after`; an update or move carries the changed fields in `before` and `after`, plus the new `version` where the entity has one; a placement move also carries the story's new version as `storyVersion`. A delete carries the fields that name the row in `before` (a node's `title` and `level`, a story's `key` and `title`, a release's, status's or map's `name`), a restore the same in `after`; a restore brings back rows the client no longer holds, so clients reload on it. Workspace-wide events (workflows and statuses, `mapId` null) go to every map in the workspace.
+An event is `{id, mapId, actorId, entity, entityId, action, before, after, at}`. `entity` is `map`, `node`, `release`, `step`, `placement`, `workflow` or `status`; `action` is `create`, `update`, `move`, `delete` or `restore`. A create carries the whole entity in `after`; an update or move carries the changed fields in `before` and `after`, plus the new `version` where the entity has one; a placement move also carries the step's new version as `stepVersion`. A delete carries the fields that name the row in `before` (a node's `title` and `level`, a step's `key` and `title`, a release's, status's or map's `name`), a restore the same in `after`; a restore brings back rows the client no longer holds, so clients reload on it. Workspace-wide events (workflows and statuses, `mapId` null) go to every map in the workspace.
 
 The upgrade needs the session cookie and an `Origin` equal to `OMS_BASE_URL`'s host (or none, for non-browser clients). The server pings every 25 seconds and closes the socket within a minute of the caller leaving the workspace.
 

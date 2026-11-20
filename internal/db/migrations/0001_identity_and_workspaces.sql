@@ -37,8 +37,8 @@ CREATE TABLE workspaces (
     id             uuid PRIMARY KEY,
     name           text NOT NULL,
     slug           citext NOT NULL UNIQUE,
-    key_prefix     text NOT NULL DEFAULT 'STORY' CHECK (key_prefix ~ '^[A-Z][A-Z0-9]{0,9}$'),
-    next_story_seq integer NOT NULL DEFAULT 1 CHECK (next_story_seq > 0),
+    key_prefix     text NOT NULL DEFAULT 'STEP' CHECK (key_prefix ~ '^[A-Z][A-Z0-9]{0,9}$'),
+    next_step_seq  integer NOT NULL DEFAULT 1 CHECK (next_step_seq > 0),
     estimate_unit  text NOT NULL DEFAULT 'points',
     created_at     timestamptz NOT NULL DEFAULT now(),
     updated_at     timestamptz NOT NULL DEFAULT now()

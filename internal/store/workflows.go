@@ -202,9 +202,9 @@ func (s *Store) MoveStatus(ctx context.Context, actor, workspaceID, statusID uui
 	return st, err
 }
 
-// DeleteStatus removes a status. Stories in it move to replacement, which must
+// DeleteStatus removes a status. Steps in it move to replacement, which must
 // be another status of the same workflow; replacement may be nil only when no
-// story uses the status. A workflow keeps at least one status.
+// step uses the status. A workflow keeps at least one status.
 func (s *Store) DeleteStatus(ctx context.Context, actor, workspaceID, statusID uuid.UUID, replacement *uuid.UUID) error {
 	return s.write(ctx, actor, workspaceID, uuid.Nil, func(tx pgx.Tx) ([]change, error) {
 		st, err := statusForUpdate(ctx, tx, workspaceID, statusID)
@@ -222,11 +222,11 @@ func (s *Store) DeleteStatus(ctx context.Context, actor, workspaceID, statusID u
 		var changes []change
 		if replacement == nil {
 			var inUse bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM stories WHERE status_id = $1)`, st.ID).Scan(&inUse); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM steps WHERE status_id = $1)`, st.ID).Scan(&inUse); err != nil {
 				return nil, err
 			}
 			if inUse {
-				return nil, fmt.Errorf("%w: stories use this status; choose a replacement", ErrInvalid)
+				return nil, fmt.Errorf("%w: steps use this status; choose a replacement", ErrInvalid)
 			}
 		} else {
 			var ok bool
@@ -236,8 +236,8 @@ func (s *Store) DeleteStatus(ctx context.Context, actor, workspaceID, statusID u
 				return nil, fmt.Errorf("%w: the replacement must be another status of the same workflow", ErrInvalid)
 			}
 			rows, err := tx.Query(ctx,
-				`UPDATE stories SET status_id = $2, version = version + 1, updated_at = now() WHERE status_id = $1
-				 RETURNING id, (SELECT map_id FROM placements p WHERE p.story_id = stories.id LIMIT 1)`,
+				`UPDATE steps SET status_id = $2, version = version + 1, updated_at = now() WHERE status_id = $1
+				 RETURNING id, (SELECT map_id FROM placements p WHERE p.step_id = steps.id LIMIT 1)`,
 				st.ID, *replacement)
 			if err != nil {
 				return nil, err
@@ -249,7 +249,7 @@ func (s *Store) DeleteStatus(ctx context.Context, actor, workspaceID, statusID u
 					rows.Close()
 					return nil, err
 				}
-				c := change{entity: "story", id: id, action: "update",
+				c := change{entity: "step", id: id, action: "update",
 					before: map[string]any{"statusId": st.ID.String()}, after: map[string]any{"statusId": replacement.String()}}
 				if mapID != nil {
 					c.mapID = *mapID

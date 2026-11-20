@@ -4,8 +4,8 @@ import { ErrorAlert, Loading } from '../ui'
 import { ago, describe, type HistoryEntry, type HistoryPage } from './history'
 
 /**
- * A history feed, newest first, a page at a time. onStory, when given, makes
- * entries about a story link to it.
+ * A history feed, newest first, a page at a time. onStep, when given, makes
+ * entries about a step link to it.
  */
 export function HistoryList(props: {
   slug: string
@@ -13,7 +13,7 @@ export function HistoryList(props: {
   queryKey: readonly unknown[]
   page: (before?: number) => Promise<HistoryPage>
   label: string
-  onStory?: (id: string) => void
+  onStep?: (id: string) => void
 }) {
   const members = useQuery({ queryKey: ['ws', props.slug, 'members'], queryFn: () => api.members(props.slug) })
   const pages = useInfiniteQuery({
@@ -44,9 +44,9 @@ export function HistoryList(props: {
                 <time dateTime={e.at} title={new Date(e.at).toLocaleString()}>
                   {ago(e.at)}
                 </time>
-                {props.onStory && storyOf(e, props.view) && (
-                  <button type="button" className="underline" onClick={() => props.onStory?.(storyOf(e, props.view) ?? '')}>
-                    Open story
+                {props.onStep && stepOf(e, props.view) && (
+                  <button type="button" className="underline" onClick={() => props.onStep?.(stepOf(e, props.view) ?? '')}>
+                    Open step
                   </button>
                 )}
               </p>
@@ -65,8 +65,8 @@ export function HistoryList(props: {
   )
 }
 
-/** The live story an entry is about, if any. */
-function storyOf(e: HistoryEntry, view: MapView): string | null {
-  const id = e.entity === 'story' ? e.entityId : e.entity === 'placement' ? view.placements.find((p) => p.id === e.entityId)?.storyId : null
-  return id && view.stories.some((s) => s.id === id) ? id : null
+/** The live step an entry is about, if any. */
+function stepOf(e: HistoryEntry, view: MapView): string | null {
+  const id = e.entity === 'step' ? e.entityId : e.entity === 'placement' ? view.placements.find((p) => p.id === e.entityId)?.stepId : null
+  return id && view.steps.some((s) => s.id === id) ? id : null
 }

@@ -14,7 +14,6 @@ type Map struct {
 	WorkflowID  uuid.UUID `json:"workflowId"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
-	Levels      int       `json:"levels"`
 }
 
 type Node struct {
@@ -38,11 +37,11 @@ type Release struct {
 
 // ---- maps ----
 
-const mapCols = `id, workflow_id, name, description, levels`
+const mapCols = `id, workflow_id, name, description`
 
 func scanMap(row pgx.Row) (Map, error) {
 	var m Map
-	err := row.Scan(&m.ID, &m.WorkflowID, &m.Name, &m.Description, &m.Levels)
+	err := row.Scan(&m.ID, &m.WorkflowID, &m.Name, &m.Description)
 	return m, notFound(err)
 }
 
@@ -57,12 +56,11 @@ func (s *Store) Maps(ctx context.Context, workspaceID uuid.UUID) ([]Map, error) 
 
 type MapInput struct {
 	Name, Description string
-	Levels            int
 	WorkflowID        *uuid.UUID // nil: the workspace's default workflow
 }
 
 func (s *Store) CreateMap(ctx context.Context, actor, workspaceID uuid.UUID, in MapInput) (Map, error) {
-	m := Map{ID: newID(), Name: in.Name, Description: in.Description, Levels: in.Levels}
+	m := Map{ID: newID(), Name: in.Name, Description: in.Description}
 	err := s.write(ctx, actor, workspaceID, uuid.Nil, func(tx pgx.Tx) ([]change, error) {
 		err := tx.QueryRow(ctx,
 			`SELECT id FROM workflows WHERE workspace_id = $1 AND (id = $2 OR ($2 IS NULL AND is_default))`,
@@ -71,8 +69,8 @@ func (s *Store) CreateMap(ctx context.Context, actor, workspaceID uuid.UUID, in 
 			return nil, fmt.Errorf("%w: workflow not found in this workspace", ErrInvalid)
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO maps (id, workspace_id, workflow_id, name, description, levels) VALUES ($1, $2, $3, $4, $5, $6)`,
-			m.ID, workspaceID, m.WorkflowID, m.Name, m.Description, m.Levels); err != nil {
+			`INSERT INTO maps (id, workspace_id, workflow_id, name, description) VALUES ($1, $2, $3, $4, $5)`,
+			m.ID, workspaceID, m.WorkflowID, m.Name, m.Description); err != nil {
 			return nil, err
 		}
 		return []change{created(m.ID, "map", m.ID, m)}, nil
@@ -82,7 +80,6 @@ func (s *Store) CreateMap(ctx context.Context, actor, workspaceID uuid.UUID, in 
 
 type MapPatch struct {
 	Name, Description *string
-	Levels            *int // refused once the map has backbone nodes
 }
 
 func (s *Store) UpdateMap(ctx context.Context, actor, workspaceID, mapID uuid.UUID, p MapPatch) (Map, error) {
@@ -93,9 +90,8 @@ func (s *Store) UpdateMap(ctx context.Context, actor, workspaceID, mapID uuid.UU
 			return nil, err
 		}
 		if m, err = scanMap(tx.QueryRow(ctx,
-			`UPDATE maps SET name = COALESCE($2, name), description = COALESCE($3, description),
-			   levels = COALESCE($4, levels), updated_at = now()
-			 WHERE id = $1 RETURNING `+mapCols, mapID, p.Name, p.Description, p.Levels)); err != nil {
+			`UPDATE maps SET name = COALESCE($2, name), description = COALESCE($3, description), updated_at = now()
+			 WHERE id = $1 RETURNING `+mapCols, mapID, p.Name, p.Description)); err != nil {
 			return nil, err
 		}
 		if c, ok := updated(mapID, "map", mapID, "update", before, m); ok {
@@ -153,8 +149,8 @@ type NodeInput struct {
 	Colour             *string
 }
 
-// CreateNode adds a backbone node. The database checks that the parent's
-// level fits the node's level and the map's number of levels.
+// CreateNode adds a backbone node. The database checks that an activity's
+// parent is an objective and that objectives have none.
 func (s *Store) CreateNode(ctx context.Context, actor, workspaceID, mapID uuid.UUID, in NodeInput, pos Position) (Node, error) {
 	n := Node{ID: newID(), ParentID: in.ParentID, Level: in.Level, Title: in.Title, Description: in.Description, Colour: in.Colour}
 	err := s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
@@ -204,7 +200,8 @@ func (s *Store) UpdateNode(ctx context.Context, actor, workspaceID, mapID, nodeI
 }
 
 // MoveNode places a node under parentID (nil for the top level) at pos. A
-// node keeps its level, so only a step can change activity, for example.
+// node keeps its level: an activity can move to another objective, and an
+// objective stays at the top level.
 func (s *Store) MoveNode(ctx context.Context, actor, workspaceID, mapID, nodeID uuid.UUID, parentID *uuid.UUID, pos Position) (Node, error) {
 	var n Node
 	err := s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
@@ -230,8 +227,8 @@ func (s *Store) MoveNode(ctx context.Context, actor, workspaceID, mapID, nodeID 
 	return n, err
 }
 
-// DeleteNode soft-deletes a node, its descendants and the stories placed on
-// any of those steps, all with one timestamp so RestoreNode can bring back
+// DeleteNode soft-deletes a node, its descendants and the steps placed under
+// any of those activities, all with one timestamp so RestoreNode can bring back
 // exactly that set.
 func (s *Store) DeleteNode(ctx context.Context, actor, workspaceID, mapID, nodeID uuid.UUID) error {
 	return s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
@@ -274,7 +271,7 @@ func (s *Store) RestoreNode(ctx context.Context, actor, workspaceID, mapID, node
 }
 
 // setSubtreeDeleted moves the subtree under nodeID whose deleted_at equals
-// from (NULL for live rows) to to, along with the stories placed on its steps.
+// from (NULL for live rows) to to, along with the steps placed under its activities.
 func setSubtreeDeleted(ctx context.Context, tx pgx.Tx, mapID, nodeID uuid.UUID, from, to *time.Time) ([]change, error) {
 	action := "delete"
 	if to == nil {
@@ -290,13 +287,13 @@ func setSubtreeDeleted(ctx context.Context, tx pgx.Tx, mapID, nodeID uuid.UUID, 
 		   UPDATE nodes SET deleted_at = $3, updated_at = now() WHERE id IN (SELECT id FROM sub)
 		   RETURNING 'node'::text AS entity, id, jsonb_build_object('title', title, 'level', level) AS label
 		 ),
-		 stories_done AS (
-		   UPDATE stories SET deleted_at = $3, updated_at = now()
+		 steps_done AS (
+		   UPDATE steps SET deleted_at = $3, updated_at = now()
 		   WHERE deleted_at IS NOT DISTINCT FROM $2
-		     AND id IN (SELECT story_id FROM placements WHERE map_id = $4 AND step_id IN (SELECT id FROM sub))
-		   RETURNING 'story'::text AS entity, id, jsonb_build_object('key', key, 'title', title) AS label
+		     AND id IN (SELECT step_id FROM placements WHERE map_id = $4 AND activity_id IN (SELECT id FROM sub))
+		   RETURNING 'step'::text AS entity, id, jsonb_build_object('key', key, 'title', title) AS label
 		 )
-		 SELECT entity, id, label FROM nodes_done UNION ALL SELECT entity, id, label FROM stories_done`,
+		 SELECT entity, id, label FROM nodes_done UNION ALL SELECT entity, id, label FROM steps_done`,
 		nodeID, from, to, mapID)
 	if err != nil {
 		return nil, err
@@ -399,8 +396,8 @@ func (s *Store) MoveRelease(ctx context.Context, actor, workspaceID, mapID, rele
 	return r, err
 }
 
-// DeleteRelease removes a release. Its stories move to the end of the
-// Unscheduled cell of their step, keeping their order.
+// DeleteRelease removes a release. Its steps move to the end of the
+// Unscheduled cell of their activity, keeping their order.
 func (s *Store) DeleteRelease(ctx context.Context, actor, workspaceID, mapID, releaseID uuid.UUID) error {
 	return s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
 		rel, err := mapRelease(ctx, tx, mapID, releaseID)
@@ -408,7 +405,7 @@ func (s *Store) DeleteRelease(ctx context.Context, actor, workspaceID, mapID, re
 			return nil, err
 		}
 		rows, err := tx.Query(ctx,
-			`SELECT `+placementCols+` FROM placements WHERE release_id = $1 ORDER BY step_id, rank`, releaseID)
+			`SELECT `+placementCols+` FROM placements WHERE release_id = $1 ORDER BY activity_id, rank`, releaseID)
 		if err != nil {
 			return nil, err
 		}
@@ -420,7 +417,7 @@ func (s *Store) DeleteRelease(ctx context.Context, actor, workspaceID, mapID, re
 		for _, before := range moving {
 			p := before
 			p.ReleaseID = nil
-			if p.Rank, err = cellSiblings(mapID, p.StepID, nil).rank(ctx, tx, Position{}, p.ID); err != nil {
+			if p.Rank, err = cellSiblings(mapID, p.ActivityID, nil).rank(ctx, tx, Position{}, p.ID); err != nil {
 				return nil, err
 			}
 			if _, err := tx.Exec(ctx, `UPDATE placements SET release_id = NULL, rank = $2 WHERE id = $1`, p.ID, p.Rank); err != nil {

@@ -40,13 +40,13 @@ func TestStartsBeforeTheSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := s.CreateMap(ctx, u.ID, ws.ID, store.MapInput{Name: "M", Levels: 3})
+	m, err := s.CreateMap(ctx, u.ID, ws.ID, store.MapInput{Name: "M"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	sub := hub.Subscribe(ctx, ws.ID, m.ID, live.User{ID: u.ID, Name: "Owner"})
 	defer hub.Unsubscribe(sub)
-	n, err := s.CreateNode(ctx, u.ID, ws.ID, m.ID, store.NodeInput{Level: "activity", Title: "A"}, store.Position{})
+	n, err := s.CreateNode(ctx, u.ID, ws.ID, m.ID, store.NodeInput{Level: "objective", Title: "A"}, store.Position{})
 	if err != nil {
 		t.Fatal(err)
 	}
