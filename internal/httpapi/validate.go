@@ -1,9 +1,13 @@
 package httpapi
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/mail"
 	"regexp"
+	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -66,4 +70,82 @@ func parseEstimateUnit(s string) (string, error) {
 		return "", errBadRequest("estimate unit must be 1 to 20 characters")
 	}
 	return s, nil
+}
+
+// text trims s and requires 1 to max characters, or 0 to max when optional.
+func text(field, s string, max int, optional bool) (string, error) {
+	s = strings.TrimSpace(s)
+	n := utf8.RuneCountInString(s)
+	if n > max || (n == 0 && !optional) {
+		if optional {
+			return "", errBadRequest(fmt.Sprintf("%s must be at most %d characters", field, max))
+		}
+		return "", errBadRequest(fmt.Sprintf("%s must be 1 to %d characters", field, max))
+	}
+	return s, nil
+}
+
+// textPtr applies text to an optional field.
+func textPtr(field string, s *string, max int, optional bool) (*string, error) {
+	if s == nil {
+		return nil, nil
+	}
+	v, err := text(field, *s, max, optional)
+	return &v, err
+}
+
+const (
+	maxName        = 100
+	maxTitle       = 500
+	maxDescription = 50_000
+)
+
+var colourRE = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+
+func parseColour(s *string) (*string, error) {
+	if s == nil {
+		return nil, nil
+	}
+	if !colourRE.MatchString(*s) {
+		return nil, errBadRequest("colour must be a hex colour such as #FCB131")
+	}
+	return s, nil
+}
+
+func parseDate(s *string) (*string, error) {
+	if s == nil {
+		return nil, nil
+	}
+	if _, err := time.Parse(time.DateOnly, *s); err != nil {
+		return nil, errBadRequest("targetDate must be a date such as 2026-12-31")
+	}
+	return s, nil
+}
+
+func oneOf(field, s string, allowed ...string) (string, error) {
+	if !slices.Contains(allowed, s) {
+		return "", errBadRequest(fmt.Sprintf("%s must be one of %s", field, strings.Join(allowed, ", ")))
+	}
+	return s, nil
+}
+
+// optional is a JSON field whose absence differs from null: Set is false when
+// the field is missing, and Value is nil when it is null.
+type optional[T any] struct {
+	Set   bool
+	Value *T
+}
+
+func (o *optional[T]) UnmarshalJSON(b []byte) error {
+	o.Set = true
+	if string(b) == "null" {
+		o.Value = nil
+		return nil
+	}
+	var v T
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	o.Value = &v
+	return nil
 }
