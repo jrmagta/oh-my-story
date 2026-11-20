@@ -20,7 +20,8 @@ const total = (page: Page, node: string) => page.getByLabel(new RegExp(`^Total f
 
 async function estimate(page: Page, key: string, value: string) {
   await page.getByRole('button', { name: new RegExp(`^${key} `) }).click()
-  const input = panel(page).getByLabel('Estimate (points)')
+  // Wait for the panel to show this story, or the fill lands in the previous one.
+  const input = page.getByRole('complementary', { name: `Story ${key}` }).getByLabel('Estimate (points)')
   await input.fill(value)
   await input.press('Enter')
   await expect(input).toHaveValue(value)
@@ -73,6 +74,7 @@ test('estimates add up per step, activity, release and map, live in a second bro
 
   // Clearing an estimate counts the story as unestimated.
   await page.getByRole('button', { name: /^STORY-3 / }).click()
+  await expect(panel(page)).toHaveAccessibleName('Story STORY-3')
   await panel(page).getByLabel('Estimate (points)').fill('')
   await panel(page).getByLabel('Estimate (points)').press('Enter')
   await expect(total(page, 'activity Pay')).toHaveText('6 points (1 unestimated)')
@@ -94,5 +96,5 @@ test('an admin changes the estimate unit in settings', async ({ page }) => {
   await page.goto(mapUrl)
   await expect(total(page, 'activity Pay')).toHaveText('6 days (1 unestimated)')
   await page.getByRole('button', { name: /^STORY-2 / }).click()
-  await expect(panel(page).getByLabel('Estimate (days)')).toHaveValue('5')
+  await expect(page.getByRole('complementary', { name: 'Story STORY-2' }).getByLabel('Estimate (days)')).toHaveValue('5')
 })
