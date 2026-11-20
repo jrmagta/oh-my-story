@@ -9,6 +9,8 @@ import { backbone, bands, cellKey, cells, type Band, type Card, type Column } fr
 import { amount, formatEstimate, totals, type Total, type Totals } from '../map/estimates'
 import { nodeStyle, palette } from '../map/colours'
 import { colourFor, TagPicker } from '../map/TagPicker'
+import { matching, readFilter, writeFilter, type Filter } from '../map/filter'
+import { FilterBar } from '../map/FilterBar'
 import { applyMove, type Move } from '../map/moves'
 import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toasts, type ToastMessage } from '../ui'
 import { PageBand } from './app'
@@ -21,8 +23,12 @@ interface MapCtx {
   view: MapView
   canEdit: boolean
   statuses: Map<string, Status>
-  /** Step counts and estimate sums for the map, each node and each release. */
+  /** Step counts and estimate sums for the map, each node and each release; only matching steps while a filter is on. */
   totals: Totals
+  /** The filter in the URL, and the ids of the steps it matches (null when no filter is on). */
+  filter: Filter
+  match: Set<string> | null
+  setFilter: (f: Filter) => void
   /** Runs a write, then reloads the map. undo, when given, is offered in a notice. */
   run: (write: () => Promise<unknown>, opts?: { done?: string; undo?: () => Promise<unknown> }) => Promise<boolean>
   selectedStep: string | null
@@ -142,15 +148,31 @@ export function MapPage() {
     [setSearch],
   )
 
+  // The filter is state, mirrored into the URL so a reload or a shared link keeps it. Reading it back
+  // from the URL on every change would lag: the router updates the URL asynchronously, so a checkbox
+  // would flick back and fast typing could drop characters.
+  const [filter, setFilterState] = useState(() => readFilter(search))
+  const setFilter = useCallback(
+    (f: Filter) => {
+      setFilterState(f)
+      setSearch((s) => writeFilter(s, f), { replace: true })
+    },
+    [setSearch],
+  )
+
   const ctx = useMemo<MapCtx | null>(() => {
     if (!query.data) return null
     const statuses = new Map(query.data.workflow.statuses.map((s) => [s.id, s]))
+    const match = matching(query.data, filter)
     return {
       ws,
       view: query.data,
       canEdit: atLeast(ws.role, 'editor'),
       statuses,
-      totals: totals(query.data, statuses),
+      totals: totals(query.data, statuses, match),
+      filter,
+      match,
+      setFilter,
       run,
       selectedStep,
       openStep,
@@ -158,7 +180,7 @@ export function MapPage() {
       adding,
       setAdding,
     }
-  }, [ws, query.data, run, selectedStep, openStep, move, adding])
+  }, [ws, query.data, filter, setFilter, run, selectedStep, openStep, move, adding])
 
   if (query.isPending) return <Loading />
   if (!ctx) {
@@ -195,6 +217,7 @@ export function MapPage() {
   return (
     <Ctx.Provider value={ctx}>
       <MapHeader panelOpen={panelOpen} users={live.users} state={live.state} activityOpen={activityOpen} toggleActivity={toggleActivity} />
+      <FilterBar panelOpen={panelOpen} />
       <div className={`map-scroll ${panelOpen ? 'with-panel' : ''}`}>
         <MapDnd view={ctx.view} onMove={move}>
           <MapGrid />
@@ -735,7 +758,7 @@ function AddRelease() {
 
 function Cell(props: { column: number; activity: MapNode; release: Release | null; bandName: string; cards: Card[] }) {
   const { activity, release, bandName, cards } = props
-  const { ws, view, canEdit, run } = useMap()
+  const { ws, view, canEdit, run, filter, match } = useMap()
   const [adding, setAdding] = useState(false)
   const where = `${activity.title} / ${bandName}`
   const drop = useDrop(`cell:${cellKey(activity.id, release?.id ?? null)}`, {
@@ -752,9 +775,11 @@ function Cell(props: { column: number; activity: MapNode; release: Release | nul
       className={`map-cell ${drop.over ? 'drop' : ''}`}
       style={{ gridColumn: props.column }}
     >
-      {cards.map((c) => (
-        <StepCard key={c.step.id} card={c} />
-      ))}
+      {cards
+        .filter((c) => !match || filter.mode === 'highlight' || match.has(c.step.id))
+        .map((c) => (
+          <StepCard key={c.step.id} card={c} dimmed={!!match && !match.has(c.step.id)} />
+        ))}
       {canEdit &&
         (adding ? (
           <TextInput
@@ -821,7 +846,8 @@ export function LabelChips({ ids, onRemove }: { ids: string[]; onRemove?: (id: s
   )
 }
 
-function StepCard({ card }: { card: Card }) {
+/** dimmed: a highlight filter is on and this step does not match. */
+function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
   const { ws, canEdit, statuses, selectedStep, openStep } = useMap()
   const { step, placement } = card
   const status = statuses.get(step.statusId)
@@ -832,7 +858,7 @@ function StepCard({ card }: { card: Card }) {
   return (
     <div
       ref={refs(drag.ref, drop.ref)}
-      className={`step-card ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''}`}
+      className={`step-card ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''} ${dimmed ? 'dimmed' : ''}`}
       {...drag.pointer}
     >
       <button
