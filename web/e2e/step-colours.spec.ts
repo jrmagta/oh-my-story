@@ -44,10 +44,10 @@ test('backbone cards take a colour, keep it after a reload, and go back to defau
   await expect(page.locator('.map-act', { hasText: 'Search' })).toHaveCSS('color', 'rgb(0, 0, 0)')
   await pick('objective Buy', 'Green')
 
-  // Add activity from the objective's menu opens a field in a new column after its activities;
-  // entry stays open for the next one, and Escape ends it.
-  await page.getByRole('button', { name: 'Actions for objective Buy' }).click()
-  await page.getByRole('button', { name: 'Add activity', exact: true }).click()
+  // The + on an activity's right edge opens a field in a new column right after it; entry stays
+  // open for the next one (after the one just made), and Escape ends it.
+  await page.locator('.map-act', { hasText: 'Search' }).hover()
+  await page.getByRole('button', { name: 'Add activity after Search' }).click()
   const field = page.getByRole('textbox', { name: 'New activity in Buy' })
   await field.fill('Checkout')
   await field.press('Enter')
@@ -87,7 +87,8 @@ test('backbone cards take a colour, keep it after a reload, and go back to defau
   expect((await buy.boundingBox())!.width).toBeCloseTo((await first.boundingBox())!.width, 0)
 
   // A new objective takes the colour of the one to its left; its first activity, the activity to its left.
-  await page.getByRole('button', { name: 'Add objective' }).click()
+  await page.locator('.map-obj', { hasText: 'Buy' }).hover()
+  await page.getByRole('button', { name: 'Add objective after Buy' }).click()
   await page.getByRole('textbox', { name: 'New objective' }).fill('Return')
   await page.keyboard.press('Enter')
   await page.keyboard.press('Escape')
@@ -98,11 +99,28 @@ test('backbone cards take a colour, keep it after a reload, and go back to defau
   await page.keyboard.press('Escape')
   await expect(page.locator('.map-act', { hasText: 'Send back' })).toHaveCSS('background-color', 'rgb(252, 177, 49)')
 
-  // The narrow + after an objective's activities adds another, in its colour.
-  await page.getByRole('button', { name: 'Add activity to Buy' }).click()
+  // The + after an objective's last activity adds another, in its colour.
+  await page.locator('.map-act', { hasText: 'Receipt' }).hover()
+  await page.getByRole('button', { name: 'Add activity after Receipt' }).click()
   await page.getByRole('textbox', { name: 'New activity in Buy' }).fill('Wish list')
   await page.keyboard.press('Enter')
   await page.keyboard.press('Escape')
   await expect(page.locator('.map-act', { hasText: 'Wish list' })).toHaveCSS('background-color', 'rgb(252, 177, 49)')
   await expect(page.getByRole('button', { name: /^Move activity / })).toHaveCount(6)
+
+  // The + on a card's left edge adds before it.
+  await page.locator('.map-act', { hasText: 'Browse' }).hover()
+  await page.getByRole('button', { name: 'Add activity before Browse' }).click()
+  await page.getByRole('textbox', { name: 'New activity in Buy' }).fill('Look around')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.map-act').first()).toContainText('Look around')
+  await page.locator('.map-obj', { hasText: 'Buy' }).hover()
+  await page.getByRole('button', { name: 'Add objective before Buy' }).click()
+  await page.getByRole('textbox', { name: 'New objective' }).fill('Discover')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.map-obj').first()).toContainText('Discover')
+  // Nothing to its left, so it starts with the default look.
+  await expect(page.locator('.map-obj').first()).not.toHaveClass(/coloured/)
 })

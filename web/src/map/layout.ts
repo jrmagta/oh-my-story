@@ -7,13 +7,31 @@ import type { MapNode, MapView, Placement, Release, Step } from '../api'
 export interface Column {
   key: string
   activity: MapNode | null
-  objective: MapNode
-  /**
-   * A column without an activity is a place to add one: wide for an objective
-   * with no activities or while an activity is being typed, narrow (a "+")
-   * after an objective's activities otherwise.
-   */
-  add?: 'wide' | 'narrow'
+  /** null only for the column of an objective being typed in (entry 'objective'). */
+  objective: MapNode | null
+  /** The column holding the name field of an objective or activity being added here. */
+  entry?: MapNode['level']
+}
+
+/** A node being added: its level, its parent, and where among its siblings (the end when neither id is set). */
+export interface Adding {
+  level: MapNode['level']
+  parentId: string | null
+  afterId?: string
+  beforeId?: string
+}
+
+/** Where a new sibling goes among siblings (in rank order) for an Adding. */
+function insertAt(siblings: MapNode[], a: Adding): number {
+  if (a.beforeId) {
+    const i = siblings.findIndex((n) => n.id === a.beforeId)
+    if (i >= 0) return i
+  }
+  if (a.afterId) {
+    const i = siblings.findIndex((n) => n.id === a.afterId)
+    if (i >= 0) return i + 1
+  }
+  return siblings.length
 }
 
 /** A backbone node drawn across `span` columns starting at column `start` (0-based). */
@@ -45,23 +63,33 @@ function childrenOf(nodes: MapNode[]): Map<string, MapNode[]> {
 }
 
 /**
- * Each objective's activities, then a column to add one: always for an
- * objective with none; for editors (editable) after the activities too.
- * addingUnder is the objective an activity is being typed into, whose add
- * column is then wide enough for the field. The add column keeps one key, so
- * the field stays mounted (and focused) as activities appear before it.
+ * The backbone's columns: each objective's activities in order, and an empty
+ * column for an objective with none. adding (a node being typed) gets a column
+ * of its own at its place: an activity's within its objective, an objective's
+ * between objectives. An objective's add column keeps one key (o:id) whether
+ * it is empty or holding the field, so the field stays mounted and focused as
+ * new activities appear just before it.
  */
-export function backbone(view: MapView, addingUnder: string | null = null, editable = false): Backbone {
+export function backbone(view: MapView, adding: Adding | null = null): Backbone {
   const kids = childrenOf(view.nodes)
   const out: Backbone = { objectives: [], columns: [] }
-  for (const obj of kids.get('') ?? []) {
+  const objs = kids.get('') ?? []
+  const newObjectiveAt = adding?.level === 'objective' ? insertAt(objs, adding) : -1
+  const newObjective = () => out.columns.push({ key: 'new:objective', activity: null, objective: null, entry: 'objective' })
+  objs.forEach((obj, i) => {
+    if (i === newObjectiveAt) newObjective()
     const start = out.columns.length
     const acts = kids.get(obj.id) ?? []
-    for (const act of acts) out.columns.push({ key: act.id, activity: act, objective: obj })
-    if (acts.length === 0 || addingUnder === obj.id) out.columns.push({ key: `o:${obj.id}`, activity: null, objective: obj, add: 'wide' })
-    else if (editable) out.columns.push({ key: `o:${obj.id}`, activity: null, objective: obj, add: 'narrow' })
+    const at = adding?.level === 'activity' && adding.parentId === obj.id ? insertAt(acts, adding) : -1
+    acts.forEach((act, j) => {
+      if (j === at) out.columns.push({ key: `o:${obj.id}`, activity: null, objective: obj, entry: 'activity' })
+      out.columns.push({ key: act.id, activity: act, objective: obj })
+    })
+    if (at === acts.length) out.columns.push({ key: `o:${obj.id}`, activity: null, objective: obj, entry: 'activity' })
+    else if (acts.length === 0) out.columns.push({ key: `o:${obj.id}`, activity: null, objective: obj })
     out.objectives.push({ node: obj, start, span: out.columns.length - start })
-  }
+  })
+  if (newObjectiveAt === objs.length) newObjective()
   return out
 }
 
@@ -101,19 +129,20 @@ export function cells(view: MapView): Map<string, Card[]> {
 }
 
 /**
- * The colour a new node starts with: its left neighbour's. A new objective
- * (added at the end) takes the last objective's; a new activity takes the last
- * activity of its objective, or for an objective's first activity, the last
- * activity of the objectives before it.
+ * The colour a new node starts with: its left neighbour's where it is being
+ * inserted. An objective takes the objective before it; an activity, the
+ * activity before it in its objective, or for an objective's first activity,
+ * the last activity of the objectives before it.
  */
-export function inheritedColour(view: MapView, level: MapNode['level'], parentId: string | null): string | null {
+export function inheritedColour(view: MapView, a: Adding): string | null {
   const kids = childrenOf(view.nodes)
-  const objectives = kids.get('') ?? []
-  if (level === 'objective') return objectives[objectives.length - 1]?.colour ?? null
-  const own = kids.get(parentId ?? '') ?? []
-  if (own.length) return own[own.length - 1]!.colour
-  const before = objectives.slice(0, Math.max(0, objectives.findIndex((o) => o.id === parentId)))
-  for (const o of before.reverse()) {
+  const objs = kids.get('') ?? []
+  if (a.level === 'objective') return objs[insertAt(objs, a) - 1]?.colour ?? null
+  const own = kids.get(a.parentId ?? '') ?? []
+  const at = insertAt(own, a)
+  if (at > 0) return own[at - 1]!.colour
+  const before = objs.slice(0, Math.max(0, objs.findIndex((o) => o.id === a.parentId))).reverse()
+  for (const o of before) {
     const acts = kids.get(o.id) ?? []
     if (acts.length) return acts[acts.length - 1]!.colour
   }
