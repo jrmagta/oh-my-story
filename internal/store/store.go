@@ -233,35 +233,24 @@ func (s *Store) ResolveOIDCUser(ctx context.Context, issuer, subject, email, nam
 
 // ---- workspaces ----
 
-// KeyPrefixFor is the step key prefix a new workspace starts with: its slug
-// in capitals without hyphens, at most 10 characters and starting with a
-// letter ("acme-corp" gives ACMECORP), or STEP when the slug has no letters.
-// Admins can change it later.
-func KeyPrefixFor(slug string) string {
-	var b strings.Builder
-	for _, r := range strings.ToUpper(slug) {
-		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9' && b.Len() > 0) {
-			b.WriteRune(r)
+// CreateWorkspace makes the owner its first member. key is its project key;
+// empty takes SuggestKey(name). A taken slug or key is ErrSlugTaken or
+// ErrKeyTaken.
+func (s *Store) CreateWorkspace(ctx context.Context, owner uuid.UUID, name, slug, key string) (Workspace, error) {
+	w := Workspace{ID: newID()}
+	if key == "" {
+		var err error
+		if key, err = s.SuggestKey(ctx, name); err != nil {
+			return w, err
 		}
 	}
-	if p := b.String(); p != "" {
-		return p[:min(len(p), 10)]
-	}
-	return "STEP"
-}
-
-func (s *Store) CreateWorkspace(ctx context.Context, owner uuid.UUID, name, slug string) (Workspace, error) {
-	w := Workspace{ID: newID()}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx,
 			`INSERT INTO workspaces (id, name, slug, key_prefix) VALUES ($1, $2, $3, $4)
-			 RETURNING name, slug, key_prefix, estimate_unit`, w.ID, name, slug, KeyPrefixFor(slug)).
+			 RETURNING name, slug, key_prefix, estimate_unit`, w.ID, name, slug, key).
 			Scan(&w.Name, &w.Slug, &w.KeyPrefix, &w.EstimateUnit)
-		if isUnique(err) {
-			return ErrConflict
-		}
 		if err != nil {
-			return err
+			return workspaceConflict(err)
 		}
 		if _, err = tx.Exec(ctx, `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`, w.ID, owner); err != nil {
 			return err
@@ -323,7 +312,7 @@ func (s *Store) UpdateWorkspace(ctx context.Context, id uuid.UUID, p WorkspacePa
 		   estimate_unit = COALESCE($4, estimate_unit), updated_at = now()
 		 WHERE id = $1 RETURNING name, slug, key_prefix, estimate_unit`,
 		id, p.Name, p.KeyPrefix, p.EstimateUnit).Scan(&w.Name, &w.Slug, &w.KeyPrefix, &w.EstimateUnit)
-	return w, notFound(err)
+	return w, workspaceConflict(notFound(err))
 }
 
 func (s *Store) DeleteWorkspace(ctx context.Context, id uuid.UUID) error {

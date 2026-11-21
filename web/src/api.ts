@@ -228,7 +228,14 @@ export const api = {
     }
   },
 
-  createWorkspace: (b: { name: string; slug: string }) => request<Membership>('POST', '/api/workspaces', b),
+  /** keyPrefix is the project key (CHC in CHC-12); left out, the server suggests one. 409 names a taken slug or key. */
+  createWorkspace: (b: { name: string; slug: string; keyPrefix?: string }) => request<Membership>('POST', '/api/workspaces', b),
+  /** A free project key for a workspace name, and whether key is free (when given). */
+  projectKeys: (name: string, key?: string) =>
+    request<{ suggestion: string; available?: boolean }>(
+      'GET',
+      `/api/project-keys?${new URLSearchParams({ name, ...(key ? { key } : {}) }).toString()}`,
+    ),
   workspace: (slug: string) => request<Membership>('GET', ws(slug)),
   updateWorkspace: (slug: string, b: { name?: string; keyPrefix?: string; estimateUnit?: string }) =>
     request<Membership>('PATCH', ws(slug), b),

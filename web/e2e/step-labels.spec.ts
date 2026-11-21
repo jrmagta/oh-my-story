@@ -30,9 +30,9 @@ test('labels are created from a step, shown on its card, and renamed in settings
   const mapUrl = `/w/${slug}/maps/${map.id}`
   await page.goto(mapUrl)
 
-  const card = page.getByRole('button', { name: 'LABELS-1 Enter password', exact: true })
+  const card = page.getByRole('button', { name: 'LAB-1 Enter password', exact: true })
   await card.click()
-  const panel = page.getByRole('complementary', { name: 'Step LABELS-1' })
+  const panel = page.getByRole('complementary', { name: 'Step LAB-1' })
   const picker = panel.getByRole('group', { name: 'Labels' })
 
   // Enter creates a label that does not exist yet; the Create button does the same.
@@ -59,8 +59,8 @@ test('labels are created from a step, shown on its card, and renamed in settings
   await expect(card).not.toContainText('email')
 
   await panel.getByRole('tab', { name: 'History' }).click()
-  await expect(panel).toContainText('labelled LABELS-1 “auth”')
-  await expect(panel).toContainText('removed “email” from LABELS-1')
+  await expect(panel).toContainText('labelled LAB-1 “auth”')
+  await expect(panel).toContainText('removed “email” from LAB-1')
 
   // Renaming a label in settings renames it on every card.
   await page.goto(`/w/${slug}/labels`)

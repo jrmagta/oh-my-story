@@ -19,7 +19,7 @@ const statuses = (page: Page, workflow: string) =>
 async function openStep(page: Page) {
   await page.goto(`/w/${slug}/maps`)
   await page.getByRole('link', { name: 'Open Onboarding' }).click()
-  await page.getByRole('button', { name: /^MAPPING-1 / }).click()
+  await page.getByRole('button', { name: /^MAP-1 / }).click()
 }
 
 test('an admin adds a status, a step uses it, and deleting it moves the step on', async ({ page }) => {
@@ -44,10 +44,10 @@ test('an admin adds a status, a step uses it, and deleting it moves the step on'
 
   // The map offers the new status, in workflow order, and the card shows it.
   await openStep(page)
-  const status = page.getByRole('complementary', { name: 'Step MAPPING-1' }).getByLabel('Status')
+  const status = page.getByRole('complementary', { name: 'Step MAP-1' }).getByLabel('Status')
   await expect(status.locator('option')).toHaveText(['To do', 'In progress', 'Blocked', 'In review', 'Done'])
   await status.selectOption({ label: 'In review' })
-  await expect(page.getByRole('button', { name: /^MAPPING-1 / })).toContainText('In review')
+  await expect(page.getByRole('button', { name: /^MAP-1 / })).toContainText('In review')
 
   // Deleting it asks where its steps go.
   await page.getByRole('link', { name: 'Workflows' }).click()
@@ -58,7 +58,7 @@ test('an admin adds a status, a step uses it, and deleting it moves the step on'
   await expect(statuses(page, 'Default')).toHaveText(['To do', 'In progress', 'Blocked', 'Done'])
 
   await openStep(page)
-  await expect(page.getByRole('button', { name: /^MAPPING-1 / })).toContainText('Done')
+  await expect(page.getByRole('button', { name: /^MAP-1 / })).toContainText('Done')
 })
 
 test('a new workflow can back a new map', async ({ page }) => {

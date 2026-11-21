@@ -74,7 +74,7 @@ test('an editor builds a map of an objective, its activities, a release and step
 test('the step panel edits the description and status, and they survive a reload', async ({ page }) => {
   await signIn(page)
   await page.goto(mapUrl)
-  await card(page, 'MAPPING-1 Register with email').click()
+  await card(page, 'MAP-1 Register with email').click()
   await expect(panel(page)).toBeVisible()
 
   await panel(page).getByRole('button', { name: 'Edit' }).click()
@@ -84,14 +84,14 @@ test('the step panel edits the description and status, and they survive a reload
   await expect(panel(page).locator('strong')).toHaveText('argon2id')
 
   await panel(page).getByLabel('Status').selectOption({ label: 'In progress' })
-  await expect(card(page, 'MAPPING-1 Register with email')).toContainText('In progress')
+  await expect(card(page, 'MAP-1 Register with email')).toContainText('In progress')
 
   await page.reload()
   await expect(panel(page)).toBeVisible() // the open step is in the URL
   await expect(panel(page).getByRole('heading', { name: 'Notes' })).toBeVisible()
   await expect(panel(page).getByLabel('Status')).toHaveValue(/.+/)
   await expect(panel(page).getByLabel('Status').locator('option:checked')).toHaveText('In progress')
-  await expect(card(page, 'MAPPING-1 Register with email')).toContainText('In progress')
+  await expect(card(page, 'MAP-1 Register with email')).toContainText('In progress')
   await expect(page.getByLabel('Steps by status')).toContainText('1In progress')
 })
 
@@ -105,9 +105,9 @@ test('renaming an activity, and deleting it with undo', async ({ page }) => {
 
   await menu(page, 'activity Check inbox', 'Delete')
   await expect(page.getByRole('status').filter({ hasText: 'Deleted activity “Check inbox”' })).toBeVisible()
-  await expect(card(page, 'MAPPING-2 Send verification email')).toHaveCount(0)
+  await expect(card(page, 'MAP-2 Send verification email')).toHaveCount(0)
   await page.getByRole('button', { name: 'Undo' }).click()
-  await expect(card(page, 'MAPPING-2 Send verification email')).toBeVisible()
+  await expect(card(page, 'MAP-2 Send verification email')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Move activity Check inbox' })).toBeVisible()
 
   // Releases rename from their menu too.
@@ -180,17 +180,17 @@ async function keyboardMove(page: Page, handle: string, key: string) {
 test('dragging a step with the pointer to another cell and release', async ({ page }) => {
   await signIn(page)
   await page.goto(mapUrl)
-  await expect.poll(() => cellKeys(page, 'Check inbox / Unscheduled')).toEqual(['MAPPING-2'])
+  await expect.poll(() => cellKeys(page, 'Check inbox / Unscheduled')).toEqual(['MAP-2'])
 
-  const source = await centre(page.locator('.step-card', { has: page.getByRole('button', { name: /^MAPPING-2 / }) }))
+  const source = await centre(page.locator('.step-card', { has: page.getByRole('button', { name: /^MAP-2 / }) }))
   const cell = await centre(page.getByRole('group', { name: 'Steps in Create account / MVP' }))
   // Drop low in the cell, below its card: the end of the cell.
   await pointerDrag(page, source, { x: cell.x, y: cell.bottom - 6 })
 
-  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAPPING-1', 'MAPPING-2'])
+  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAP-1', 'MAP-2'])
   expect(await cellKeys(page, 'Check inbox / Unscheduled')).toEqual([])
   await page.reload()
-  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAPPING-1', 'MAPPING-2'])
+  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAP-1', 'MAP-2'])
 })
 
 test('reordering with the keyboard: a step in its cell, an activity, a release', async ({ page }) => {
@@ -198,22 +198,22 @@ test('reordering with the keyboard: a step in its cell, an activity, a release',
   await page.goto(mapUrl)
 
   // On a step card Enter opens it and Space picks it up; picking up and dropping at once moves nothing.
-  await page.getByRole('button', { name: 'MAPPING-2 Send verification email', exact: true }).focus()
+  await page.getByRole('button', { name: 'MAP-2 Send verification email', exact: true }).focus()
   await page.keyboard.press('Enter')
-  await expect(panel(page)).toHaveAccessibleName('Step MAPPING-2')
+  await expect(panel(page)).toHaveAccessibleName('Step MAP-2')
   await expect(page.locator('.drag-ghost')).toHaveCount(0)
   await page.getByRole('button', { name: 'Close step' }).click()
-  await page.getByRole('button', { name: 'MAPPING-2 Send verification email', exact: true }).focus()
+  await page.getByRole('button', { name: 'MAP-2 Send verification email', exact: true }).focus()
   await page.keyboard.press('Space')
   await expect(page.locator('.drag-ghost')).toBeVisible()
   await expect(panel(page)).toHaveCount(0)
   await page.keyboard.press('Space')
   await expect(page.locator('.drag-ghost')).toHaveCount(0)
   await page.reload()
-  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAPPING-1', 'MAPPING-2'])
+  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAP-1', 'MAP-2'])
 
-  await keyboardMove(page, 'MAPPING-2 Send verification email', 'ArrowUp')
-  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAPPING-2', 'MAPPING-1'])
+  await keyboardMove(page, 'MAP-2 Send verification email', 'ArrowUp')
+  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAP-2', 'MAP-1'])
 
   await expect.poll(() => activityOrder(page)).toEqual(['Create account', 'Check inbox'])
   await keyboardMove(page, 'Move activity Check inbox', 'ArrowLeft')
@@ -226,7 +226,7 @@ test('reordering with the keyboard: a step in its cell, an activity, a release',
   await expect.poll(bands).toEqual(['Release Later', 'Release MVP', 'Release Unscheduled'])
 
   await page.reload()
-  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAPPING-2', 'MAPPING-1'])
+  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAP-2', 'MAP-1'])
   expect(await activityOrder(page)).toEqual(['Check inbox', 'Create account'])
   await expect.poll(bands).toEqual(['Release Later', 'Release MVP', 'Release Unscheduled'])
 })
@@ -237,24 +237,24 @@ test('a move that crosses another edit says so, and one that fails is undone', a
   // as it was while someone else changes it.
   await page.routeWebSocket(/\/live\?/, () => {})
   await page.goto(mapUrl)
-  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAPPING-2', 'MAPPING-1'])
+  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAP-2', 'MAP-1'])
 
   const api = `/api/workspaces/${slug}/maps/${mapUrl.split('/').pop()}`
   const view = (await (await page.request.get(api)).json()) as { steps: { id: string; key: string }[] }
   const id = (key: string) => view.steps.find((s) => s.key === key)?.id ?? ''
 
-  // Someone else deletes MAPPING-2 while this page still shows it: the move fails and is put back.
+  // Someone else deletes MAP-2 while this page still shows it: the move fails and is put back.
   const json = { 'Content-Type': 'application/json' }
-  expect((await page.request.delete(`${api}/steps/${id('MAPPING-2')}`, { headers: json })).status()).toBe(204)
-  await keyboardMove(page, 'MAPPING-2 Send verification email', 'ArrowDown')
+  expect((await page.request.delete(`${api}/steps/${id('MAP-2')}`, { headers: json })).status()).toBe(204)
+  await keyboardMove(page, 'MAP-2 Send verification email', 'ArrowDown')
   await expect(page.getByRole('alert')).toContainText('not found')
-  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAPPING-1'])
+  await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAP-1'])
 
-  // Someone else edits MAPPING-1 while this page shows the old version: the move applies, and says so.
+  // Someone else edits MAP-1 while this page shows the old version: the move applies, and says so.
   const me = (await (await page.request.get('/api/me')).json()) as { user: { id: string } }
-  expect((await page.request.patch(`${api}/steps/${id('MAPPING-1')}`, { data: { assigneeId: me.user.id } })).status()).toBe(200)
-  await keyboardMove(page, 'MAPPING-1 Register with email', 'ArrowDown')
-  await expect(page.getByRole('status').filter({ hasText: 'MAPPING-1 was changed by someone else' })).toBeVisible()
+  expect((await page.request.patch(`${api}/steps/${id('MAP-1')}`, { data: { assigneeId: me.user.id } })).status()).toBe(200)
+  await keyboardMove(page, 'MAP-1 Register with email', 'ArrowDown')
+  await expect(page.getByRole('status').filter({ hasText: 'MAP-1 was changed by someone else' })).toBeVisible()
   await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual([])
 })
 
@@ -272,14 +272,14 @@ test('a viewer sees the map without edit controls', async ({ page, browser }) =>
   const v = await ctx.newPage()
   await v.goto(mapUrl)
   await expect(v.getByRole('heading', { name: 'Onboarding' })).toBeVisible()
-  await expect(card(v, 'MAPPING-1 Register with email')).toBeVisible()
+  await expect(card(v, 'MAP-1 Register with email')).toBeVisible()
   await expect(v.getByRole('button', { name: /^Add / })).toHaveCount(0)
   await expect(v.getByRole('button', { name: /^Rename / })).toHaveCount(0)
   await expect(v.getByRole('button', { name: /^Delete / })).toHaveCount(0)
   await expect(v.getByRole('button', { name: /^Move / })).toHaveCount(0)
   await expect(v.getByRole('button', { name: '+ Add release' })).toHaveCount(0)
 
-  await card(v, 'MAPPING-1 Register with email').click()
+  await card(v, 'MAP-1 Register with email').click()
   await expect(panel(v)).toContainText('In progress')
   await expect(panel(v).getByRole('combobox')).toHaveCount(0)
   await expect(panel(v).getByRole('button', { name: 'Edit' })).toHaveCount(0)
@@ -316,7 +316,7 @@ test('two people on one map see each other and each other’s edits live', async
   await expect(v.getByRole('group', { name: 'Steps in Open the email / MVP' })).toContainText('Resend the link')
 
   // A move shows up too: up into the Later release.
-  await keyboardMove(page, 'MAPPING-3 Resend the link', 'ArrowUp')
+  await keyboardMove(page, 'MAP-3 Resend the link', 'ArrowUp')
   await expect(page.getByRole('group', { name: 'Steps in Open the email / Later' })).toContainText('Resend the link')
   await expect(v.getByRole('group', { name: 'Steps in Open the email / Later' })).toContainText('Resend the link')
   await expect(v.getByRole('group', { name: 'Steps in Open the email / MVP' })).not.toContainText('Resend the link')
@@ -328,29 +328,29 @@ test('two people on one map see each other and each other’s edits live', async
 test('the step history and the map activity say who changed what', async ({ page }) => {
   await signIn(page)
   await page.goto(mapUrl)
-  await card(page, 'MAPPING-1 Register with email').click()
+  await card(page, 'MAP-1 Register with email').click()
   const step = panel(page)
   await step.getByLabel('Status').selectOption({ label: 'Blocked' })
-  await expect(card(page, 'MAPPING-1 Register with email')).toContainText('Blocked')
+  await expect(card(page, 'MAP-1 Register with email')).toContainText('Blocked')
   await step.getByRole('button', { name: 'Rename step' }).click()
   await step.getByRole('textbox', { name: 'New name for step' }).fill('Register with an email')
   await page.keyboard.press('Enter')
-  await expect(card(page, 'MAPPING-1 Register with an email')).toBeVisible()
+  await expect(card(page, 'MAP-1 Register with an email')).toBeVisible()
 
   await step.getByRole('tab', { name: 'History' }).click()
-  const history = step.getByRole('list', { name: 'History of MAPPING-1' })
+  const history = step.getByRole('list', { name: 'History of MAP-1' })
   await expect(history.getByRole('listitem').first()).toContainText(
-    'Olive Owner renamed MAPPING-1 from “Register with email” to “Register with an email”',
+    'Olive Owner renamed MAP-1 from “Register with email” to “Register with an email”',
   )
-  await expect(history).toContainText('Olive Owner set MAPPING-1 to Blocked')
-  await expect(history).toContainText('Olive Owner added MAPPING-1 “Register with email”')
+  await expect(history).toContainText('Olive Owner set MAP-1 to Blocked')
+  await expect(history).toContainText('Olive Owner added MAP-1 “Register with email”')
   await expect(history).toContainText('just now')
 
   await page.getByRole('button', { name: 'Activity', exact: true }).click()
   await expect(step).toHaveCount(0)
   const feed = page.getByRole('list', { name: 'Map activity' })
-  await expect(feed.getByRole('listitem').first()).toContainText('Olive Owner renamed MAPPING-1')
-  await expect(feed).toContainText('Olive Owner set MAPPING-1 to Blocked')
+  await expect(feed.getByRole('listitem').first()).toContainText('Olive Owner renamed MAP-1')
+  await expect(feed).toContainText('Olive Owner set MAP-1 to Blocked')
 
   // Entries link to their step.
   await feed.getByRole('listitem').first().getByRole('button', { name: 'Open step' }).click()

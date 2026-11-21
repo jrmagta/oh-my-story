@@ -72,7 +72,7 @@ func TestLastOwnerRace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws, err := s.CreateWorkspace(ctx, a.ID, "W", "w")
+	ws, err := s.CreateWorkspace(ctx, a.ID, "W", "w", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestInviteSingleUse(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
 	a, _ := s.Bootstrap(ctx, "a@example.com", "A", "hash")
-	ws, _ := s.CreateWorkspace(ctx, a.ID, "W", "w")
+	ws, _ := s.CreateWorkspace(ctx, a.ID, "W", "w", "")
 	if _, err := s.CreateInvite(ctx, ws.ID, "c@example.com", role.Viewer, []byte("tok"), a.ID, time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestOIDCFirstLoginRace(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
 	a, _ := s.Bootstrap(ctx, "a@example.com", "A", "hash")
-	ws, _ := s.CreateWorkspace(ctx, a.ID, "W", "w")
+	ws, _ := s.CreateWorkspace(ctx, a.ID, "W", "w", "")
 	for round := range 20 {
 		email, sub := fmt.Sprintf("c%d@example.com", round), fmt.Sprintf("sub-c%d", round)
 		if _, err := s.CreateInvite(ctx, ws.ID, email, role.Viewer, []byte(email), a.ID, time.Now().Add(time.Hour)); err != nil {
@@ -193,7 +193,7 @@ func TestOIDCDeactivatedUser(t *testing.T) {
 	ctx := context.Background()
 	s, pool := newStoreWithPool(t)
 	a, _ := s.Bootstrap(ctx, "a@example.com", "A", "hash")
-	ws, _ := s.CreateWorkspace(ctx, a.ID, "W", "w")
+	ws, _ := s.CreateWorkspace(ctx, a.ID, "W", "w", "")
 	if _, err := s.CreateInvite(ctx, ws.ID, "d@example.com", role.Viewer, []byte("tok"), a.ID, time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
@@ -211,16 +211,61 @@ func TestOIDCDeactivatedUser(t *testing.T) {
 	}
 }
 
-func TestKeyPrefixFor(t *testing.T) {
-	for slug, want := range map[string]string{
-		"acme":                  "ACME",
-		"acme-corp":             "ACMECORP",
-		"2026-plans":            "PLANS",
-		"oh-my-story-workspace": "OHMYSTORYW",
-		"123":                   "STEP",
+func TestKeyCandidates(t *testing.T) {
+	for name, want := range map[string]string{
+		"Cheshire Cat":         "CHC",
+		"Acme":                 "ACM",
+		"Mad Hatter Tea Party": "MHT",
+		"Oh my story":          "OMS",
+		"2026 plans":           "PLA",
+		"X":                    "X",
+		"Q 1":                  "Q1",
+		"!!!":                  "WS",
 	} {
-		if got := store.KeyPrefixFor(slug); got != want {
-			t.Errorf("KeyPrefixFor(%q) = %q, want %q", slug, got, want)
+		c := store.KeyCandidates(name)
+		if c[0] != want {
+			t.Errorf("KeyCandidates(%q)[0] = %q, want %q", name, c[0], want)
 		}
+		seen := map[string]bool{}
+		for _, k := range c {
+			if seen[k] || k[0] < 'A' || k[0] > 'Z' || len(k) > 10 {
+				t.Errorf("KeyCandidates(%q) has bad or repeated %q", name, k)
+			}
+			seen[k] = true
+		}
+	}
+	// Alternatives keep the first letter and draw on the rest of the name.
+	if c := store.KeyCandidates("Cheshire Cat"); c[1] != "CHE" || c[2] != "CHS" {
+		t.Errorf("alternatives = %v", c[:5])
+	}
+}
+
+func TestProjectKeysAreUnique(t *testing.T) {
+	s := newStore(t)
+	u := must[store.User](t)(s.Bootstrap(ctx, "a@example.com", "A", "hash"))
+	ws1 := must[store.Workspace](t)(s.CreateWorkspace(ctx, u.ID, "Cheshire Cat", "cat", ""))
+	if ws1.KeyPrefix != "CHC" {
+		t.Errorf("first key = %q", ws1.KeyPrefix)
+	}
+	// The same name suggests the next free key.
+	if k := must[string](t)(s.SuggestKey(ctx, "Cheshire Cat")); k != "CHE" {
+		t.Errorf("suggestion after CHC is taken = %q", k)
+	}
+	ws2 := must[store.Workspace](t)(s.CreateWorkspace(ctx, u.ID, "Cheshire Cat", "cat-2", ""))
+	if ws2.KeyPrefix != "CHE" {
+		t.Errorf("second key = %q", ws2.KeyPrefix)
+	}
+	if _, err := s.CreateWorkspace(ctx, u.ID, "Other", "other", "CHC"); !errors.Is(err, store.ErrKeyTaken) {
+		t.Errorf("taken key: %v", err)
+	}
+	if _, err := s.CreateWorkspace(ctx, u.ID, "Other", "cat", "OTH"); !errors.Is(err, store.ErrSlugTaken) {
+		t.Errorf("taken slug: %v", err)
+	}
+	k := "CHC"
+	if _, err := s.UpdateWorkspace(ctx, ws2.ID, store.WorkspacePatch{KeyPrefix: &k}); !errors.Is(err, store.ErrKeyTaken) {
+		t.Errorf("renaming onto a taken key: %v", err)
+	}
+	if taken := must[bool](t)(s.KeyTaken(ctx, "CHC")); !taken {
+		t.Error("CHC should be taken")
 	}
 }

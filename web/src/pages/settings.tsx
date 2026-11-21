@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useOutletContext } from 'react-router'
 import { api, atLeast, type Membership } from '../api'
 import { refreshSession } from '../session'
 import { ErrorAlert, Field, Notice } from '../ui'
 import { PageBand } from './app'
+import { ProjectKeyField } from './project-key'
 
 /** Workspace name, step key prefix and estimate unit. Admins change them; everyone else reads. */
 export function SettingsPage() {
@@ -13,6 +14,8 @@ export function SettingsPage() {
   const canManage = atLeast(ws.role, 'admin')
   const [name, setName] = useState(ws.name)
   const [keyPrefix, setKeyPrefix] = useState(ws.keyPrefix)
+  const [keyOk, setKeyOk] = useState(true)
+  const onKey = useCallback((k: string) => setKeyPrefix(k), [])
   const [estimateUnit, setEstimateUnit] = useState(ws.estimateUnit)
   const save = useMutation({
     mutationFn: () => api.updateWorkspace(ws.slug, { name, keyPrefix, estimateUnit }),
@@ -37,15 +40,15 @@ export function SettingsPage() {
             <Field label="Workspace name">
               <input className="input w-full" required maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
             </Field>
-            <Field label="Step key prefix" hint="New steps get keys like STEP-12. Existing keys keep their prefix.">
-              <input
-                className="input w-full"
-                required
-                pattern="[A-Z][A-Z0-9]{0,9}"
-                value={keyPrefix}
-                onChange={(e) => setKeyPrefix(e.target.value.toUpperCase())}
-              />
-            </Field>
+            <ProjectKeyField
+              name={name}
+              value={keyPrefix}
+              edited
+              current={ws.keyPrefix}
+              onChange={onKey}
+              onAvailability={setKeyOk}
+            />
+            <p className="text-muted -mt-2 mb-4 text-[13px] font-medium">Existing steps keep their IDs; new steps use the new key.</p>
             <Field label="Estimate unit" hint="What estimates count, such as points or days.">
               <input
                 className="input w-full"
@@ -57,7 +60,7 @@ export function SettingsPage() {
             </Field>
           </fieldset>
           {canManage ? (
-            <button className="btn btn-primary mt-2" disabled={save.isPending}>
+            <button className="btn btn-primary mt-2" disabled={save.isPending || !keyOk}>
               Save settings
             </button>
           ) : (

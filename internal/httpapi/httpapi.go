@@ -56,6 +56,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, sender mail.Sender, oidc *OIDC, 
 
 	mux.HandleFunc("GET /api/workspaces", s.authed(s.listWorkspaces))
 	mux.HandleFunc("POST /api/workspaces", s.authed(s.createWorkspace))
+	mux.HandleFunc("GET /api/project-keys", s.authed(s.projectKeys))
 	mux.HandleFunc("GET /api/workspaces/{slug}", s.inWorkspace(role.View, s.getWorkspace))
 	mux.HandleFunc("PATCH /api/workspaces/{slug}", s.inWorkspace(role.ManageSettings, s.patchWorkspace))
 	mux.HandleFunc("DELETE /api/workspaces/{slug}", s.inWorkspace(role.DeleteWorkspace, s.deleteWorkspace))
@@ -221,6 +222,10 @@ func writeError(w http.ResponseWriter, err error) {
 		e = &apiError{http.StatusConflict, "conflict", "already a member of this workspace"}
 	case errors.Is(err, store.ErrInvalid):
 		e = errBadRequest(err.Error())
+	case errors.Is(err, store.ErrSlugTaken):
+		e = &apiError{http.StatusConflict, "conflict", "that URL slug is taken"}
+	case errors.Is(err, store.ErrKeyTaken):
+		e = &apiError{http.StatusConflict, "conflict", "that project key is taken"}
 	case errors.Is(err, store.ErrConflict):
 		e = &apiError{http.StatusConflict, "conflict", "already exists"}
 	case errors.Is(err, store.ErrInviteUsed), errors.Is(err, store.ErrBootstrapped), errors.Is(err, store.ErrResetUsed):

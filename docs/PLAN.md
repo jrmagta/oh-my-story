@@ -13,7 +13,7 @@ A self-hosted user story mapping tool. Feature set modelled on Avion; visual des
 | Frontend | React + TypeScript + Vite, TanStack Query, Zustand, React Router, dnd-kit, Tailwind CSS v4 + daisyUI v5 with two custom themes |
 | Dev deploy | docker-compose: app, Postgres, Keycloak, Mailpit |
 | Prod deploy | Helm chart: Deployment, Service, Ingress, HPA, migration Job; external Postgres or CloudNativePG |
-| Data model | `docs/DATA_MODEL.md`. UUIDv7 ids, fractional-index ranks, per-workspace roles, invite-only sign-up, workspace-wide step keys |
+| Data model | `docs/DATA_MODEL.md`. UUIDv7 ids, fractional-index ranks, per-workspace roles, invite-only sign-up, workspace-wide step keys with a server-unique project key (CHC-12) |
 | Target devices | Desktop browser first. Phone and tablet layouts are not optimised; the map scrolls sideways and may be view-only there |
 | Tests | Go tests against real Postgres, Playwright e2e |
 

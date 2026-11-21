@@ -36,7 +36,7 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w, err := s.CreateWorkspace(ctx, u.ID, "Acme", "acme")
+	w, err := s.CreateWorkspace(ctx, u.ID, "Acme", "acme", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,11 +203,11 @@ func TestStepKeysConcurrent(t *testing.T) {
 		if errs[i] != nil {
 			t.Fatal(errs[i])
 		}
-		want[i] = fmt.Sprintf("ACME-%d", i+1)
+		want[i] = fmt.Sprintf("ACM-%d", i+1)
 	}
 	slices.SortFunc(keys, func(a, b string) int {
-		ai, _ := strconv.Atoi(a[len("ACME-"):])
-		bi, _ := strconv.Atoi(b[len("ACME-"):])
+		ai, _ := strconv.Atoi(a[len("ACM-"):])
+		bi, _ := strconv.Atoi(b[len("ACM-"):])
 		return ai - bi
 	})
 	if !slices.Equal(keys, want) {
@@ -414,7 +414,7 @@ func TestOtherWorkspaceIsNotFound(t *testing.T) {
 	f := newFixture(t)
 	m, _, act, _ := f.activities()
 	st := f.step(m.ID, act.ID, nil, "s")
-	other := must[store.Workspace](t)(f.s.CreateWorkspace(ctx, f.user, "Other", "other"))
+	other := must[store.Workspace](t)(f.s.CreateWorkspace(ctx, f.user, "Other", "other", ""))
 	title := "x"
 	if _, err := f.s.UpdateStep(ctx, f.user, other.ID, m.ID, st.ID, store.StepPatch{Title: &title}); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("update through another workspace: %v", err)

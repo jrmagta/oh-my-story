@@ -62,7 +62,7 @@ func parseWorkspaceName(s string) (string, error) {
 
 func parseKeyPrefix(s string) (string, error) {
 	if !keyPrefixRE.MatchString(s) {
-		return "", errBadRequest("key prefix must be 1 to 10 uppercase letters or digits, starting with a letter")
+		return "", errBadRequest("project key must be 1 to 10 uppercase letters or digits, starting with a letter")
 	}
 	return s, nil
 }

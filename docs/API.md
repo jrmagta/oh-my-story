@@ -53,9 +53,10 @@ Extra rules:
 | `GET /auth/oidc/login?next=<path>` | none | browser redirect to the identity provider |
 | `GET /auth/oidc/callback` | none | browser redirect to `next` (a local path, default `/`) with a session, or to `/login?error=<code>&next=<path>`: `not_invited`, `account_disabled`, `sso_email_unverified`, `sso_denied`, `sso_expired`, `sso_state`, `sso_failed` |
 | `GET /api/workspaces` | session | → my workspaces |
-| `POST /api/workspaces` | session | `{name, slug}` → `201` workspace; caller becomes owner |
+| `POST /api/workspaces` | session | `{name, slug, keyPrefix?}` → `201` workspace; caller becomes owner. `keyPrefix` is the project key (CHC in CHC-12), unique on the server; left out, it is the first free suggestion for the name. `409` says whether the URL slug or the project key is taken |
+| `GET /api/project-keys?name=&key=` | session | → `{suggestion, available?}`: the first free project key for the workspace name ("Cheshire Cat" gives CHC, then CHE, CHS, …), and whether `key` is free when given |
 | `GET /api/workspaces/{slug}` | viewer | → workspace incl. `myRole` |
-| `PATCH /api/workspaces/{slug}` | admin | `{name?, keyPrefix?, estimateUnit?}` → workspace |
+| `PATCH /api/workspaces/{slug}` | admin | `{name?, keyPrefix?, estimateUnit?}` → workspace. A project key another workspace has is `409`; existing steps keep their keys |
 | `DELETE /api/workspaces/{slug}` | owner | → `204` |
 | `GET /api/workspaces/{slug}/members` | viewer | → `[{userId, email, displayName, role}]` |
 | `PATCH /api/workspaces/{slug}/members/{userId}` | admin | `{role}` → member |

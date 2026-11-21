@@ -140,7 +140,7 @@ func (s *Server) listWorkspaces(w http.ResponseWriter, r *http.Request, u store.
 }
 
 func (s *Server) createWorkspace(w http.ResponseWriter, r *http.Request, u store.User) {
-	var in struct{ Name, Slug string }
+	var in struct{ Name, Slug, KeyPrefix string }
 	if err := readJSON(w, r, &in); err != nil {
 		writeError(w, err)
 		return
@@ -155,7 +155,14 @@ func (s *Server) createWorkspace(w http.ResponseWriter, r *http.Request, u store
 		writeError(w, err)
 		return
 	}
-	ws, err := s.store.CreateWorkspace(r.Context(), u.ID, name, slug)
+	key := ""
+	if in.KeyPrefix != "" {
+		if key, err = parseKeyPrefix(in.KeyPrefix); err != nil {
+			writeError(w, err)
+			return
+		}
+	}
+	ws, err := s.store.CreateWorkspace(r.Context(), u.ID, name, slug, key)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -421,4 +428,31 @@ func (s *Server) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"workspace": ws, "user": u})
+}
+
+// projectKeys suggests a free project key for ?name= and says whether ?key= is free.
+func (s *Server) projectKeys(w http.ResponseWriter, r *http.Request, _ store.User) {
+	out := struct {
+		Suggestion string `json:"suggestion"`
+		Available  *bool  `json:"available,omitempty"`
+	}{}
+	var err error
+	if out.Suggestion, err = s.store.SuggestKey(r.Context(), r.URL.Query().Get("name")); err != nil {
+		writeError(w, err)
+		return
+	}
+	if k := r.URL.Query().Get("key"); k != "" {
+		if _, err := parseKeyPrefix(k); err != nil {
+			writeError(w, err)
+			return
+		}
+		taken, err := s.store.KeyTaken(r.Context(), k)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		free := !taken
+		out.Available = &free
+	}
+	writeJSON(w, http.StatusOK, out)
 }
