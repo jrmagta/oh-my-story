@@ -79,7 +79,7 @@ func mapStep(ctx context.Context, tx pgx.Tx, mapID, stepID uuid.UUID) (Step, Pla
 	var p Placement
 	err := tx.QueryRow(ctx,
 		`SELECT `+stepCols+`, p.id, p.step_id, p.activity_id, p.release_id, p.rank
-		 FROM steps s JOIN placements p ON p.step_id = s.id
+		 FROM steps s JOIN placements p ON p.step_id = s.id JOIN nodes n ON n.id = p.activity_id AND n.deleted_at IS NULL
 		 WHERE s.id = $1 AND p.map_id = $2 AND s.deleted_at IS NULL FOR UPDATE OF s`, stepID, mapID).
 		Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.LabelIDs, &st.CommentCount, &st.Version,
 			&p.ID, &p.StepID, &p.ActivityID, &p.ReleaseID, &p.Rank)
@@ -186,7 +186,10 @@ func (s *Store) UpdateStep(ctx context.Context, actor, workspaceID, mapID, stepI
 		if !ok {
 			return nil, nil
 		}
-		changes := []change{c}
+		changes, err := echoes(ctx, tx, stepID, c)
+		if err != nil {
+			return nil, err
+		}
 		if before.StatusID != st.StatusID {
 			refs, err := linkedElsewhere(ctx, tx, stepID, st)
 			if err != nil {
@@ -255,7 +258,7 @@ func (s *Store) DeleteStep(ctx context.Context, actor, workspaceID, mapID, stepI
 		if _, err := tx.Exec(ctx, `UPDATE steps SET deleted_at = now(), updated_at = now() WHERE id = $1`, stepID); err != nil {
 			return nil, err
 		}
-		return []change{gone(mapID, "step", stepID, "delete", map[string]any{"key": st.Key, "title": st.Title})}, nil
+		return echoes(ctx, tx, stepID, gone(mapID, "step", stepID, "delete", map[string]any{"key": st.Key, "title": st.Title}))
 	})
 }
 
@@ -278,7 +281,7 @@ func (s *Store) RestoreStep(ctx context.Context, actor, workspaceID, mapID, step
 			`UPDATE steps s SET deleted_at = NULL, updated_at = now() WHERE id = $1 RETURNING `+stepCols, stepID)); err != nil {
 			return nil, err
 		}
-		return []change{gone(mapID, "step", stepID, "restore", map[string]any{"key": st.Key, "title": st.Title})}, nil
+		return echoes(ctx, tx, stepID, gone(mapID, "step", stepID, "restore", map[string]any{"key": st.Key, "title": st.Title}))
 	})
 	return st, err
 }

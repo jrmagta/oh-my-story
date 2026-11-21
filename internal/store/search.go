@@ -54,7 +54,7 @@ func (s *Store) Search(ctx context.Context, workspaceID uuid.UUID, q string) ([]
 		 FROM steps s
 		 JOIN placements p ON p.step_id = s.id
 		 JOIN maps m ON m.id = p.map_id AND m.deleted_at IS NULL
-		 JOIN nodes n ON n.id = p.activity_id
+		 JOIN nodes n ON n.id = p.activity_id AND n.deleted_at IS NULL
 		 WHERE s.workspace_id = $1 AND s.deleted_at IS NULL
 		   AND (upper(s.key) = upper($2) OR s.search @@ to_tsquery('simple', $3))
 		 ORDER BY upper(s.key) = upper($2) DESC, ts_rank(s.search, to_tsquery('simple', $3)) DESC, s.key
