@@ -57,6 +57,14 @@ test('an editor builds a map of an objective, its activities, a release and step
   await page.getByRole('button', { name: 'Add activity to Get started' }).click()
   await typeEach(page, 'New activity in Get started', ['Create account', 'Verify email'])
 
+  // The objective row ends in a placeholder for the next objective, hidden while one is typed in.
+  const addObjective = page.getByRole('button', { name: 'Add objective', exact: true })
+  await addObjective.click()
+  await expect(page.getByRole('textbox', { name: 'New objective' })).toBeVisible()
+  await expect(addObjective).toHaveCount(0)
+  await page.getByRole('textbox', { name: 'New objective' }).press('Escape')
+  await expect(addObjective).toBeVisible()
+
   await page.getByRole('button', { name: '+ Add release' }).click()
   await typeEach(page, 'New release name', ['MVP'])
   await expect(page.getByRole('heading', { name: 'Release MVP' })).toBeVisible()

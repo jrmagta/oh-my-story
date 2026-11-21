@@ -136,7 +136,12 @@ test('a big map zooms, fits, pans, keeps its backbone pinned, and has a minimap'
   await page.getByRole('button', { name: 'Zoom out' }).click()
   await page.getByRole('button', { name: 'Zoom out' }).click()
   await expect(zoomLabel).toHaveText('75%')
-  await page.getByRole('button', { name: /Far step$/ }).scrollIntoViewIfNeeded()
+  // Centre the target cell: dragging near the map's edge would auto-scroll it away.
+  await page.getByRole('group', { name: 'Steps in Discover 2 / Unscheduled' }).scrollIntoViewIfNeeded()
+  const area = (await page.locator('.map-scroll').boundingBox())!
+  const cell = (await page.getByRole('group', { name: 'Steps in Discover 2 / Unscheduled' }).boundingBox())!
+  await page.locator('.map-scroll').evaluate((s, dx) => (s.scrollLeft += dx), cell.x + cell.width / 2 - (area.x + area.width / 2))
+  await expect(page.getByRole('button', { name: /Far step$/ })).toBeInViewport()
   const from = (await page.getByRole('button', { name: /Far step$/ }).boundingBox())!
   // A cell to the left, clear of the zoom controls and minimap in the bottom-right corner.
   const target = (await page.getByRole('group', { name: 'Steps in Discover 2 / Unscheduled' }).boundingBox())!

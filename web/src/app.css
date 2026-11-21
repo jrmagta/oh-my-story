@@ -989,6 +989,9 @@
   }
   /* Between the last release and Unscheduled: a slim line, not another row of cards. */
   .add-slot.add-release { padding: 3px 10px; font-size: 11px; }
+  /* As wide as an activity column and as tall as the objective row. */
+  .add-objective { width: 184px; display: flex; }
+  .add-objective .add-slot { height: 100%; }
   /* Members: one row per person, under column headings. */
   .member-row {
     display: grid;

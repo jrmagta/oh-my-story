@@ -582,6 +582,12 @@ export function MapGrid() {
           {canEdit && <SideAdds node={o.node} />}
         </div>
       ))}
+      {/* After the last objective, in the flexible column; hidden while an objective is being typed in. */}
+      {canEdit && adding?.level !== 'objective' && (
+        <div className="add-objective" style={{ gridColumn: bb.columns.length + 1, gridRow: 1 }} data-export="skip">
+          <StartAdd adding={{ level: 'objective', parentId: null }} label="Add objective" />
+        </div>
+      )}
       {bb.columns.map((c, i) =>
         c.entry === 'objective' ? (
           <div key={c.key} style={col(i)}>
