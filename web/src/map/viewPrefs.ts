@@ -15,11 +15,15 @@ export interface ViewPrefs {
   focus: string | null
   /** Draw arrows between linked steps. */
   lines: boolean
+  /** Scale of the map, 0.5 to 1.5. */
+  zoom: number
+  /** Show the overview in the corner when the map does not fit. */
+  minimap: boolean
 }
 
 export const UNSCHEDULED_BAND = 'unscheduled'
 
-export const defaultPrefs: ViewPrefs = { size: 'full', collapsedActivities: [], collapsedReleases: [], focus: null, lines: false }
+export const defaultPrefs: ViewPrefs = { size: 'full', collapsedActivities: [], collapsedReleases: [], focus: null, lines: false, zoom: 1, minimap: true }
 
 const storageKey = (mapId: string) => `oms-view:${mapId}`
 
@@ -34,6 +38,8 @@ function load(mapId: string): ViewPrefs {
       collapsedReleases: Array.isArray(p.collapsedReleases) ? p.collapsedReleases.filter((x) => typeof x === 'string') : [],
       focus: typeof p.focus === 'string' ? p.focus : null,
       lines: p.lines === true,
+      zoom: typeof p.zoom === 'number' && p.zoom >= 0.5 && p.zoom <= 1.5 ? p.zoom : 1,
+      minimap: p.minimap !== false,
     }
   } catch {
     return defaultPrefs

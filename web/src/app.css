@@ -459,8 +459,9 @@
 
   /* Export: the caption shows only in the exported picture, which gets some breathing room. */
   /* At least as wide as the page, so release bands run its full width; an export keeps only the map's own width. */
-  .map-export { width: max-content; min-width: 100%; }
+  .map-export { width: max-content; min-width: 100%; padding-top: 22px; }
   .map-export.exporting, .map-export.exporting .map-grid { min-width: 0; }
+  .map-export.exporting .map-zoom { zoom: 1 !important; }
   .export-caption { display: none; }
   .map-export.exporting { padding: 24px; }
   .map-export.exporting .export-caption {
@@ -664,15 +665,89 @@
   /* The map fills the window below the top bar (68px) and stripe (10px) and scrolls inside
      itself, so both its scrollbars sit at the window's edges, not at the bottom of a tall map. */
   .map-page {
+    position: relative;
     display: flex;
     flex-direction: column;
     height: calc(100dvh - 78px);
   }
+  /* Empty space on the map pans when dragged. */
+  .map-scroll { cursor: grab; }
+  .map-scroll.panning { cursor: grabbing; user-select: none; }
+  .map-scroll .band-row { cursor: default; }
+
+  /* The objective and activity rows, pinned at the top of the scroll area; a subgrid so they keep
+     the map's columns. Their background hides steps scrolling underneath. */
+  .backbone {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    row-gap: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    /* A little room above when pinned, and cover for the gap below it. */
+    padding: 10px 0 8px;
+    margin: -10px 0 -8px;
+    background: var(--color-base-100);
+  }
+
+  /* The row labels in the pinned rows act as a frozen column: a solid strip the full height of
+     each row, reaching back over the scroll area's left gutter, so cards scrolled sideways pass
+     under it instead of showing around the words. */
+  .backbone .map-lbl {
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    z-index: 2;
+    box-shadow: -40px 0 0 var(--color-base-100), 0 -10px 0 var(--color-base-100), 0 8px 0 var(--color-base-100);
+  }
+
+  /* Zoom controls and the minimap, over the map's bottom-right corner. */
+  .map-nav {
+    position: absolute;
+    right: 28px;
+    bottom: 22px;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .map-nav.with-panel { right: 388px; }
+  .map-nav > * { pointer-events: auto; }
+  .map-nav-bar {
+    display: flex;
+    border: 2px solid var(--color-base-content);
+    border-radius: var(--oms-radius);
+    background: var(--color-base-100);
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+  .map-nav-bar button { padding: 4px 10px; min-width: 30px; }
+  .map-nav-bar button + button { border-left: 2px solid var(--color-base-content); }
+  .map-nav-bar button:hover:not(:disabled) { background: var(--oms-cell); }
+  .map-nav-bar button:disabled { opacity: 0.4; }
+  .map-nav-bar button[aria-pressed='true'] { background: var(--color-base-content); color: var(--color-base-100); }
+  .map-nav-bar .pct { min-width: 54px; }
+  .minimap {
+    display: block;
+    border: 2px solid var(--color-base-content);
+    border-radius: var(--oms-radius);
+    background: var(--color-base-100);
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgb(0 0 0 / 0.18);
+  }
+  .minimap .port { fill: color-mix(in srgb, var(--color-brand-amber) 18%, transparent); stroke: var(--color-brand-amber); stroke-width: 2; }
   .map-scroll {
     flex: 1;
     min-height: 0;
     overflow: auto;
-    padding: 22px 28px 60px;
+    /* No top padding here: pinned rows measure from the padding edge, which zoom does not scale.
+       The map's own top padding (.map-export) gives the same room. */
+    padding: 0 28px 60px;
   }
   .map-scroll.with-panel {
     margin-right: 360px;
