@@ -11,15 +11,18 @@ import (
 // keep it current by applying events with ids above LastEventID. Deleted
 // nodes and steps are left out.
 type MapView struct {
-	Map         Map         `json:"map"`
-	Workflow    Workflow    `json:"workflow"`
-	Labels      []Label     `json:"labels"`   // the workspace's, for naming steps' labelIds
-	Personas    []Persona   `json:"personas"` // the workspace's, for naming objectives' personaIds
-	Nodes       []Node      `json:"nodes"`
-	Releases    []Release   `json:"releases"`
-	Steps       []Step      `json:"steps"`
-	Placements  []Placement `json:"placements"`
-	LastEventID int64       `json:"lastEventId"`
+	Map        Map         `json:"map"`
+	Workflow   Workflow    `json:"workflow"`
+	Labels     []Label     `json:"labels"`   // the workspace's, for naming steps' labelIds
+	Personas   []Persona   `json:"personas"` // the workspace's, for naming objectives' personaIds
+	Nodes      []Node      `json:"nodes"`
+	Releases   []Release   `json:"releases"`
+	Steps      []Step      `json:"steps"`
+	Placements []Placement `json:"placements"`
+	// Dependencies touching steps on this map; OtherSteps names their ends on other maps.
+	Dependencies []Dependency `json:"dependencies"`
+	OtherSteps   []StepRef    `json:"otherSteps"`
+	LastEventID  int64        `json:"lastEventId"`
 }
 
 func (s *Store) MapView(ctx context.Context, workspaceID, mapID uuid.UUID) (MapView, error) {
@@ -66,6 +69,10 @@ func (s *Store) MapView(ctx context.Context, workspaceID, mapID uuid.UUID) (MapV
 		v.Placements, err = collect(ctx, tx, scanPlacement,
 			`SELECT p.id, p.step_id, p.activity_id, p.release_id, p.rank FROM placements p JOIN steps s ON s.id = p.step_id
 			 WHERE p.map_id = $1 AND s.deleted_at IS NULL ORDER BY p.rank`, mapID)
+		if err != nil {
+			return err
+		}
+		v.Dependencies, v.OtherSteps, err = mapDependencies(ctx, tx, mapID)
 		return err
 	})
 	return v, err
