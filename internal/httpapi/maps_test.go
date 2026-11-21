@@ -52,7 +52,7 @@ func TestMapRoundTrip(t *testing.T) {
 
 	created := owner.must(201, "POST", b.path+"/steps", map[string]any{"title": "Email field", "activityId": b.act1})
 	step := str(created.body, "step", "id")
-	if str(created.body, "step", "key") != "ACME-1" || str(created.body, "step", "statusId") != b.todo {
+	if str(created.body, "step", "key") != "ACM-1" || str(created.body, "step", "statusId") != b.todo {
 		t.Errorf("created step = %v", created.body)
 	}
 	second := str(owner.must(201, "POST", b.path+"/steps", map[string]any{"title": "Second", "activityId": b.act1, "beforeId": step}).body, "step", "id")

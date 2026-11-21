@@ -36,7 +36,7 @@ func TestStartsBeforeTheSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws, err := s.CreateWorkspace(ctx, u.ID, "Acme", "acme")
+	ws, err := s.CreateWorkspace(ctx, u.ID, "Acme", "acme", "")
 	if err != nil {
 		t.Fatal(err)
 	}

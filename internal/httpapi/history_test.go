@@ -50,7 +50,7 @@ func TestStepHistory(t *testing.T) {
 	if es[2].actor != "ed@example.com" || es[2].before["title"] != "Draft" || es[2].after["statusId"] != b.doing {
 		t.Errorf("update entry = %+v", es[2])
 	}
-	if es[0].actor != "Olive Owner" || es[0].before["title"] != "Final" || es[0].before["key"] != "ACME-1" {
+	if es[0].actor != "Olive Owner" || es[0].before["title"] != "Final" || es[0].before["key"] != "ACM-1" {
 		t.Errorf("a delete names what it deleted: %+v", es[0])
 	}
 

@@ -49,25 +49,25 @@ test('a filter dims or hides steps, counts only matches, and lives in the URL', 
   await bar.getByRole('group', { name: 'Filter by' }).getByLabel('auth').check()
   await page.keyboard.press('Escape')
   await expect(bar.getByText('2 of 3 steps match')).toBeVisible()
-  await expect(card('FILTER-3')).toHaveClass(/dimmed/)
-  await expect(card('FILTER-1')).not.toHaveClass(/dimmed/)
+  await expect(card('FIL-3')).toHaveClass(/dimmed/)
+  await expect(card('FIL-1')).not.toHaveClass(/dimmed/)
   await expect(page.getByRole('heading', { name: 'Release MVP' })).toContainText('1 step')
 
   // Hide: the step goes, its activity column stays.
   await bar.getByRole('button', { name: 'Hide' }).click()
-  await expect(card('FILTER-3')).toHaveCount(0)
+  await expect(card('FIL-3')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Move activity Renew' })).toBeVisible()
 
   // The filter is in the URL, so a reload (or a shared link) keeps it.
   await page.reload()
   await expect(bar.getByText('Label: auth')).toBeVisible()
-  await expect(card('FILTER-3')).toHaveCount(0)
-  await expect(card('FILTER-1')).toBeVisible()
+  await expect(card('FIL-3')).toHaveCount(0)
+  await expect(card('FIL-1')).toBeVisible()
 
   // Fields combine: label auth and text "email" leave one step; persona Admin (through the objective) keeps it.
   await bar.getByLabel('Filter steps by key or title').fill('email')
   await expect(bar.getByText('1 of 3 steps match')).toBeVisible()
-  await expect(card('FILTER-2')).toHaveCount(0)
+  await expect(card('FIL-2')).toHaveCount(0)
   await bar.getByRole('button', { name: /^Filter/ }).click()
   await bar.getByRole('group', { name: 'Filter by' }).getByLabel('Admin').check()
   await page.keyboard.press('Escape')
@@ -78,6 +78,6 @@ test('a filter dims or hides steps, counts only matches, and lives in the URL', 
   await expect(bar.getByText('Label: auth')).toHaveCount(0)
   await bar.getByRole('button', { name: 'Clear' }).click()
   await expect(bar.getByText(/steps match/)).toHaveCount(0)
-  await expect(card('FILTER-3')).toBeVisible()
+  await expect(card('FIL-3')).toBeVisible()
   await expect(bar.getByLabel('Filter steps by key or title')).toHaveValue('')
 })

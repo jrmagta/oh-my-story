@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router'
 import { api, ApiError, type Membership } from '../api'
 import { refreshSession, useMe, useSession } from '../session'
 import { Avatar, ErrorAlert, Field, Loading, Logo, Stripe, ThemeToggle } from '../ui'
+import { ProjectKeyField } from './project-key'
 
 /** Gate for every signed-in screen: sends visitors to setup or sign-in. */
 export function RequireAuth() {
@@ -167,8 +168,15 @@ function CreateWorkspace() {
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [slugEdited, setSlugEdited] = useState(false)
+  const [key, setKey] = useState('')
+  const [keyEdited, setKeyEdited] = useState(false)
+  const [keyOk, setKeyOk] = useState(false)
+  const onKey = useCallback((k: string, edited: boolean) => {
+    setKey(k)
+    if (edited) setKeyEdited(true)
+  }, [])
   const create = useMutation({
-    mutationFn: () => api.createWorkspace({ name, slug }),
+    mutationFn: () => api.createWorkspace({ name, slug, keyPrefix: key }),
     onSuccess: async (w) => {
       await refreshSession(qc)
       navigate(`/w/${w.slug}/members`)
@@ -210,7 +218,8 @@ function CreateWorkspace() {
             }}
           />
         </Field>
-        <button className="btn btn-primary mt-2 w-full" disabled={create.isPending}>
+        <ProjectKeyField name={name} value={key} edited={keyEdited} onChange={onKey} onAvailability={setKeyOk} />
+        <button className="btn btn-primary mt-2 w-full" disabled={create.isPending || !keyOk}>
           Create workspace
         </button>
       </form>

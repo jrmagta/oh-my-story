@@ -78,7 +78,8 @@ sessions (
 
 workspaces (
   id uuid pk, name text not null, slug citext unique not null,
-  key_prefix text not null default 'STEP',      -- step keys: ACME-142; new workspaces take it from their slug
+  key_prefix text not null default 'STEP',      -- the project key, as in CHC-142; unique on the server (0007);
+                                                 -- suggested from the name: "Cheshire Cat" gives CHC
   next_step_seq int not null default 1,
   estimate_unit text not null default 'points',  -- label only: points, days, ...
   created_at, updated_at
@@ -297,4 +298,4 @@ M0 migrates only 0001. The rest are specified here so M1 does not reshape M0 tab
 | 4 | Role scope | Per workspace only; no map-level roles in v1 |
 | 5 | Sign-up | Invite-only. The first user bootstraps the instance as owner |
 | 6 | Soft delete | `maps`, `nodes`, `steps`, `comments` only |
-| 7 | Step keys | One workspace-wide counter, prefix per workspace (`workspaces.key_prefix`, `next_step_seq`) |
+| 7 | Step keys | One workspace-wide counter, and a project key per workspace that is unique on the server (`workspaces.key_prefix`, `next_step_seq`) |

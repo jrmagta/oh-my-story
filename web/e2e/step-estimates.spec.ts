@@ -56,9 +56,9 @@ test('estimates add up per activity, objective, release and map, live in a secon
 
   await page.goto(mapUrl)
   await expect(total(page, 'objective Pay')).toHaveCount(0) // nothing estimated yet
-  await estimate(page, 'ESTIMATES-1', '3')
-  await estimate(page, 'ESTIMATES-2', '5')
-  await estimate(page, 'ESTIMATES-3', '0.5')
+  await estimate(page, 'EST-1', '3')
+  await estimate(page, 'EST-2', '5')
+  await estimate(page, 'EST-3', '0.5')
 
   await expect(total(page, 'activity Card')).toHaveText('8 points')
   await expect(total(page, 'activity Invoice')).toHaveText('0.5 points')
@@ -66,15 +66,15 @@ test('estimates add up per activity, objective, release and map, live in a secon
   await expect(page.getByRole('heading', { name: 'Release MVP' })).toContainText('2 steps · 8 points')
   await expect(page.getByRole('heading', { name: 'Release Unscheduled' })).toContainText('1 step · 0.5 points')
   await expect(page.getByText(/· 3 steps · 8\.5 points$/)).toBeVisible()
-  await expect(page.getByRole('button', { name: 'ESTIMATES-1 Enter card', exact: true })).toContainText('3')
+  await expect(page.getByRole('button', { name: 'EST-1 Enter card', exact: true })).toContainText('3')
 
   await expect(total(other, 'objective Pay')).toHaveText('8.5 points')
-  await estimate(page, 'ESTIMATES-1', '1')
+  await estimate(page, 'EST-1', '1')
   await expect(total(other, 'objective Pay')).toHaveText('6.5 points')
 
   // Clearing an estimate counts the step as unestimated.
-  await page.getByRole('button', { name: /^ESTIMATES-3 / }).click()
-  await expect(panel(page)).toHaveAccessibleName('Step ESTIMATES-3')
+  await page.getByRole('button', { name: /^EST-3 / }).click()
+  await expect(panel(page)).toHaveAccessibleName('Step EST-3')
   await panel(page).getByLabel('Estimate (points)').fill('')
   await panel(page).getByLabel('Estimate (points)').press('Enter')
   await expect(total(page, 'objective Pay')).toHaveText('6 points (1 unestimated)')
@@ -82,7 +82,7 @@ test('estimates add up per activity, objective, release and map, live in a secon
   await expect(total(page, 'activity Invoice')).toHaveCount(0)
 
   await panel(page).getByRole('tab', { name: 'History' }).click()
-  await expect(panel(page)).toContainText('cleared the estimate of ESTIMATES-3')
+  await expect(panel(page)).toContainText('cleared the estimate of EST-3')
   await ctx.close()
 })
 
@@ -91,10 +91,10 @@ test('an admin changes the estimate unit in settings', async ({ page }) => {
   await page.goto(`/w/${slug}/settings`)
   await page.getByLabel('Estimate unit').fill('days')
   await page.getByRole('button', { name: 'Save settings' }).click()
-  await expect(page.getByRole('status')).toHaveText('Settings saved.')
+  await expect(page.getByRole('status').filter({ hasText: 'Settings saved.' })).toBeVisible()
 
   await page.goto(mapUrl)
   await expect(total(page, 'objective Pay')).toHaveText('6 days (1 unestimated)')
-  await page.getByRole('button', { name: /^ESTIMATES-2 / }).click()
-  await expect(page.getByRole('complementary', { name: 'Step ESTIMATES-2' }).getByLabel('Estimate (days)')).toHaveValue('5')
+  await page.getByRole('button', { name: /^EST-2 / }).click()
+  await expect(page.getByRole('complementary', { name: 'Step EST-2' }).getByLabel('Estimate (days)')).toHaveValue('5')
 })
