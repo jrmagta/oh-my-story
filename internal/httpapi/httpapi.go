@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/jrmagta/oh-my-story/api"
 	"github.com/jrmagta/oh-my-story/internal/auth"
 	"github.com/jrmagta/oh-my-story/internal/config"
 	"github.com/jrmagta/oh-my-story/internal/live"
@@ -35,6 +36,8 @@ type Server struct {
 	mail  mail.Sender
 	oidc  *OIDC // nil when SSO is off
 	hub   *live.Hub
+	// routes lists the patterns registered, in order (see handle).
+	routes []string
 }
 
 // New returns the server's handler. hub must be started. ui serves the web
@@ -42,38 +45,45 @@ type Server struct {
 func New(cfg config.Config, pool *pgxpool.Pool, sender mail.Sender, oidc *OIDC, hub *live.Hub, ui http.Handler) http.Handler {
 	s := &Server{cfg: cfg, pool: pool, store: store.New(pool), mail: sender, oidc: oidc, hub: hub}
 	mux := http.NewServeMux()
+	s.register(mux, ui)
+	return s.csrf(mux)
+}
 
-	mux.HandleFunc("GET /healthz", s.healthz)
+// register adds every route, then the catch-all for other paths.
+func (s *Server) register(mux *http.ServeMux, ui http.Handler) {
 
-	mux.HandleFunc("GET /api/setup", s.getSetup)
-	mux.HandleFunc("POST /api/setup", s.postSetup)
-	mux.HandleFunc("POST /api/auth/login", s.login)
-	mux.HandleFunc("POST /api/auth/logout", s.logout)
-	mux.HandleFunc("GET /api/auth/providers", s.providers)
-	mux.HandleFunc("GET /api/me", s.authed(s.me))
-	mux.HandleFunc("GET /auth/oidc/login", s.oidcLogin)
-	mux.HandleFunc("GET /auth/oidc/callback", s.oidcCallback)
+	s.handle(mux, "GET /healthz", s.healthz)
 
-	mux.HandleFunc("GET /api/workspaces", s.authed(s.listWorkspaces))
-	mux.HandleFunc("POST /api/workspaces", s.authed(s.createWorkspace))
-	mux.HandleFunc("GET /api/project-keys", s.authed(s.projectKeys))
-	mux.HandleFunc("GET /api/shared/{token}", s.sharedMap)
-	mux.HandleFunc("GET /api/workspaces/{slug}", s.inWorkspace(role.View, s.getWorkspace))
-	mux.HandleFunc("PATCH /api/workspaces/{slug}", s.inWorkspace(role.ManageSettings, s.patchWorkspace))
-	mux.HandleFunc("DELETE /api/workspaces/{slug}", s.inWorkspace(role.DeleteWorkspace, s.deleteWorkspace))
-	mux.HandleFunc("GET /api/workspaces/{slug}/members", s.inWorkspace(role.View, s.listMembers))
-	mux.HandleFunc("PATCH /api/workspaces/{slug}/members/{userId}", s.inWorkspace(role.ManageMembers, s.patchMember))
+	s.handle(mux, "GET /api/setup", s.getSetup)
+	s.handle(mux, "POST /api/setup", s.postSetup)
+	s.handle(mux, "POST /api/auth/login", s.login)
+	s.handle(mux, "POST /api/auth/logout", s.logout)
+	s.handle(mux, "GET /api/auth/providers", s.providers)
+	s.handle(mux, "GET /api/me", s.authed(s.me))
+	s.handle(mux, "GET /auth/oidc/login", s.oidcLogin)
+	s.handle(mux, "GET /auth/oidc/callback", s.oidcCallback)
+
+	s.handle(mux, "GET /api/workspaces", s.authed(s.listWorkspaces))
+	s.handle(mux, "POST /api/workspaces", s.authed(s.createWorkspace))
+	s.handle(mux, "GET /api/project-keys", s.authed(s.projectKeys))
+	s.handle(mux, "GET /api/shared/{token}", s.sharedMap)
+	s.handle(mux, "GET /api/workspaces/{slug}", s.inWorkspace(role.View, s.getWorkspace))
+	s.handle(mux, "PATCH /api/workspaces/{slug}", s.inWorkspace(role.ManageSettings, s.patchWorkspace))
+	s.handle(mux, "DELETE /api/workspaces/{slug}", s.inWorkspace(role.DeleteWorkspace, s.deleteWorkspace))
+	s.handle(mux, "GET /api/workspaces/{slug}/members", s.inWorkspace(role.View, s.listMembers))
+	s.handle(mux, "PATCH /api/workspaces/{slug}/members/{userId}", s.inWorkspace(role.ManageMembers, s.patchMember))
 	// Removing yourself only needs membership; the handler checks ManageMembers for anyone else.
-	mux.HandleFunc("DELETE /api/workspaces/{slug}/members/{userId}", s.inWorkspace(role.View, s.deleteMember))
-	mux.HandleFunc("GET /api/workspaces/{slug}/invites", s.inWorkspace(role.ManageMembers, s.listInvites))
-	mux.HandleFunc("POST /api/workspaces/{slug}/invites", s.inWorkspace(role.ManageMembers, s.createInvite))
-	mux.HandleFunc("DELETE /api/workspaces/{slug}/invites/{id}", s.inWorkspace(role.ManageMembers, s.revokeInvite))
-	mux.HandleFunc("POST /api/auth/reset", s.requestReset)
-	mux.HandleFunc("GET /api/auth/reset/{token}", s.getReset)
-	mux.HandleFunc("POST /api/auth/reset/{token}", s.resetPassword)
-	mux.HandleFunc("GET /api/invites/{token}", s.getInvite)
-	mux.HandleFunc("POST /api/invites/{token}/accept", s.acceptInvite)
+	s.handle(mux, "DELETE /api/workspaces/{slug}/members/{userId}", s.inWorkspace(role.View, s.deleteMember))
+	s.handle(mux, "GET /api/workspaces/{slug}/invites", s.inWorkspace(role.ManageMembers, s.listInvites))
+	s.handle(mux, "POST /api/workspaces/{slug}/invites", s.inWorkspace(role.ManageMembers, s.createInvite))
+	s.handle(mux, "DELETE /api/workspaces/{slug}/invites/{id}", s.inWorkspace(role.ManageMembers, s.revokeInvite))
+	s.handle(mux, "POST /api/auth/reset", s.requestReset)
+	s.handle(mux, "GET /api/auth/reset/{token}", s.getReset)
+	s.handle(mux, "POST /api/auth/reset/{token}", s.resetPassword)
+	s.handle(mux, "GET /api/invites/{token}", s.getInvite)
+	s.handle(mux, "POST /api/invites/{token}/accept", s.acceptInvite)
 	s.mapRoutes(mux)
+	s.handle(mux, "GET /api/openapi.yaml", serveOpenAPI)
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -85,8 +95,19 @@ func New(cfg config.Config, pool *pgxpool.Pool, sender mail.Sender, oidc *OIDC, 
 			http.NotFound(w, r)
 		}
 	})
+}
 
-	return s.csrf(mux)
+// handle registers a route and remembers its pattern, so a test can hold the
+// routes against the OpenAPI description.
+func (s *Server) handle(mux *http.ServeMux, pattern string, h http.HandlerFunc) {
+	s.routes = append(s.routes, pattern)
+	mux.HandleFunc(pattern, h)
+}
+
+// serveOpenAPI sends the API's description. No sign-in needed.
+func serveOpenAPI(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+	_, _ = w.Write(api.OpenAPI)
 }
 
 func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {

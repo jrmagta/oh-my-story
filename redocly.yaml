@@ -1,0 +1,9 @@
+# Lints api/openapi.yaml (CI: lint job) with Redocly's recommended rules,
+# less the ones this API deliberately does not meet, so any new warning shows.
+extends:
+  - recommended
+rules:
+  # Some public endpoints cannot fail (setup status, sign-in options, this file).
+  operation-4xx-response: off
+  # The live feed answers 101 and becomes a WebSocket; there is no 2xx.
+  operation-2xx-response: off

@@ -45,7 +45,11 @@ export function ApiTokens({ ws }: { ws: Membership }) {
       </h2>
       <p className="text-muted mt-1 mb-4 text-sm font-medium">
         Scripts and other tools use a token as <code>Authorization: Bearer oms_…</code> on this workspace's API. Read tokens act
-        like a viewer, write tokens like an editor; history names the token.
+        like a viewer, write tokens like an editor; history names the token. The{' '}
+        <a className="underline" href="/api/openapi.yaml" target="_blank" rel="noreferrer">
+          API description
+        </a>{' '}
+        (OpenAPI) lists every endpoint.
       </p>
       <ErrorAlert error={create.error ?? revoke.error} />
       <form

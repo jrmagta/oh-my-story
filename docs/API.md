@@ -231,6 +231,10 @@ An event is `{id, mapId, actorId, entity, entityId, action, before, after, at}`.
 
 The upgrade needs the session cookie and an `Origin` equal to `OMS_BASE_URL`'s host (or none, for non-browser clients). The server pings every 25 seconds and closes the socket within a minute of the caller leaving the workspace.
 
+## OpenAPI
+
+`api/openapi.yaml` describes every `/api` endpoint as OpenAPI 3.1, written by hand. The server sends it at `GET /api/openapi.yaml` (no sign-in) and Settings → API tokens links to it. `TestOpenAPICoversRoutes` fails when the server has a route the file does not describe, or the reverse, and `TestOpenAPISchemasMatchStructs` when a schema's fields differ from the Go struct it describes; CI lints the file with Redocly (`redocly.yaml` lists the rules it leaves off, and why). The file keeps one layout, which that test reads: paths two spaces in under `paths:`, their methods four spaces in. When an endpoint changes, change the file and this document together.
+
 ## Validation
 
 - Email: trimmed, must contain one `@`; stored case-insensitively.

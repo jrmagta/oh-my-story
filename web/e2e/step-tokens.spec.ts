@@ -36,6 +36,12 @@ test('an admin makes an API token, a script uses it, history names it, and revok
   await expect(listed).toContainText('not used yet')
   await expect(listed).not.toContainText(token)
 
+  // The section links to the API description, which anyone can fetch.
+  await expect(section.getByRole('link', { name: 'API description' })).toHaveAttribute('href', '/api/openapi.yaml')
+  const spec = await page.request.get('/api/openapi.yaml')
+  expect(spec.headers()['content-type']).toMatch(/^application\/yaml/)
+  expect(await spec.text()).toContain('openapi: "3.1.0"')
+
   // A script with no session uses it.
   const script = await request.newContext({ baseURL, extraHTTPHeaders: { Authorization: `Bearer ${token}` } })
   const made = await script.post(`${api}/steps`, { data: { title: 'Deployed build 42', activityId: act.id, releaseId: null } })

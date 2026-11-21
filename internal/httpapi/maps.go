@@ -87,11 +87,11 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 		{"DELETE " + m + "/views/{id}", role.View, s.deleteView},
 	}
 	for _, rt := range routes {
-		mux.HandleFunc(rt.pattern, s.inWorkspace(rt.action, mapEndpoint(rt.h)))
+		s.handle(mux, rt.pattern, s.inWorkspace(rt.action, mapEndpoint(rt.h)))
 	}
-	mux.HandleFunc("GET "+m+"/live", s.inWorkspace(role.View, s.liveMap))
-	mux.HandleFunc("GET "+m+"/history", s.inWorkspace(role.View, mapEndpoint(s.mapHistory)))
-	mux.HandleFunc("GET "+m+"/steps/{id}/history", s.inWorkspace(role.View, mapEndpoint(s.stepHistory)))
+	s.handle(mux, "GET "+m+"/live", s.inWorkspace(role.View, s.liveMap))
+	s.handle(mux, "GET "+m+"/history", s.inWorkspace(role.View, mapEndpoint(s.mapHistory)))
+	s.handle(mux, "GET "+m+"/steps/{id}/history", s.inWorkspace(role.View, mapEndpoint(s.stepHistory)))
 }
 
 // mapRequest is what every map handler needs: the caller, the workspace and
