@@ -58,7 +58,17 @@ export interface InvitePreview {
 }
 
 export interface Providers {
-  oidc: { enabled: false } | { enabled: true; name: string }
+  oidc: { enabled: false } | { enabled: true; name: string; directory?: boolean }
+}
+
+/** Someone in the identity provider's directory (Keycloak), as Members shows them. */
+export interface DirectoryUser {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  name: string
+  member: boolean
 }
 
 export type Category = 'todo' | 'doing' | 'done' | 'blocked'
@@ -318,6 +328,10 @@ export const api = {
   login: (b: { email: string; password: string }) => request<User>('POST', '/api/auth/login', b),
   logout: () => request<void>('POST', '/api/auth/logout', {}),
   providers: () => request<Providers>('GET', '/api/auth/providers'),
+  /** Admins, with OMS_OIDC_DIRECTORY set: people in the identity provider matching q. */
+  directory: (slug: string, q: string) => request<DirectoryUser[]>('GET', `${ws(slug)}/directory?${new URLSearchParams({ q }).toString()}`),
+  /** Admins: make someone from the directory a member at once. */
+  addMember: (slug: string, b: { directoryId: string; role: Role }) => request<Member>('POST', `${ws(slug)}/members`, b),
   /** Always succeeds; an email goes out only if a local account has that address. */
   requestReset: (b: { email: string }) => request<void>('POST', '/api/auth/reset', b),
   resetPreview: (token: string) => request<{ email: string }>('GET', `/api/auth/reset/${encodeURIComponent(token)}`),

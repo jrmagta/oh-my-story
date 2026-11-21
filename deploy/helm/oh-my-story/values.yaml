@@ -52,6 +52,10 @@ oidc:
   clientSecret: ""
   # Label on the sign-in button.
   name: ""
+  # "keycloak": admins can add people from the Keycloak realm in Members. The
+  # client needs a service account with realm-management view-users and
+  # query-users, and (Keycloak 26.8+) the kc-admin-api client scope.
+  directory: ""
 
 migration:
   backoffLimit: 6

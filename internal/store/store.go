@@ -175,19 +175,44 @@ func (s *Store) DeleteSession(ctx context.Context, tokenHash []byte) error {
 
 // ---- SSO identities ----
 
+// Profile is what the identity provider says about a person. It is the
+// source for SSO users' names and email: applied at every sign-in.
+type Profile struct {
+	Email, FirstName, LastName string
+	// DisplayName is "First Last", or the provider's name, or the email.
+	DisplayName string
+}
+
+// syncProfile brings a user's names and email in line with their provider.
+// An email another account already has is left as it was.
+func syncProfile(ctx context.Context, tx pgx.Tx, u *User, p Profile) error {
+	return tx.QueryRow(ctx,
+		`UPDATE users SET first_name = NULLIF($2, ''), last_name = NULLIF($3, ''), display_name = $4,
+		   email = CASE WHEN EXISTS (SELECT 1 FROM users o WHERE o.email = $5 AND o.id <> $1) THEN email ELSE $5 END,
+		   updated_at = now()
+		 WHERE id = $1 RETURNING email, display_name`,
+		u.ID, p.FirstName, p.LastName, p.DisplayName, p.Email).Scan(&u.Email, &u.DisplayName)
+}
+
+// lockIdentity serialises work on one provider identity and one email, so two
+// requests for the same person cannot both create the user or the identity.
+func lockIdentity(ctx context.Context, tx pgx.Tx, issuer, subject, email string) error {
+	_, err := tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtext('oms.oidc.subject:' || $1 || ' ' || $2)),
+		        pg_advisory_xact_lock(hashtext('oms.oidc.email:' || lower($3)))`,
+		issuer, subject, email)
+	return err
+}
+
 // ResolveOIDCUser finds or creates the user for a verified OIDC identity:
 // a linked identity wins; otherwise a user with the same email is linked;
 // otherwise a user is created only if an open invite exists for the email.
-// A deactivated user gets ErrDisabled.
-func (s *Store) ResolveOIDCUser(ctx context.Context, issuer, subject, email, name string) (User, error) {
+// A deactivated user gets ErrDisabled. The user's names and email then follow p.
+func (s *Store) ResolveOIDCUser(ctx context.Context, issuer, subject string, p Profile) (User, error) {
+	email, name := p.Email, p.DisplayName
 	var u User
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		// Two first-time callbacks for one person would both try to create the
-		// user or the identity. Take the locks in a fixed order so one waits.
-		if _, err := tx.Exec(ctx,
-			`SELECT pg_advisory_xact_lock(hashtext('oms.oidc.subject:' || $1 || ' ' || $2)),
-			        pg_advisory_xact_lock(hashtext('oms.oidc.email:' || lower($3)))`,
-			issuer, subject, email); err != nil {
+		if err := lockIdentity(ctx, tx, issuer, subject, email); err != nil {
 			return err
 		}
 
@@ -200,7 +225,7 @@ func (s *Store) ResolveOIDCUser(ctx context.Context, issuer, subject, email, nam
 			return ErrDisabled
 		}
 		if err == nil {
-			return nil
+			return syncProfile(ctx, tx, &u, p)
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
@@ -227,11 +252,100 @@ func (s *Store) ResolveOIDCUser(ctx context.Context, issuer, subject, email, nam
 		case err != nil:
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO identities (id, user_id, issuer, subject) VALUES ($1, $2, $3, $4)`,
-			newID(), u.ID, issuer, subject)
-		return err
+		if _, err = tx.Exec(ctx, `INSERT INTO identities (id, user_id, issuer, subject) VALUES ($1, $2, $3, $4)`,
+			newID(), u.ID, issuer, subject); err != nil {
+			return err
+		}
+		return syncProfile(ctx, tx, &u, p)
 	})
 	return u, err
+}
+
+// AddDirectoryMember makes the person behind a provider identity a member of
+// the workspace with role, creating their account (no password; they sign in
+// with SSO) or linking an existing one with their email. ErrConflict when they
+// are a member already; ErrDisabled when their account is deactivated.
+func (s *Store) AddDirectoryMember(ctx context.Context, workspaceID uuid.UUID, issuer, subject string, p Profile, r role.Role) (Member, error) {
+	var m Member
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := lockIdentity(ctx, tx, issuer, subject, p.Email); err != nil {
+			return err
+		}
+		var u User
+		var active, linked bool
+		err := tx.QueryRow(ctx,
+			`SELECT u.id, u.email, u.display_name, u.is_active FROM identities i JOIN users u ON u.id = i.user_id
+			 WHERE i.issuer = $1 AND i.subject = $2`, issuer, subject).Scan(&u.ID, &u.Email, &u.DisplayName, &active)
+		switch {
+		case err == nil:
+			linked = true
+		case errors.Is(err, pgx.ErrNoRows):
+			err = tx.QueryRow(ctx, `SELECT id, email, display_name, is_active FROM users WHERE email = $1`, p.Email).
+				Scan(&u.ID, &u.Email, &u.DisplayName, &active)
+			if errors.Is(err, pgx.ErrNoRows) {
+				if u, err = insertUser(ctx, tx, p.Email, p.DisplayName, nil); err != nil {
+					return err
+				}
+				active = true
+			} else if err != nil {
+				return err
+			}
+		default:
+			return err
+		}
+		if !active {
+			return ErrDisabled
+		}
+		if !linked {
+			if _, err := tx.Exec(ctx, `INSERT INTO identities (id, user_id, issuer, subject) VALUES ($1, $2, $3, $4)`,
+				newID(), u.ID, issuer, subject); err != nil {
+				return err
+			}
+		}
+		if err := syncProfile(ctx, tx, &u, p); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx,
+			`INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+			workspaceID, u.ID, r.String())
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrConflict
+		}
+		m = Member{UserID: u.ID, Email: u.Email, DisplayName: u.DisplayName, Role: r}
+		return nil
+	})
+	return m, err
+}
+
+// DirectoryMembers says which of the given provider identities, or emails,
+// already belong to members of the workspace.
+func (s *Store) DirectoryMembers(ctx context.Context, workspaceID uuid.UUID, issuer string, subjects, emails []string) (map[string]bool, map[string]bool, error) {
+	bySubject, byEmail := map[string]bool{}, map[string]bool{}
+	rows, err := s.pool.Query(ctx,
+		`SELECT 's', i.subject FROM identities i JOIN workspace_members m ON m.user_id = i.user_id
+		 WHERE m.workspace_id = $1 AND i.issuer = $2 AND i.subject = ANY($3)
+		 UNION ALL
+		 SELECT 'e', lower(u.email) FROM users u JOIN workspace_members m ON m.user_id = u.id
+		 WHERE m.workspace_id = $1 AND lower(u.email) = ANY($4)`, workspaceID, issuer, subjects, emails)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var kind, v string
+		if err := rows.Scan(&kind, &v); err != nil {
+			return nil, nil, err
+		}
+		if kind == "s" {
+			bySubject[v] = true
+		} else {
+			byEmail[v] = true
+		}
+	}
+	return bySubject, byEmail, rows.Err()
 }
 
 // ---- workspaces ----

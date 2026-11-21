@@ -10,12 +10,22 @@ name: oh-my-story-lan
 #
 # OMS_BASE_URL must be the address people type, e.g. http://story.example.home;
 # the server refuses writes from any other origin.
+#
+# Single sign-on with an existing Keycloak (or any OIDC provider) is off
+# unless OMS_OIDC_ISSUER is set; pass the OMS_OIDC_* variables to make lan.
+# See docs/SSO.md.
 
 x-app-env: &app-env
   OMS_DATABASE_URL: postgres://oms:oms@postgres:5432/oms?sslmode=disable
   OMS_BASE_URL: ${OMS_BASE_URL:?set OMS_BASE_URL to the address people will use}
   OMS_SMTP_ADDR: mailpit:1025
   OMS_MAIL_FROM: oh-my-story <no-reply@oh-my-story.local>
+  OMS_OIDC_ISSUER: ${OMS_OIDC_ISSUER:-}
+  OMS_OIDC_DISCOVERY_URL: ${OMS_OIDC_DISCOVERY_URL:-}
+  OMS_OIDC_CLIENT_ID: ${OMS_OIDC_CLIENT_ID:-}
+  OMS_OIDC_CLIENT_SECRET: ${OMS_OIDC_CLIENT_SECRET:-}
+  OMS_OIDC_NAME: ${OMS_OIDC_NAME:-}
+  OMS_OIDC_DIRECTORY: ${OMS_OIDC_DIRECTORY:-}
 
 services:
   postgres:

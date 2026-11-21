@@ -74,6 +74,8 @@ func (s *Server) register(mux *http.ServeMux, ui http.Handler) {
 	s.handle(mux, "PATCH /api/workspaces/{slug}/members/{userId}", s.inWorkspace(role.ManageMembers, s.patchMember))
 	// Removing yourself only needs membership; the handler checks ManageMembers for anyone else.
 	s.handle(mux, "DELETE /api/workspaces/{slug}/members/{userId}", s.inWorkspace(role.View, s.deleteMember))
+	s.handle(mux, "POST /api/workspaces/{slug}/members", s.inWorkspace(role.ManageMembers, s.addDirectoryMember))
+	s.handle(mux, "GET /api/workspaces/{slug}/directory", s.inWorkspace(role.ManageMembers, s.directorySearch))
 	s.handle(mux, "GET /api/workspaces/{slug}/invites", s.inWorkspace(role.ManageMembers, s.listInvites))
 	s.handle(mux, "POST /api/workspaces/{slug}/invites", s.inWorkspace(role.ManageMembers, s.createInvite))
 	s.handle(mux, "DELETE /api/workspaces/{slug}/invites/{id}", s.inWorkspace(role.ManageMembers, s.revokeInvite))

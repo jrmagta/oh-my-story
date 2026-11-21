@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useOutletContext } from 'react-router'
 import { api, atLeast, roles, type Invite, type Member, type Membership, type Role } from '../api'
@@ -37,7 +37,12 @@ export function MembersPage() {
           )}
           {canManage && <OpenInvites ws={ws} />}
         </section>
-        {canManage && <InviteForm ws={ws} />}
+        {canManage && (
+          <div className="flex flex-col gap-6 self-start">
+            <AddFromDirectory ws={ws} />
+            <InviteForm ws={ws} />
+          </div>
+        )}
       </main>
     </>
   )
@@ -171,6 +176,84 @@ function InviteRow({ ws, inv }: { ws: Membership; inv: Invite }) {
   )
 }
 
+/**
+ * Admins add people who are already in the identity provider (Keycloak): they
+ * become members at once, named from the directory, and sign in with SSO.
+ * Shown only when the directory is set up.
+ */
+function AddFromDirectory({ ws }: { ws: Membership }) {
+  const qc = useQueryClient()
+  const providers = useQuery({ queryKey: ['providers'], queryFn: api.providers })
+  const [q, setQ] = useState('')
+  const [query, setQuery] = useState('')
+  const [role, setRole] = useState<Role>('editor')
+  const [added, setAdded] = useState<string | null>(null)
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(q.trim()), 250)
+    return () => clearTimeout(t)
+  }, [q])
+  const found = useQuery({
+    queryKey: ['ws', ws.slug, 'directory', query],
+    queryFn: () => api.directory(ws.slug, query),
+    enabled: query.length > 0,
+  })
+  const add = useMutation({
+    mutationFn: (id: string) => api.addMember(ws.slug, { directoryId: id, role }),
+    onMutate: () => setAdded(null),
+    onSuccess: async (m) => {
+      setAdded(m.displayName)
+      await qc.invalidateQueries({ queryKey: ['ws', ws.slug, 'members'] })
+      await qc.invalidateQueries({ queryKey: ['ws', ws.slug, 'directory'] })
+    },
+  })
+  const oidc = providers.data?.oidc
+  if (!oidc?.enabled || !oidc.directory) return null
+  return (
+    <section aria-labelledby="directory-h" className="bg-base-200 border-line border p-6">
+      <h2 id="directory-h" className="up mb-2 text-xl">
+        Add from {oidc.name}
+      </h2>
+      <p className="text-muted mb-4 text-sm font-medium">
+        People already in {oidc.name} become members at once and sign in with it. No email is sent.
+      </p>
+      {added && <Notice>{added} is a member now.</Notice>}
+      <ErrorAlert error={add.error ?? found.error} />
+      <Field label="Find by name or email">
+        <input className="input w-full" type="search" maxLength={100} value={q} onChange={(e) => setQ(e.target.value)} />
+      </Field>
+      <Field label="Role">
+        <select className="select w-full font-bold capitalize" aria-label="Role for people added" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+          {invitable.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {found.data && (
+        <ul className="rows" aria-label={`People in ${oidc.name}`}>
+          {found.data.length === 0 && <li className="text-muted text-sm font-medium">Nobody matches.</li>}
+          {found.data.map((u) => (
+            <li key={u.id} className="flex items-center gap-3 py-2">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-bold">{u.name}</span>
+                <span className="text-muted block truncate text-xs font-medium">{u.email}</span>
+              </span>
+              {u.member ? (
+                <span className="text-muted text-xs font-extrabold uppercase">Member</span>
+              ) : (
+                <button type="button" className="btn btn-xs btn-ol" aria-label={`Add ${u.name}`} disabled={add.isPending} onClick={() => add.mutate(u.id)}>
+                  Add
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 function InviteForm({ ws }: { ws: Membership }) {
   const qc = useQueryClient()
   const [email, setEmail] = useState('')
@@ -186,7 +269,7 @@ function InviteForm({ ws }: { ws: Membership }) {
     },
   })
   return (
-    <section aria-labelledby="invite-h" className="bg-base-200 border-line self-start border p-6">
+    <section aria-labelledby="invite-h" className="bg-base-200 border-line border p-6">
       <h2 id="invite-h" className="up mb-5 text-xl">
         Invite someone
       </h2>

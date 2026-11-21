@@ -35,6 +35,7 @@ export default defineConfig({
       OMS_OIDC_CLIENT_ID: 'oh-my-story',
       OMS_OIDC_CLIENT_SECRET: 'dev-only-client-secret',
       OMS_OIDC_NAME: 'Keycloak',
+      OMS_OIDC_DIRECTORY: 'keycloak',
     },
   },
 })
