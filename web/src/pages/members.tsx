@@ -16,14 +16,14 @@ export function MembersPage() {
 
   return (
     <>
-      <PageBand kicker={`${ws.name} › Members`} title="Members">
+      <PageBand kicker={`${ws.name} › Members`} title="Members" wide>
         {count !== undefined && (
           <p className="label-up pb-1">
             {count} {count === 1 ? 'member' : 'members'} · you are {ws.role}
           </p>
         )}
       </PageBand>
-      <main className="mx-auto grid max-w-5xl gap-12 px-7 py-10 lg:grid-cols-[1fr_340px]">
+      <main className="mx-auto grid max-w-7xl gap-12 px-7 py-10 lg:grid-cols-[1fr_340px]">
         <section aria-labelledby="members-h">
           <h2 id="members-h" className="label-up mb-3">
             People
@@ -53,7 +53,15 @@ function MemberList({ ws, members }: { ws: Membership; members: Member[] }) {
   return (
     <>
       <ErrorAlert error={error} />
-      <ul className="rows" aria-label="Members">
+      <div className="member-row member-head" aria-hidden>
+        <span />
+        <span>First name</span>
+        <span>Last name</span>
+        <span>Email</span>
+        <span>Role</span>
+        <span />
+      </div>
+      <ul className="rows member-rows" aria-label="Members">
         {members.map((m) => (
           <MemberRow key={m.userId} ws={ws} m={m} onError={setError} />
         ))}
@@ -96,18 +104,30 @@ function MemberRow({ ws, m, onError }: { ws: Membership; m: Member; onError: (e:
   })
 
   return (
-    <li>
-      <Avatar id={m.userId} name={m.displayName} size={38} />
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-extrabold">
+    <li className="member-row">
+      <Avatar id={m.userId} name={m.displayName} size={34} />
+      {/* Accounts made with a password have one name, shown across both name columns. */}
+      {m.firstName || m.lastName ? (
+        <>
+          <span className="truncate font-extrabold">{m.firstName}</span>
+          {/* A space between the names, so the row reads "Carol Directory"; the grid ignores it. */}{' '}
+          <span className="truncate font-extrabold">
+            {m.lastName}
+            {self && <span className="text-muted font-semibold"> (you)</span>}
+          </span>
+        </>
+      ) : (
+        <span className="col-span-2 truncate font-extrabold">
           {m.displayName}
           {self && <span className="text-muted font-semibold"> (you)</span>}
-        </p>
-        <p className="text-muted truncate text-sm font-medium">{m.email}</p>
-      </div>
+        </span>
+      )}
+      <span className="text-muted truncate text-sm font-medium" title={m.email}>
+        {m.email}
+      </span>
       {canTouch ? (
         <select
-          className="select select-sm w-36 font-bold capitalize"
+          className="select select-sm w-full font-bold capitalize"
           aria-label={`Role for ${m.displayName}`}
           value={m.role}
           disabled={setRole.isPending}
@@ -120,9 +140,9 @@ function MemberRow({ ws, m, onError }: { ws: Membership; m: Member; onError: (e:
           ))}
         </select>
       ) : (
-        <span className="label-up w-36 text-right">{m.role}</span>
+        <span className="label-up">{m.role}</span>
       )}
-      <div className="w-32 text-right">
+      <div className="text-right">
         {(self || canTouch) && (
           <ConfirmButton
             label={self ? 'Leave' : 'Remove'}

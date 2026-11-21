@@ -57,7 +57,10 @@ type Member struct {
 	UserID      uuid.UUID `json:"userId"`
 	Email       string    `json:"email"`
 	DisplayName string    `json:"displayName"`
-	Role        role.Role `json:"role"`
+	// First and last name, from the identity provider; null for accounts made with a password.
+	FirstName *string   `json:"firstName"`
+	LastName  *string   `json:"lastName"`
+	Role      role.Role `json:"role"`
 }
 
 type Invite struct {
@@ -315,6 +318,12 @@ func (s *Store) AddDirectoryMember(ctx context.Context, workspaceID uuid.UUID, i
 			return ErrConflict
 		}
 		m = Member{UserID: u.ID, Email: u.Email, DisplayName: u.DisplayName, Role: r}
+		if p.FirstName != "" {
+			m.FirstName = &p.FirstName
+		}
+		if p.LastName != "" {
+			m.LastName = &p.LastName
+		}
 		return nil
 	})
 	return m, err
@@ -441,8 +450,8 @@ func (s *Store) DeleteWorkspace(ctx context.Context, id uuid.UUID) error {
 
 func (s *Store) Members(ctx context.Context, workspaceID uuid.UUID) ([]Member, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT u.id, u.email, u.display_name, m.role FROM workspace_members m JOIN users u ON u.id = m.user_id
-		 WHERE m.workspace_id = $1 ORDER BY u.display_name`, workspaceID)
+		`SELECT u.id, u.email, u.display_name, u.first_name, u.last_name, m.role FROM workspace_members m JOIN users u ON u.id = m.user_id
+		 WHERE m.workspace_id = $1 ORDER BY coalesce(u.first_name, u.display_name), u.last_name NULLS FIRST, u.email`, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +460,7 @@ func (s *Store) Members(ctx context.Context, workspaceID uuid.UUID) ([]Member, e
 	for rows.Next() {
 		var m Member
 		var r string
-		if err := rows.Scan(&m.UserID, &m.Email, &m.DisplayName, &r); err != nil {
+		if err := rows.Scan(&m.UserID, &m.Email, &m.DisplayName, &m.FirstName, &m.LastName, &r); err != nil {
 			return nil, err
 		}
 		if m.Role, err = role.Parse(r); err != nil {
@@ -473,9 +482,9 @@ func (s *Store) changeMember(ctx context.Context, workspaceID, userID uuid.UUID,
 		}
 		var r string
 		err := tx.QueryRow(ctx,
-			`SELECT u.id, u.email, u.display_name, m.role FROM workspace_members m JOIN users u ON u.id = m.user_id
+			`SELECT u.id, u.email, u.display_name, u.first_name, u.last_name, m.role FROM workspace_members m JOIN users u ON u.id = m.user_id
 			 WHERE m.workspace_id = $1 AND m.user_id = $2`, workspaceID, userID).
-			Scan(&m.UserID, &m.Email, &m.DisplayName, &r)
+			Scan(&m.UserID, &m.Email, &m.DisplayName, &m.FirstName, &m.LastName, &r)
 		if err != nil {
 			return notFound(err)
 		}

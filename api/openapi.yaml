@@ -2869,10 +2869,15 @@ components:
           type: "string"
         displayName:
           type: "string"
+        firstName:
+          type: ["string", "null"]
+          description: "From the identity provider; null for accounts made with a password."
+        lastName:
+          type: ["string", "null"]
         role:
           type: "string"
           enum: ["viewer", "commenter", "editor", "admin", "owner"]
-      required: ["userId", "email", "displayName", "role"]
+      required: ["userId", "email", "displayName", "firstName", "lastName", "role"]
       additionalProperties: false
     Invite:
       type: "object"

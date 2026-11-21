@@ -95,10 +95,11 @@ export function AppShell() {
   )
 }
 
-export function PageBand({ kicker, title, children }: { kicker: string; title: string; children?: ReactNode }) {
+/** A page's title band. wide matches pages whose content uses the wider max-w-7xl column. */
+export function PageBand({ kicker, title, wide, children }: { kicker: string; title: string; wide?: boolean; children?: ReactNode }) {
   return (
     <section className="band">
-      <div className="mx-auto flex max-w-5xl items-end gap-6 px-7">
+      <div className={`mx-auto flex ${wide ? 'max-w-7xl' : 'max-w-5xl'} items-end gap-6 px-7`}>
         <div className="flex-1">
           <p className="label-up">{kicker}</p>
           <h1 className="mt-1">{title}</h1>

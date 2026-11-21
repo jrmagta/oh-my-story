@@ -58,7 +58,7 @@ Extra rules:
 | `GET /api/workspaces/{slug}` | viewer | → workspace incl. `myRole` |
 | `PATCH /api/workspaces/{slug}` | admin | `{name?, keyPrefix?, estimateUnit?}` → workspace. A project key another workspace has is `409`; existing steps keep their keys |
 | `DELETE /api/workspaces/{slug}` | owner | → `204` |
-| `GET /api/workspaces/{slug}/members` | viewer | → `[{userId, email, displayName, role}]` |
+| `GET /api/workspaces/{slug}/members` | viewer | → `[{userId, email, displayName, firstName, lastName, role}]`, by first name. `firstName` and `lastName` come from the identity provider and are null for accounts made with a password |
 | `POST /api/workspaces/{slug}/members` | admin | `{directoryId, role}` → `201` member. Needs `OMS_OIDC_DIRECTORY`. Makes the person from the identity provider a member at once (no invite, no email): their account is made from the directory, or an existing one with their email is linked, and they sign in with SSO. `role` is not `owner`; `409` when they are a member already |
 | `GET /api/workspaces/{slug}/directory?q=` | admin | → up to 20 `{id, email, firstName, lastName, name, member}`: enabled people with an email in the identity provider matching `q` (name, username or email, 1 to 100 characters). `id` is their provider user id |
 | `PATCH /api/workspaces/{slug}/members/{userId}` | admin | `{role}` → member |
