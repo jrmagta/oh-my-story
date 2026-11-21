@@ -12,8 +12,9 @@ name: oh-my-story-lan
 #   mailpit   127.0.0.1:8026, where invite emails land (not exposed to the LAN:
 #             invite links are credentials)
 #
-# Secrets (Keycloak admin, the app's client secret, users' passwords) come
-# from deploy/lan/pki/out/secrets.env, made by make-certs.sh, not from git.
+# Certificates and secrets (Keycloak admin, the app's client secret, users'
+# passwords) come from LAN_PKI_DIR (~/.local/share/oh-my-story/lan-pki),
+# made by deploy/lan/pki/make-certs.sh, outside git and outside any checkout.
 
 x-app-env: &app-env
   OMS_DATABASE_URL: postgres://oms:oms@postgres:5432/oms?sslmode=disable
@@ -49,7 +50,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.2
     command: ["start-dev", "--import-realm"]
-    env_file: [pki/out/secrets.env]
+    env_file: ["${LAN_PKI_DIR:?set by make lan}/secrets.env"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_HEALTH_ENABLED: "true"
@@ -68,9 +69,9 @@ services:
     volumes:
       - kcdata:/opt/keycloak/data
       - ./keycloak/oms-realm.json:/opt/keycloak/data/import/oms-realm.json:ro
-      - ./pki/out/server.crt:/pki/server.crt:ro
-      - ./pki/out/server.key:/pki/server.key:ro
-      - ./pki/out/ca.crt:/pki/ca.crt:ro
+      - ${LAN_PKI_DIR:?set by make lan}/server.crt:/pki/server.crt:ro
+      - ${LAN_PKI_DIR:?set by make lan}/server.key:/pki/server.key:ro
+      - ${LAN_PKI_DIR:?set by make lan}/ca.crt:/pki/ca.crt:ro
     ports:
       - "127.0.0.1:8444:8443"
     restart: unless-stopped
@@ -86,7 +87,7 @@ services:
       context: ../..
     image: localhost/oh-my-story:lan
     command: ["migrate"]
-    env_file: [pki/out/secrets.env]
+    env_file: ["${LAN_PKI_DIR:?set by make lan}/secrets.env"]
     environment: *app-env
     depends_on:
       postgres:
@@ -96,10 +97,10 @@ services:
   app:
     image: localhost/oh-my-story:lan
     command: ["serve"]
-    env_file: [pki/out/secrets.env]
+    env_file: ["${LAN_PKI_DIR:?set by make lan}/secrets.env"]
     environment: *app-env
     volumes:
-      - ./pki/out/ca.crt:/etc/oms-ca/ca.crt:ro
+      - ${LAN_PKI_DIR:?set by make lan}/ca.crt:/etc/oms-ca/ca.crt:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -118,8 +119,8 @@ services:
     image: docker.io/library/caddy:2.10.0-alpine
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./pki/out/server.crt:/pki/server.crt:ro
-      - ./pki/out/server.key:/pki/server.key:ro
+      - ${LAN_PKI_DIR:?set by make lan}/server.crt:/pki/server.crt:ro
+      - ${LAN_PKI_DIR:?set by make lan}/server.key:/pki/server.key:ro
     ports:
       - "127.0.0.1:8443:8443"
       - "127.0.0.1:8090:8080"
