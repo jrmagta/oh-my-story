@@ -1,6 +1,7 @@
 // Client for the HTTP API in docs/API.md.
 
 import type { HistoryPage } from './map/history'
+import type { Filter } from './map/filter'
 
 export type Role = 'owner' | 'admin' | 'editor' | 'commenter' | 'viewer'
 
@@ -157,6 +158,16 @@ export interface MapView {
   lastEventId: number
 }
 
+/** A named map filter: private to its creator until shared with the workspace. */
+export interface SavedView {
+  id: string
+  name: string
+  filter: Filter
+  shared: boolean
+  createdBy: string
+  creatorName: string
+}
+
 /** Where a new or moved item goes: next to one sibling, or last when both are absent. */
 export interface Position {
   afterId?: string
@@ -304,6 +315,15 @@ export const api = {
       labelIds?: string[]
     },
   ) => request<Step>('PATCH', `${mp(slug, mapId)}/steps/${id}`, b),
+  views: (slug: string, mapId: string) => request<SavedView[]>('GET', `${mp(slug, mapId)}/views`),
+  /** shared: true needs editor. */
+  createView: (slug: string, mapId: string, b: { name: string; filter: Filter; shared?: boolean }) =>
+    request<SavedView>('POST', `${mp(slug, mapId)}/views`, b),
+  /** Only the creator; sharing needs editor. */
+  patchView: (slug: string, mapId: string, id: string, b: { name?: string; filter?: Filter; shared?: boolean }) =>
+    request<SavedView>('PATCH', `${mp(slug, mapId)}/views/${encodeURIComponent(id)}`, b),
+  /** The creator, or an admin for a shared view. */
+  deleteView: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/views/${encodeURIComponent(id)}`),
   /** version is the step version the client showed; stale says someone changed it since. */
   moveStep: (slug: string, mapId: string, id: string, b: { activityId: string; releaseId: string | null; version: number } & Position) =>
     request<{ placement: Placement; stale: boolean }>('POST', `${mp(slug, mapId)}/steps/${id}/move`, b),
