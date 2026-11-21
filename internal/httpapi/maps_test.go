@@ -24,9 +24,12 @@ type built struct {
 	todo, doing, blocked, doneID string
 }
 
-func buildMap(c *client) built {
-	m := c.must(201, "POST", acme+"/maps", map[string]any{"name": "Onboarding"})
-	b := built{path: acme + "/maps/" + str(m.body, "id")}
+func buildMap(c *client) built { return buildMapIn(c, acme) }
+
+// buildMapIn builds the same map in the workspace at wsPath (/api/workspaces/{slug}).
+func buildMapIn(c *client, wsPath string) built {
+	m := c.must(201, "POST", wsPath+"/maps", map[string]any{"name": "Onboarding"})
+	b := built{path: wsPath + "/maps/" + str(m.body, "id")}
 	b.obj = str(c.must(201, "POST", b.path+"/nodes", map[string]any{"level": "objective", "title": "Grow"}).body, "id")
 	b.act1 = str(c.must(201, "POST", b.path+"/nodes", map[string]any{"level": "activity", "title": "Enter email", "parentId": b.obj}).body, "id")
 	b.act2 = str(c.must(201, "POST", b.path+"/nodes", map[string]any{"level": "activity", "title": "Verify", "parentId": b.obj}).body, "id")

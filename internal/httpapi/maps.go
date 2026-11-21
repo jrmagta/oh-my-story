@@ -38,6 +38,7 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 		{"PATCH " + ws + "/personas/{id}", role.Edit, s.patchPersona},
 		{"DELETE " + ws + "/personas/{id}", role.Edit, s.deletePersona},
 
+		{"GET " + ws + "/search", role.View, s.search},
 		{"GET " + ws + "/maps", role.View, s.listMaps},
 		{"POST " + ws + "/maps", role.Edit, s.createMap},
 		{"GET " + m, role.View, s.getMap},
@@ -564,4 +565,14 @@ func (s *Server) stepHistory(q mapRequest) (int, any, error) {
 	}
 	h, err := s.store.StepHistory(q.r.Context(), q.ws, q.mapID, q.id, before, limit)
 	return http.StatusOK, h, err
+}
+
+// search takes ?q= (at most 200 characters) and returns up to 20 steps.
+func (s *Server) search(q mapRequest) (int, any, error) {
+	text := q.r.URL.Query().Get("q")
+	if len(text) > 200 {
+		return 0, nil, errBadRequest("q must be at most 200 characters")
+	}
+	hits, err := s.store.Search(q.r.Context(), q.ws, text)
+	return http.StatusOK, hits, err
 }
