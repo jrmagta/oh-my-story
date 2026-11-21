@@ -107,7 +107,11 @@ export function MapDnd({ view, onMove, children }: { view: MapView; onMove: (m: 
   const sensors = useSensors(
     // A short distance before a drag starts keeps clicks working on cards and titles.
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: keyboardCoordinates }),
+    // Space picks up and drops; Enter is left to the element (a step card opens its panel).
+    useSensor(KeyboardSensor, {
+      coordinateGetter: keyboardCoordinates,
+      keyboardCodes: { start: ['Space'], cancel: ['Escape'], end: ['Space', 'Enter'] },
+    }),
   )
   const [dragging, setDragging] = useState<DragItem | null>(null)
   const end = (e: DragEndEvent) => {
@@ -125,7 +129,7 @@ export function MapDnd({ view, onMove, children }: { view: MapView; onMove: (m: 
       accessibility={{
         announcements,
         screenReaderInstructions: {
-          draggable: 'To move this, press space or enter. Use the arrow keys to choose where, then space or enter to drop it there, or escape to cancel.',
+          draggable: 'To move this, press space. Use the arrow keys to choose where, then space to drop it there, or escape to cancel.',
         },
       }}
       onDragStart={(e) => setDragging(itemOf(e.active.data.current) ?? null)}
@@ -138,10 +142,14 @@ export function MapDnd({ view, onMove, children }: { view: MapView; onMove: (m: 
   )
 }
 
+/** Presses that start here edit or open something, so they never start a drag. */
+const noDrag = 'input, textarea, select, [data-no-drag]'
+
 /**
- * A draggable item. Spread `pointer` on the element people grab and `handle`
- * on a keyboard-focusable button, so the element's own click and Enter keep
- * their meaning.
+ * A draggable item, grabbed anywhere. Spread `pointer` on the whole element
+ * (a press moved 6 px drags it) and `keys` on the element that takes focus
+ * (Space picks it up). Presses inside an input or a [data-no-drag] element,
+ * such as a menu, are left alone, and so are keys aimed at anything inside.
  */
 export function useDrag(id: string, item: DragItem, disabled: boolean) {
   const d = useDraggable({ id: `drag:${id}`, data: { item }, disabled })
@@ -151,9 +159,24 @@ export function useDrag(id: string, item: DragItem, disabled: boolean) {
   }
   return {
     ref: d.setNodeRef,
+    /** The focusable element keys go to; dnd-kit returns focus to it after a drop. */
+    keysRef: d.setActivatorNodeRef,
     dragging: d.isDragging,
-    pointer: { onPointerDown },
-    handle: { ...d.attributes, onKeyDown, ref: d.setActivatorNodeRef, 'aria-label': `Move ${item.label}` },
+    pointer: {
+      onPointerDown: ((e) => {
+        if ((e.target as Element).closest(noDrag)) return
+        onPointerDown?.(e)
+      }) as PointerEventHandler,
+    },
+    keys: disabled
+      ? {}
+      : {
+          ...d.attributes,
+          onKeyDown: ((e) => {
+            if (e.target !== e.currentTarget) return
+            onKeyDown?.(e)
+          }) as KeyboardEventHandler,
+        },
   }
 }
 

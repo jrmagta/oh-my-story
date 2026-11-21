@@ -468,20 +468,11 @@
     border-radius: var(--oms-radius);
   }
   .coloured .node-total { color: inherit; opacity: 0.75; }
-  .colour-pop {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 6px);
-    z-index: 20;
+  .colour-grid {
     display: grid;
     grid-template-columns: repeat(3, 28px);
     gap: 6px;
-    padding: 8px;
-    background: var(--color-base-100);
-    color: var(--color-base-content);
-    border: 2px solid var(--color-base-content);
-    border-radius: var(--oms-radius);
-    text-transform: none;
+    padding: 2px;
   }
   .swatch {
     width: 28px;
@@ -498,31 +489,80 @@
   }
   .swatch.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
   .swatch.custom:focus-within { outline: 3px solid var(--color-brand-amber); outline-offset: 1px; }
-  .node-head {
-    position: relative;
+  /* A backbone card's content: the title has the full width; the ⋯ menu sits over the corner. */
+  .node-head { position: relative; }
+  .node-title { display: block; overflow-wrap: anywhere; }
+  .grab, .grab-area { cursor: grab; }
+  .grab:focus-visible { outline: 3px solid var(--color-brand-amber); outline-offset: 3px; }
+  .card-menu {
+    position: absolute;
+    top: -4px;
+    right: -6px;
+    opacity: 0;
+  }
+  .node-head:hover .card-menu,
+  .node-head:focus-within .card-menu,
+  .card-menu.open { opacity: 1; }
+  .band-row .card-menu { position: relative; top: 0; right: 0; opacity: 1; }
+  .menu-btn {
+    width: 26px;
+    height: 22px;
+    border-radius: 6px;
+    font-weight: 800;
+    line-height: 1;
+    color: inherit;
+    background: color-mix(in srgb, currentColor 14%, transparent);
+  }
+  .menu-btn:hover, .menu-btn:focus-visible { background: color-mix(in srgb, currentColor 28%, transparent); }
+  .menu-pop {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 30;
+    min-width: 11rem;
     display: flex;
-    align-items: flex-start;
-    gap: 6px;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    background: var(--color-base-100);
+    color: var(--color-base-content);
+    border: 2px solid var(--color-base-content);
+    border-radius: var(--oms-radius);
+    text-transform: none;
+    font-size: 13px;
+    letter-spacing: normal;
+    word-spacing: normal;
+    cursor: default;
   }
-  .node-head > :first-child {
-    flex: 1;
-    min-width: 0;
+  .menu-item {
+    text-align: left;
+    padding: 5px 8px;
+    border-radius: 5px;
+    font-weight: 700;
   }
+  .menu-item:hover, .menu-item:focus-visible { background: var(--oms-cell); }
+  .menu-item.danger { color: var(--oms-blocked-text); }
+  /* Renaming: a field that looks like the title it replaces. */
+  .title-input {
+    font: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    background: color-mix(in srgb, currentColor 8%, transparent);
+    border: 2px dashed currentColor;
+    border-radius: 6px;
+    height: auto;
+    padding: 2px 6px;
+    width: 100%;
+  }
+  .title-input:focus, .title-input:focus-visible { outline: none; box-shadow: none; border-style: solid; }
+  .band-input { max-width: 22rem; }
   .node-popup {
     position: absolute;
     left: 0;
     top: calc(100% + 6px);
     width: 14rem;
     z-index: 10;
-  }
-  .node-tools {
-    display: flex;
-    gap: 4px;
-    opacity: 0;
-  }
-  .node-head:hover .node-tools,
-  .node-head:focus-within .node-tools {
-    opacity: 1;
   }
   .icon-btn {
     font-weight: 800;
@@ -632,18 +672,6 @@
     text-align: left;
     padding: 9px 10px 8px;
   }
-  .card-handle {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    opacity: 0;
-    background: var(--oms-card);
-  }
-  .step-card:hover .card-handle,
-  .card-handle:focus-visible {
-    opacity: 1;
-  }
-  .drag-handle { cursor: grab; }
 
   /* Drag and drop. */
   .drop {
@@ -711,7 +739,7 @@
     color: var(--color-base-content);
   }
   .tag > i,
-  .label-pop li i {
+  .tag-chooser li i {
     display: inline-block;
     width: 8px;
     height: 8px;
@@ -760,20 +788,19 @@
     background: var(--color-base-100);
     border: 2px solid var(--color-base-content);
     border-radius: var(--oms-radius);
+    text-align: left;
+  }
+  .tag-chooser {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    text-align: left;
-  }
-  /* Inside a backbone card it keeps its own colours and opens to the right. */
-  .label-pop {
+    min-width: 12rem;
     color: var(--color-base-content);
     text-transform: none;
     font-size: 13px;
   }
-  .node-tools .label-pop { left: 0; right: auto; }
-  .label-pop ul { max-height: 12rem; overflow-y: auto; }
-  .label-pop li button {
+  .tag-chooser ul { max-height: 12rem; overflow-y: auto; }
+  .tag-chooser li button {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -783,8 +810,8 @@
     font-size: 13px;
     font-weight: 700;
   }
-  .label-pop li button:hover,
-  .label-pop li button:focus-visible { background: var(--oms-cell); }
+  .tag-chooser li button:hover,
+  .tag-chooser li button:focus-visible { background: var(--oms-cell); }
 
   .pill {
     display: inline-block;

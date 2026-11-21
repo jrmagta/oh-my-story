@@ -37,9 +37,12 @@ test('personas are linked to objectives and shown on them', async ({ page }) => 
   await page.goto(mapUrl)
 
   // Only objectives take personas.
-  await expect(page.getByRole('button', { name: 'Personas of activity Sign up' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Actions for activity Sign up' }).click()
+  await expect(page.getByRole('group', { name: 'Actions for activity Sign up' })).not.toContainText('Personas')
+  await page.keyboard.press('Escape')
   const objective = page.locator('.map-obj', { hasText: 'Grow' })
-  await page.getByRole('button', { name: 'Personas of objective Grow' }).click()
+  await page.getByRole('button', { name: 'Actions for objective Grow' }).click()
+  await page.getByRole('button', { name: 'Personas…' }).click()
   const picker = page.getByRole('group', { name: 'Personas' })
   await picker.getByRole('button', { name: /^Admin/ }).click()
   await expect(objective.getByLabel('Personas: Admin')).toBeVisible()

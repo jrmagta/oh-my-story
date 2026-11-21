@@ -32,7 +32,8 @@ test('backbone cards take a colour, keep it after a reload, and go back to defau
 
   const activity = page.locator('.map-act', { hasText: 'Browse' })
   const pick = async (label: string, colour: string) => {
-    await page.getByRole('button', { name: `Colour of ${label}` }).click()
+    await page.getByRole('button', { name: `Actions for ${label}` }).click()
+    await page.getByRole('button', { name: 'Colour…' }).click()
     await page.getByRole('group', { name: `Colours for ${label}` }).getByRole('button', { name: colour }).click()
   }
   await pick('activity Browse', 'Blue')
@@ -45,7 +46,8 @@ test('backbone cards take a colour, keep it after a reload, and go back to defau
 
   await page.reload()
   await expect(activity).toHaveCSS('background-color', 'rgb(59, 130, 196)')
-  await page.getByRole('button', { name: 'Colour of activity Browse' }).click()
+  await page.getByRole('button', { name: 'Actions for activity Browse' }).click()
+  await page.getByRole('button', { name: 'Colour…' }).click()
   await expect(page.getByRole('group', { name: 'Colours for activity Browse' }).getByRole('button', { name: 'Blue' })).toHaveAttribute(
     'aria-pressed',
     'true',
