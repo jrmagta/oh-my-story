@@ -221,15 +221,15 @@ func (s *Store) ClaimDeliveries(ctx context.Context, n int, lease time.Duration)
 }
 
 // RecordDelivery stores how a send went. On failure the delivery comes due
-// again after retry, or is marked failed when retry is zero.
-func (s *Store) RecordDelivery(ctx context.Context, id int64, ok bool, code *int, errText *string, retry time.Duration) error {
+// again after retry (zero: at once), or is marked failed when giveUp is set.
+func (s *Store) RecordDelivery(ctx context.Context, id int64, ok bool, code *int, errText *string, giveUp bool, retry time.Duration) error {
 	var err error
 	switch {
 	case ok:
 		_, err = s.pool.Exec(ctx,
 			`UPDATE webhook_deliveries SET status = 'sent', attempts = attempts + 1, last_status_code = $2, last_error = NULL,
 			   delivered_at = now() WHERE id = $1`, id, code)
-	case retry > 0:
+	case !giveUp:
 		_, err = s.pool.Exec(ctx,
 			`UPDATE webhook_deliveries SET attempts = attempts + 1, last_status_code = $2, last_error = $3,
 			   next_attempt_at = now() + make_interval(secs => $4) WHERE id = $1`, id, code, errText, retry.Seconds())

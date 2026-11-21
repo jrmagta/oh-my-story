@@ -185,14 +185,13 @@ func (s *Sender) RunOnce(ctx context.Context) (int, error) {
 		if code != 0 {
 			codePtr = &code
 		}
+		// After the last wait in the schedule has been used, give up.
+		giveUp := !ok && d.Attempts >= len(s.backoff)
 		var retry time.Duration
-		if !ok && d.Attempts < len(s.backoff) {
+		if !ok && !giveUp {
 			retry = s.backoff[d.Attempts]
-			if retry == 0 {
-				retry = time.Millisecond // due again at once (tests)
-			}
 		}
-		if err := s.store.RecordDelivery(ctx, d.ID, ok, codePtr, errText, retry); err != nil {
+		if err := s.store.RecordDelivery(ctx, d.ID, ok, codePtr, errText, giveUp, retry); err != nil {
 			return len(batch), err
 		}
 	}
