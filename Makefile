@@ -4,7 +4,7 @@ DATABASE_URL ?= postgres://oms:oms@localhost:5432/oms?sslmode=disable
 
 E2E_DATABASE_URL ?= postgres://oms:oms@localhost:5432/oms_e2e?sslmode=disable
 
-.PHONY: up down ps db-up db-down test migrate run build web e2e lan lan-down lan-certs lan-reset-keycloak
+.PHONY: up down ps db-up db-down test migrate run build web e2e lan lan-down lan-certs lan-reset-keycloak lan-services lan-app
 
 # Full dev stack: postgres, migrate, app, keycloak, mailpit.
 up:
@@ -59,6 +59,7 @@ e2e: build
 # Keycloak, over HTTPS with a test CA, built from the working tree. LAN_HOST is
 # the name people type; see docs/LAN.md.
 #   make lan LAN_HOST=story.example.home
+# Day to day: make lan-services once, then make lan-app to rebuild just the app.
 # LAN_HTTPS_PORT is the port people reach HTTPS on (443: none in the address).
 LAN_COMPOSE = $(subst deploy/compose/docker-compose.yml,deploy/lan/docker-compose.yml,$(COMPOSE))
 LAN_HTTPS_PORT ?= 443
@@ -71,8 +72,23 @@ lan-certs:
 	@test -n '$(LAN_HOST)' || { echo 'set LAN_HOST, e.g. make lan LAN_HOST=story.example.home'; exit 1; }
 	deploy/lan/pki/make-certs.sh '$(LAN_HOST)' '$(LAN_PKI_DIR)'
 
-lan: lan-certs
-	LAN_HOST='$(LAN_HOST)' OMS_BASE_URL='$(LAN_BASE_URL)' LAN_PKI_DIR='$(LAN_PKI_DIR)' $(LAN_COMPOSE) up -d --build --wait
+LAN_ENV = LAN_HOST='$(LAN_HOST)' OMS_BASE_URL='$(LAN_BASE_URL)' LAN_PKI_DIR='$(LAN_PKI_DIR)'
+LAN_SERVICES = postgres keycloak mailpit proxy
+
+# Everything: the supporting services, then the app.
+lan: lan-services lan-app
+
+# The supporting services (Postgres, Keycloak, Mailpit, the HTTPS proxy). Start
+# them once and leave them running; running this again leaves running ones be.
+lan-services: lan-certs
+	$(LAN_ENV) $(LAN_COMPOSE) up -d --wait $(LAN_SERVICES)
+
+# Rebuilds oh-my-story from this checkout, migrates, and replaces only the app
+# container; the supporting services keep running.
+lan-app: lan-certs
+	$(LAN_ENV) $(LAN_COMPOSE) build migrate
+	$(LAN_ENV) $(LAN_COMPOSE) run --rm --no-deps migrate
+	$(LAN_ENV) $(LAN_COMPOSE) up -d --no-deps --force-recreate --wait app
 
 lan-down:
 	LAN_HOST=unused OMS_BASE_URL=unused LAN_PKI_DIR='$(LAN_PKI_DIR)' $(LAN_COMPOSE) down
