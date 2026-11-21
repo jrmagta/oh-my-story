@@ -12,6 +12,7 @@ import { colourFor, TagChooser } from '../map/TagPicker'
 import { CardMenu, MenuItem } from '../map/CardMenu'
 import { matching, readFilter, writeFilter, type Filter } from '../map/filter'
 import { FilterBar } from '../map/FilterBar'
+import { toggled, UNSCHEDULED_BAND, useViewPrefs, type ViewPrefs } from '../map/viewPrefs'
 import { applyMove, type Move } from '../map/moves'
 import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toasts, type ToastMessage } from '../ui'
 import { PageBand } from './app'
@@ -30,6 +31,9 @@ interface MapCtx {
   filter: Filter
   match: Set<string> | null
   setFilter: (f: Filter) => void
+  /** This browser's view of the map: card size, collapsed activities and bands, the release in focus. */
+  prefs: ViewPrefs
+  setPrefs: (p: ViewPrefs) => void
   /** Runs a write, then reloads the map. undo, when given, is offered in a notice. */
   run: (write: () => Promise<unknown>, opts?: { done?: string; undo?: () => Promise<unknown> }) => Promise<boolean>
   selectedStep: string | null
@@ -152,6 +156,7 @@ export function MapPage() {
   // The filter is state, mirrored into the URL so a reload or a shared link keeps it. Reading it back
   // from the URL on every change would lag: the router updates the URL asynchronously, so a checkbox
   // would flick back and fast typing could drop characters.
+  const [prefs, setPrefs] = useViewPrefs(mapId)
   const [filter, setFilterState] = useState(() => readFilter(search))
   const setFilter = useCallback(
     (f: Filter) => {
@@ -174,6 +179,8 @@ export function MapPage() {
       filter,
       match,
       setFilter,
+      prefs,
+      setPrefs,
       run,
       selectedStep,
       openStep,
@@ -181,7 +188,7 @@ export function MapPage() {
       adding,
       setAdding,
     }
-  }, [ws, query.data, filter, setFilter, run, selectedStep, openStep, move, adding])
+  }, [ws, query.data, filter, setFilter, prefs, setPrefs, run, selectedStep, openStep, move, adding])
 
   if (query.isPending) return <Loading />
   if (!ctx) {
@@ -324,9 +331,13 @@ function MapHeader(props: {
 const levelLabel: Record<Level, string> = { objective: 'Objective', activity: 'Activity' }
 
 function MapGrid() {
-  const { view, canEdit } = useMap()
+  const { view, canEdit, prefs } = useMap()
   const bb = useMemo(() => backbone(view), [view])
-  const bs = useMemo(() => bands(view), [view])
+  const all = useMemo(() => bands(view), [view])
+  // A focused release shows alone; a focus on a release that no longer exists shows everything.
+  const focused = all.filter((b) => (b.release?.id ?? UNSCHEDULED_BAND) === prefs.focus)
+  const bs = focused.length ? focused : all
+  const collapsed = (c: Column) => !!c.activity && prefs.collapsedActivities.includes(c.activity.id)
   const byCell = useMemo(() => cells(view), [view])
 
   if (bb.columns.length === 0) {
@@ -340,7 +351,10 @@ function MapGrid() {
   }
 
   // Columns: row labels, one per backbone column, and one for adding at the end.
-  const style = { gridTemplateColumns: `max-content repeat(${bb.columns.length}, 184px)${canEdit ? ' 150px' : ''}` }
+  const widths = bb.columns.map((c) => (collapsed(c) ? '52px' : '184px')).join(' ')
+  // The last, flexible column takes up whatever width a release band needs beyond the others (on a
+  // narrow map, or with activities collapsed), so bands never stretch the label column.
+  const style = { gridTemplateColumns: `max-content ${widths}${canEdit ? ' 150px' : ''} minmax(0, 1fr)` }
   const col = (start: number, span = 1) => ({ gridColumn: `${start + 2} / span ${span}` })
   const trailing = { gridColumn: `${bb.columns.length + 2}` }
 
@@ -369,10 +383,10 @@ function MapGrid() {
         c.activity ? (
           <div
             key={c.key}
-            className={`map-act ${c.activity.colour ? 'coloured' : ''}`}
+            className={`map-act ${c.activity.colour ? 'coloured' : ''} ${collapsed(c) ? 'collapsed' : ''}`}
             style={{ ...col(i), ...nodeStyle(c.activity.colour) }}
           >
-            <NodeHead node={c.activity} bold />
+            {collapsed(c) ? <CollapsedActivity node={c.activity} /> : <NodeHead node={c.activity} bold />}
           </div>
         ) : (
           <Slot key={c.key} style={col(i)} level="activity" parent={c.objective}>
@@ -382,7 +396,15 @@ function MapGrid() {
       )}
 
       {bs.map((b, i) => (
-        <BandRows key={b.key} band={b} index={i} columns={bb.columns} byCell={byCell} isLast={i === bs.length - 1} />
+        <BandRows
+          key={b.key}
+          band={b}
+          index={all.indexOf(b)}
+          columns={bb.columns}
+          byCell={byCell}
+          isLast={!focused.length && i === bs.length - 1}
+          collapsedColumn={collapsed}
+        />
       ))}
     </div>
   )
@@ -414,6 +436,14 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
       className={`node-head ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''} ${canEdit ? 'grab-area' : ''}`}
       {...drag.pointer}
     >
+      {/* First, so it floats at the right of the title's first line and the title wraps around it. */}
+      {(canEdit || node.level === 'activity') && !renaming && (
+        <CardMenu label={label}>
+          {(close) => (
+            <NodeMenu node={node} label={label} close={close} rename={() => setRenaming(true)} addChild={child ? () => add.setOpen(true) : undefined} />
+          )}
+        </CardMenu>
+      )}
       {renaming ? (
         <TextInput
           label={`New name for ${label}`}
@@ -445,16 +475,29 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
           {add.input}
         </span>
       )}
-      {canEdit && !renaming && (
-        <CardMenu label={label}>{(close) => <NodeMenu node={node} label={label} close={close} rename={() => setRenaming(true)} addChild={child ? () => add.setOpen(true) : undefined} />}</CardMenu>
-      )}
     </div>
+  )
+}
+
+/** A collapsed activity: a narrow strip with its name, and a button to open it out again. */
+function CollapsedActivity({ node }: { node: MapNode }) {
+  const { prefs, setPrefs } = useMap()
+  return (
+    <button
+      type="button"
+      className="collapsed-act"
+      aria-label={`Expand activity ${node.title}`}
+      title={`Expand ${node.title}`}
+      onClick={() => setPrefs({ ...prefs, collapsedActivities: toggled(prefs.collapsedActivities, node.id) })}
+    >
+      <span>{node.title}</span>
+    </button>
   )
 }
 
 function NodeMenu(props: { node: MapNode; label: string; close: () => void; rename: () => void; addChild?: () => void }) {
   const { node, label, close } = props
-  const { ws, view, run } = useMap()
+  const { ws, view, run, canEdit, prefs, setPrefs } = useMap()
   const [panel, setPanel] = useState<'main' | 'colour' | 'personas'>('main')
   if (panel === 'colour') {
     return (
@@ -494,8 +537,16 @@ function NodeMenu(props: { node: MapNode; label: string; close: () => void; rena
     close()
     f()
   }
+  // Collapsing is a personal view setting, so everyone gets it; the rest edits the map.
+  const collapse = node.level === 'activity' && (
+    <MenuItem onClick={then(() => setPrefs({ ...prefs, collapsedActivities: toggled(prefs.collapsedActivities, node.id) }))}>
+      Collapse
+    </MenuItem>
+  )
+  if (!canEdit) return collapse
   return (
     <>
+      {collapse}
       <MenuItem onClick={then(props.rename)}>Rename</MenuItem>
       {props.addChild && <MenuItem onClick={then(props.addChild)}>Add activity</MenuItem>}
       {node.level === 'objective' && <MenuItem onClick={() => setPanel('personas')}>Personas…</MenuItem>}
@@ -600,16 +651,24 @@ function Slot(props: { style: CSSProperties; level: Level; parent: MapNode; chil
   )
 }
 
-function BandRows(props: { band: Band; index: number; columns: Column[]; byCell: Map<string, Card[]>; isLast: boolean }) {
-  const { canEdit, totals } = useMap()
+function BandRows(props: {
+  band: Band
+  index: number
+  columns: Column[]
+  byCell: Map<string, Card[]>
+  isLast: boolean
+  collapsedColumn: (c: Column) => boolean
+}) {
+  const { canEdit, totals, prefs } = useMap()
   const { band, columns, byCell } = props
   const name = band.release?.name ?? 'Unscheduled'
+  const bandCollapsed = prefs.collapsedReleases.includes(band.release?.id ?? UNSCHEDULED_BAND)
   return (
     <>
       {props.isLast && canEdit && <AddRelease />}
       <BandHeader release={band.release} index={props.index} total={totals.releases.get(band.release?.id ?? '')} />
-      <div className="map-lbl" style={{ gridColumn: 1 }} />
-      {columns.map((c, i) =>
+      {!bandCollapsed && <div className="map-lbl" style={{ gridColumn: 1 }} />}
+      {!bandCollapsed && columns.map((c, i) =>
         c.activity ? (
           <Cell
             key={c.key}
@@ -617,6 +676,7 @@ function BandRows(props: { band: Band; index: number; columns: Column[]; byCell:
             activity={c.activity}
             release={band.release}
             bandName={name}
+            narrow={props.collapsedColumn(c)}
             cards={byCell.get(cellKey(c.activity.id, band.release?.id ?? null)) ?? []}
           />
         ) : (
@@ -632,8 +692,11 @@ function formatDate(d: string): string {
 }
 
 function BandHeader({ release, index, total }: { release: Release | null; index: number; total: Total | undefined }) {
-  const { ws, view, canEdit, run } = useMap()
+  const { ws, view, canEdit, run, prefs, setPrefs } = useMap()
   const tone = release ? (index % 2 === 0 ? 'green' : 'amber') : ''
+  const bandId = release?.id ?? UNSCHEDULED_BAND
+  const collapsed = prefs.collapsedReleases.includes(bandId)
+  const focused = prefs.focus === bandId
   const name = release?.name ?? 'Unscheduled'
   const label = `release ${name}`
   // Unscheduled stays last: a release dropped on it moves to the end of the releases.
@@ -655,6 +718,16 @@ function BandHeader({ release, index, total }: { release: Release | null; index:
       aria-label={`Release ${name}`}
       {...(movable ? drag.pointer : {})}
     >
+      <button
+        type="button"
+        className="band-toggle"
+        data-no-drag
+        aria-expanded={!collapsed}
+        aria-label={`${collapsed ? 'Expand' : 'Collapse'} ${label}`}
+        onClick={() => setPrefs({ ...prefs, collapsedReleases: toggled(prefs.collapsedReleases, bandId) })}
+      >
+        {collapsed ? '▸' : '▾'}
+      </button>
       {release && renaming ? (
         <TextInput
           label={`New name for ${label}`}
@@ -684,6 +757,16 @@ function BandHeader({ release, index, total }: { release: Release | null; index:
       <span className="r">
         <span>{[plural(total?.steps ?? 0, 'step'), total && estimated(total, ws.estimateUnit)].filter(Boolean).join(' · ')}</span>
         {total && <Meter total={total} />}
+        <button
+          type="button"
+          className="btn btn-xs btn-ol"
+          data-no-drag
+          aria-pressed={focused}
+          aria-label={focused ? 'Show all releases' : `Focus ${label}`}
+          onClick={() => setPrefs({ ...prefs, focus: focused ? null : bandId })}
+        >
+          {focused ? 'Show all' : 'Focus'}
+        </button>
         {release && canEdit && !renaming && (
           <CardMenu label={label}>
             {(close) => (
@@ -787,7 +870,8 @@ function AddRelease() {
   )
 }
 
-function Cell(props: { column: number; activity: MapNode; release: Release | null; bandName: string; cards: Card[] }) {
+/** narrow: the activity is collapsed, so the cell shows its count and still takes drops. */
+function Cell(props: { column: number; activity: MapNode; release: Release | null; bandName: string; cards: Card[]; narrow: boolean }) {
   const { activity, release, bandName, cards } = props
   const { ws, view, canEdit, run, filter, match } = useMap()
   const [adding, setAdding] = useState(false)
@@ -803,15 +887,22 @@ function Cell(props: { column: number; activity: MapNode; release: Release | nul
       ref={drop.ref}
       role="group"
       aria-label={`Steps in ${where}`}
-      className={`map-cell ${drop.over ? 'drop' : ''}`}
+      className={`map-cell ${drop.over ? 'drop' : ''} ${props.narrow ? 'narrow' : ''}`}
       style={{ gridColumn: props.column }}
     >
-      {cards
+      {props.narrow ? (
+        <span className="narrow-count" title={`${cards.length} step${cards.length === 1 ? '' : 's'}`}>
+          {cards.length || ''}
+        </span>
+      ) : (
+        cards
         .filter((c) => !match || filter.mode === 'highlight' || match.has(c.step.id))
         .map((c) => (
           <StepCard key={c.step.id} card={c} dimmed={!!match && !match.has(c.step.id)} />
-        ))}
+        ))
+      )}
       {canEdit &&
+        !props.narrow &&
         (adding ? (
           <TextInput
             label={`New step in ${where}`}
@@ -879,7 +970,7 @@ export function LabelChips({ ids, onRemove }: { ids: string[]; onRemove?: (id: s
 
 /** dimmed: a highlight filter is on and this step does not match. */
 function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
-  const { ws, canEdit, statuses, selectedStep, openStep } = useMap()
+  const { ws, canEdit, statuses, selectedStep, openStep, prefs } = useMap()
   const { step, placement } = card
   const status = statuses.get(step.statusId)
   const selected = selectedStep === step.id
@@ -890,7 +981,7 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
     <div
       ref={refs(drag.ref, drop.ref)}
       {...drag.id}
-      className={`step-card ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''} ${dimmed ? 'dimmed' : ''}`}
+      className={`step-card size-${prefs.size} ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''} ${dimmed ? 'dimmed' : ''}`}
       {...drag.pointer}
     >
       {/* Click or Enter opens the step; Space picks it up to move it. */}
