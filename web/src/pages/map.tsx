@@ -264,12 +264,14 @@ export function MapPage() {
     )
   return (
     <Ctx.Provider value={ctx}>
-      <MapHeader panelOpen={panelOpen} live={{ users: live.users, state: live.state, activityOpen, toggleActivity }} />
-      <FilterBar panelOpen={panelOpen} />
-      <div className={`map-scroll ${panelOpen ? 'with-panel' : ''}`}>
-        <MapDnd view={ctx.view} onMove={move}>
-          <MapCanvas />
-        </MapDnd>
+      <div className="map-page">
+        <MapHeader panelOpen={panelOpen} live={{ users: live.users, state: live.state, activityOpen, toggleActivity }} />
+        <FilterBar panelOpen={panelOpen} />
+        <div className={`map-scroll ${panelOpen ? 'with-panel' : ''}`}>
+          <MapDnd view={ctx.view} onMove={move}>
+            <MapCanvas />
+          </MapDnd>
+        </div>
       </div>
       {stepOpen && <StepPanel stepId={selectedStep} />}
       {activityOpen && <ActivityPanel onClose={toggleActivity} />}

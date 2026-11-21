@@ -74,7 +74,8 @@ func appendEvents(ctx context.Context, tx pgx.Tx, actor, workspaceID uuid.UUID, 
 		}
 		err := tx.QueryRow(ctx,
 			`INSERT INTO events (workspace_id, map_id, actor_id, actor_kind, entity_type, entity_id, action, before, after, echo)
-			 VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, $8, $9) RETURNING id`,
+			 VALUES ($1, $2, $3, coalesce((SELECT CASE WHEN is_bot THEN 'token' ELSE 'user' END FROM users WHERE id = $3), 'user'),
+			         $4, $5, $6, $7, $8, $9) RETURNING id`,
 			workspaceID, mapID, actor, c.entity, c.id, c.action, jsonOrNull(c.before), jsonOrNull(c.after), c.echo).Scan(&last)
 		if err != nil {
 			return err

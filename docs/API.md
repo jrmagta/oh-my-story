@@ -168,6 +168,18 @@ A comment is `{id, stepId, parentId, authorId, authorName, bodyMd, mentionIds, r
 | `PATCH /maps/{mapId}/comments/{id}` | commenter | `{bodyMd?, mentionIds?, resolved?}` → comment. Body and mentions: the author only (`403` otherwise). `resolved`: a first comment only, by its author or an editor |
 | `DELETE /maps/{mapId}/comments/{id}` | commenter | → `204`. The author, or an admin |
 
+### API tokens
+
+Admins make tokens for scripts and other tools. A token is sent as `Authorization: Bearer oms_…` and works on this workspace's `/api/workspaces/{slug}/…` endpoints only: as a viewer (`read`) or an editor (`write`). It cannot use account endpoints (`/api/me`, `/api/workspaces`), which answer `403`, or other workspaces (`404`). Requests with a token need no Origin check, since browsers never send one on their own; a bad, revoked or expired token answers `401` and is never replaced by the session cookie. Each token acts as its own bot user, so history names it ("CI bot (token)") and the event log records `actor_kind` `token`.
+
+| Method and path | Body → response |
+|---|---|
+| `GET /api-tokens` | → `[token]`, not revoked, newest first. Admins |
+| `POST /api-tokens` | `{name, scope, expiresInDays?}` → `201` token with `token`, shown only here. `scope`: `read` or `write`; `expiresInDays`: 30, 90, 365 or null (never). Admins |
+| `DELETE /api-tokens/{id}` | → `204`. Revokes it. Admins |
+
+Shape: token `{id, name, scope, prefix, creatorName, expiresAt, lastUsedAt, createdAt}`. Only a hash of the token is stored; `prefix` is its first characters, to tell tokens apart.
+
 ### Share links
 
 A share link shows a map read-only to anyone who has it, without an account. Its token is returned once, in the `url` when the link is made, and only its hash is stored. A link is `{id, creatorName, expiresAt, lastUsedAt, createdAt}`.

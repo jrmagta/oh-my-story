@@ -28,6 +28,30 @@ async function offenders(page: Page): Promise<string[]> {
   })
 }
 
+test('a big map scrolls inside the window, so its scrollbars are always in view', async ({ page }) => {
+  await signIn(page)
+  const ws = '/api/workspaces/deps'
+  const map = (await (await page.request.post(`${ws}/maps`, { data: { name: 'Big' } })).json()) as { id: string }
+  const api = `${ws}/maps/${map.id}`
+  const obj = (await (await page.request.post(`${api}/nodes`, { data: { level: 'objective', title: 'Everything' } })).json()) as { id: string }
+  let act = ''
+  for (let i = 1; i <= 12; i++) {
+    act = ((await (await page.request.post(`${api}/nodes`, { data: { level: 'activity', title: `Activity ${i}`, parentId: obj.id } })).json()) as { id: string }).id
+  }
+  for (let i = 1; i <= 25; i++) await page.request.post(`${api}/steps`, { data: { title: `Step ${i}`, activityId: act, releaseId: null } })
+  await page.goto(`/w/deps/maps/${map.id}`)
+  await expect(page.getByRole('button', { name: /Step 25$/ })).toBeAttached()
+  const m = await page.evaluate(() => {
+    const s = document.querySelector('.map-scroll')!
+    const r = s.getBoundingClientRect()
+    return { page: document.documentElement.scrollHeight, win: innerHeight, bottom: r.bottom, wide: s.scrollWidth > s.clientWidth, tall: s.scrollHeight > s.clientHeight }
+  })
+  // The page itself does not scroll; the map does, and its box ends at the window's bottom edge.
+  expect(m.page).toBeLessThanOrEqual(m.win)
+  expect(Math.round(m.bottom)).toBe(m.win)
+  expect(m.wide && m.tall).toBe(true)
+})
+
 test('everything clickable shows the hand cursor', async ({ page }) => {
   await signIn(page)
   const slug = 'deps' // from step-dependencies.spec.ts: a map with steps, links and a panel to open

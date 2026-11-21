@@ -38,6 +38,10 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 		{"PATCH " + ws + "/personas/{id}", role.Edit, s.patchPersona},
 		{"DELETE " + ws + "/personas/{id}", role.Edit, s.deletePersona},
 
+		{"GET " + ws + "/api-tokens", role.ManageSettings, s.listAPITokens},
+		{"POST " + ws + "/api-tokens", role.ManageSettings, s.createAPIToken},
+		{"DELETE " + ws + "/api-tokens/{id}", role.ManageSettings, s.revokeAPIToken},
+
 		{"GET " + ws + "/search", role.View, s.search},
 		{"GET " + ws + "/maps", role.View, s.listMaps},
 		{"POST " + ws + "/maps", role.Edit, s.createMap},

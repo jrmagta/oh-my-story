@@ -128,8 +128,17 @@ func newHarness(t *testing.T, opts harnessOpts) *harness {
 
 // client is one browser: its own cookie jar.
 type client struct {
-	h    *harness
-	http *http.Client
+	h       *harness
+	http    *http.Client
+	headers map[string]string // sent with every request
+}
+
+// tokenClient is a script holding an API token: no cookies, and an Origin
+// header from elsewhere, which only browsers' cookie requests are refused for.
+func (h *harness) tokenClient(token string) *client {
+	c := h.client()
+	c.headers = map[string]string{"Authorization": "Bearer " + token, "Origin": "https://ci.example.org"}
+	return c
 }
 
 func (h *harness) client() *client {
@@ -186,6 +195,9 @@ func (c *client) do(method, path string, body any) resp {
 	}
 	if method != http.MethodGet {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range c.headers {
+		req.Header.Set(k, v)
 	}
 	res, err := c.http.Do(req)
 	if err != nil {
