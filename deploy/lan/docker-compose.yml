@@ -7,7 +7,7 @@ name: oh-my-story-lan
 #
 #   proxy     https://LAN_HOST (127.0.0.1:8443; http on 127.0.0.1:8090
 #             redirects), in front of the app
-#   keycloak  https://LAN_HOST:8444 (127.0.0.1:8444), realm "oms": sign in
+#   keycloak  https://LAN_HOST:8444 (127.0.0.1:18444), realm "oms": sign in
 #             with a client certificate or a password; admin console at /admin
 #   mailpit   127.0.0.1:8026, where invite emails land (not exposed to the LAN:
 #             invite links are credentials)
@@ -73,7 +73,9 @@ services:
       - ${LAN_PKI_DIR:?set by make lan}/server.key:/pki/server.key:ro
       - ${LAN_PKI_DIR:?set by make lan}/ca.crt:/pki/ca.crt:ro
     ports:
-      - "127.0.0.1:8444:8443"
+      # Not 8444 here: Windows listens on 8444 for the LAN, and a forward from
+      # 8444 to 127.0.0.1:8444 would reach itself and loop (ERR_NO_BUFFER_SPACE).
+      - "127.0.0.1:18444:8443"
     restart: unless-stopped
     healthcheck:
       # The image has no curl; ask the management port with bash.

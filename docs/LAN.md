@@ -5,7 +5,7 @@
 | Service | People reach it at | On this machine |
 |---|---|---|
 | oh-my-story, over HTTPS (Caddy in front of the app) | `https://jr-pc1.jrmagta.home` | `127.0.0.1:8443` (and `:8090`, which redirects to HTTPS) |
-| Keycloak, realm `oms` | `https://jr-pc1.jrmagta.home:8444` (admin console at `/admin`) | `127.0.0.1:8444` |
+| Keycloak, realm `oms` | `https://jr-pc1.jrmagta.home:8444` (admin console at `/admin`) | `127.0.0.1:18444` |
 | Mailpit, where invite emails land | not exposed | `http://127.0.0.1:8026` |
 
 Its database and Keycloak data live in podman volumes and survive restarts. `make lan-down` stops it.
@@ -34,11 +34,11 @@ Each can sign in with their certificate or with their password from `users.txt`.
 
 ## Setting up Windows (once)
 
-**1. Forward the ports** (PowerShell as administrator). Add these the same way as the existing port 80 rule, which now redirects to HTTPS:
+**1. Forward the ports** (PowerShell as administrator). Add these the same way as the existing port 80 rule, which now redirects to HTTPS. Each forward goes to a different port than it listens on: a rule from 8444 to `127.0.0.1:8444` would reach itself and loop, which browsers report as `ERR_NO_BUFFER_SPACE`.
 
 ```powershell
 netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=443  connectaddress=127.0.0.1 connectport=8443
-netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=8444 connectaddress=127.0.0.1 connectport=8444
+netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=8444 connectaddress=127.0.0.1 connectport=18444
 New-NetFirewallRule -DisplayName "oh-my-story LAN HTTPS" -Direction Inbound -Protocol TCP -LocalPort 443,8444 -Action Allow
 ```
 
