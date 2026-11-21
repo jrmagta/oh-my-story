@@ -8,7 +8,8 @@ import { useLiveMap, type LiveState, type PresentUser } from '../map/live'
 import { backbone, bands, cellKey, cells, type Band, type Card, type Column } from '../map/layout'
 import { amount, formatEstimate, totals, type Total, type Totals } from '../map/estimates'
 import { nodeStyle, palette } from '../map/colours'
-import { colourFor, TagPicker } from '../map/TagPicker'
+import { colourFor, TagChooser } from '../map/TagPicker'
+import { CardMenu, MenuItem } from '../map/CardMenu'
 import { matching, readFilter, writeFilter, type Filter } from '../map/filter'
 import { FilterBar } from '../map/FilterBar'
 import { applyMove, type Move } from '../map/moves'
@@ -388,146 +389,162 @@ function MapGrid() {
 }
 
 /**
- * Title, rename and delete for a backbone node. child is the level below; its
- * add button shows once the node has children, since until then an empty
- * column below offers the first one.
+ * A backbone card's content. The whole card drags (with the pointer, or Space
+ * once focused); its ⋯ menu renames, recolours, links personas (objectives),
+ * adds an activity (objectives) and deletes.
  */
 function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: boolean }) {
   const { ws, view, canEdit, totals, run } = useMap()
   const label = `${node.level} ${node.title}`
   const total = totals.nodes.get(node.id)
   const sum = total && estimated(total, ws.estimateUnit)
+  const [renaming, setRenaming] = useState(false)
+  const add = useAddNode(child ?? 'activity', node)
+  // Until a node has children, the empty column under it holds the add field; showing it here
+  // too would put two fields on one key, and the second would close the first by taking focus.
   const hasChildren = view.nodes.some((n) => n.parentId === node.id)
-  const drag = useDrag(`node:${node.id}`, { kind: 'node', node, label }, !canEdit)
+  const drag = useDrag(`node:${node.id}`, { kind: 'node', node, label }, !canEdit || renaming)
   const drop = useDrop(`node:${node.id}`, { kind: 'node', node, label })
   return (
+    // The pointer drags from anywhere on the card; the keyboard handle is the title alone, so the
+    // rename and add fields and the menu are not inside a button (whose content is presentational).
     <div
       ref={refs(drag.ref, drop.ref)}
-      className={`node-head ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''}`}
+      className={`node-head ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''} ${canEdit ? 'grab-area' : ''}`}
       {...drag.pointer}
     >
-      <div>
-        <InlineText
-          value={node.title}
-          label={label}
-          editable={canEdit}
-          className={bold ? 'up text-[15px]' : undefined}
-          onSave={(title) => run(() => api.patchNode(ws.slug, view.map.id, node.id, { title }))}
+      {renaming ? (
+        <TextInput
+          label={`New name for ${label}`}
+          initial={node.title}
+          className={`title-input ${bold ? 'text-[15px]' : ''}`}
+          onDone={(title) => {
+            setRenaming(false)
+            if (title && title !== node.title) void run(() => api.patchNode(ws.slug, view.map.id, node.id, { title }))
+          }}
         />
-        {sum && (
-          <span className="node-total" aria-label={`Total for ${label}: ${sum}`}>
-            {sum}
-          </span>
-        )}
-        {node.level === 'objective' && <PersonaBadges node={node} />}
-      </div>
-      {canEdit && (
-        <span className="node-tools">
-          {child && hasChildren && <AddNodeIcon level={child} parent={node} />}
-          {node.level === 'objective' && (
-            <TagPicker
-              noun="persona"
-              iconLabel={`Personas of ${label}`}
-              tags={view.personas}
-              selected={node.personaIds}
-              onToggle={(id) =>
-                run(() =>
-                  api.patchNode(ws.slug, view.map.id, node.id, {
-                    personaIds: node.personaIds.includes(id) ? node.personaIds.filter((x) => x !== id) : [...node.personaIds, id],
-                  }),
-                )
-              }
-              onCreate={(name) =>
-                run(async () => {
-                  const p = await api.createPersona(ws.slug, { name, colour: colourFor(name) })
-                  await api.patchNode(ws.slug, view.map.id, node.id, { personaIds: [...node.personaIds, p.id] })
-                })
-              }
-            />
-          )}
-          <ColourMenu node={node} label={label} />
-          <button type="button" className="icon-btn drag-handle" title="Move" {...drag.handle}>
-            <span>⠿</span>
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label={`Delete ${label}`}
-            title="Delete"
-            onClick={() =>
-              run(() => api.deleteNode(ws.slug, view.map.id, node.id), {
-                done: `Deleted ${node.level} “${node.title}”`,
-                undo: () => api.restoreNode(ws.slug, view.map.id, node.id),
-              })
-            }
-          >
-            <span>✕</span>
-          </button>
+      ) : (
+        <span
+          ref={drag.keysRef}
+          {...drag.keys}
+          aria-label={canEdit ? `Move ${label}` : undefined}
+          className={`node-title ${bold ? 'up text-[15px]' : ''} ${canEdit ? 'grab' : ''}`}
+        >
+          {node.title}
         </span>
+      )}
+      {sum && (
+        <span className="node-total" aria-label={`Total for ${label}: ${sum}`}>
+          {sum}
+        </span>
+      )}
+      {node.level === 'objective' && <PersonaBadges node={node} />}
+      {child && hasChildren && add.open && (
+        <span className="node-popup" data-no-drag>
+          {add.input}
+        </span>
+      )}
+      {canEdit && !renaming && (
+        <CardMenu label={label}>{(close) => <NodeMenu node={node} label={label} close={close} rename={() => setRenaming(true)} addChild={child ? () => add.setOpen(true) : undefined} />}</CardMenu>
       )}
     </div>
   )
 }
 
-/** Picks a backbone card's colour: a swatch, any colour, or the level's default look. */
-function ColourMenu({ node, label }: { node: MapNode; label: string }) {
+function NodeMenu(props: { node: MapNode; label: string; close: () => void; rename: () => void; addChild?: () => void }) {
+  const { node, label, close } = props
   const { ws, view, run } = useMap()
-  const [open, setOpen] = useState(false)
-  const set = (colour: string | null) => {
-    setOpen(false)
-    if (colour !== node.colour) void run(() => api.patchNode(ws.slug, view.map.id, node.id, { colour }))
+  const [panel, setPanel] = useState<'main' | 'colour' | 'personas'>('main')
+  if (panel === 'colour') {
+    return (
+      <ColourChooser
+        node={node}
+        label={label}
+        onPick={(colour) => {
+          close()
+          if (colour !== node.colour) void run(() => api.patchNode(ws.slug, view.map.id, node.id, { colour }))
+        }}
+      />
+    )
+  }
+  if (panel === 'personas') {
+    return (
+      <TagChooser
+        noun="persona"
+        tags={view.personas}
+        selected={node.personaIds}
+        onToggle={(id) =>
+          run(() =>
+            api.patchNode(ws.slug, view.map.id, node.id, {
+              personaIds: node.personaIds.includes(id) ? node.personaIds.filter((x) => x !== id) : [...node.personaIds, id],
+            }),
+          )
+        }
+        onCreate={(name) =>
+          run(async () => {
+            const p = await api.createPersona(ws.slug, { name, colour: colourFor(name) })
+            await api.patchNode(ws.slug, view.map.id, node.id, { personaIds: [...node.personaIds, p.id] })
+          })
+        }
+      />
+    )
+  }
+  const then = (f: () => void) => () => {
+    close()
+    f()
   }
   return (
-    <span
-      className="relative"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') setOpen(false)
-      }}
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false)
-      }}
-    >
-      <button
-        type="button"
-        className="icon-btn"
-        aria-label={`Colour of ${label}`}
-        aria-expanded={open}
-        title="Colour"
-        onClick={() => setOpen((o) => !o)}
+    <>
+      <MenuItem onClick={then(props.rename)}>Rename</MenuItem>
+      {props.addChild && <MenuItem onClick={then(props.addChild)}>Add activity</MenuItem>}
+      {node.level === 'objective' && <MenuItem onClick={() => setPanel('personas')}>Personas…</MenuItem>}
+      <MenuItem onClick={() => setPanel('colour')}>Colour…</MenuItem>
+      <MenuItem
+        danger
+        onClick={then(() =>
+          run(() => api.deleteNode(ws.slug, view.map.id, node.id), {
+            done: `Deleted ${node.level} “${node.title}”`,
+            undo: () => api.restoreNode(ws.slug, view.map.id, node.id),
+          }),
+        )}
       >
-        <span>◐</span>
+        Delete
+      </MenuItem>
+    </>
+  )
+}
+
+/** A backbone card's colour: a swatch, any colour, or the level's default look. */
+function ColourChooser({ node, label, onPick }: { node: MapNode; label: string; onPick: (colour: string | null) => void }) {
+  return (
+    <div className="colour-grid" role="group" aria-label={`Colours for ${label}`}>
+      {palette.map((c) => (
+        <button
+          key={c.hex}
+          type="button"
+          className="swatch"
+          style={{ background: c.hex }}
+          aria-label={c.name}
+          aria-pressed={node.colour?.toUpperCase() === c.hex}
+          title={c.name}
+          onClick={() => onPick(c.hex)}
+        />
+      ))}
+      <label className="swatch custom" title="Any colour">
+        {/* React's onChange fires on every move in the picker; the native change event fires once, when it closes. */}
+        <input
+          type="color"
+          aria-label="Any colour"
+          defaultValue={(node.colour ?? '#8A8A93').toLowerCase()}
+          ref={(el) => {
+            if (el) el.onchange = () => onPick(el.value.toUpperCase())
+          }}
+        />
+      </label>
+      <button type="button" className="btn btn-xs btn-ol col-span-full" aria-pressed={!node.colour} onClick={() => onPick(null)}>
+        Default
       </button>
-      {open && (
-        <div className="colour-pop" role="group" aria-label={`Colours for ${label}`}>
-          {palette.map((c) => (
-            <button
-              key={c.hex}
-              type="button"
-              className="swatch"
-              style={{ background: c.hex }}
-              aria-label={c.name}
-              aria-pressed={node.colour?.toUpperCase() === c.hex}
-              title={c.name}
-              onClick={() => set(c.hex)}
-            />
-          ))}
-          <label className="swatch custom" title="Any colour">
-            {/* React's onChange fires on every move in the picker; the native change event fires once, when it closes. */}
-            <input
-              type="color"
-              aria-label="Any colour"
-              defaultValue={(node.colour ?? '#8A8A93').toLowerCase()}
-              ref={(el) => {
-                if (el) el.onchange = () => set(el.value.toUpperCase())
-              }}
-            />
-          </label>
-          <button type="button" className="btn btn-xs btn-ol col-span-full" aria-pressed={!node.colour} onClick={() => set(null)}>
-            Default
-          </button>
-        </div>
-      )}
-    </span>
+    </div>
   )
 }
 
@@ -555,16 +572,6 @@ function useAddNode(level: Level, parent: MapNode | null) {
       />
     ),
   }
-}
-
-function AddNodeIcon({ level, parent }: { level: Level; parent: MapNode }) {
-  const add = useAddNode(level, parent)
-  if (add.open) return <span className="node-popup">{add.input}</span>
-  return (
-    <button type="button" className="icon-btn" aria-label={`Add ${level} to ${parent.title}`} title={`Add ${level}`} onClick={() => add.setOpen(true)}>
-      <span>+</span>
-    </button>
-  )
 }
 
 function AddNode({ level, parent, label, short }: { level: Level; parent: MapNode | null; label: string; short?: string }) {
@@ -635,6 +642,8 @@ function BandHeader({ release, index, total }: { release: Release | null; index:
     `release:${release?.id ?? 'unscheduled'}`,
     release ? { kind: 'release', release, label } : { kind: 'unscheduled', label: 'the end of the releases' },
   )
+  const [renaming, setRenaming] = useState(false)
+  const movable = release && canEdit && !renaming
   return (
     <div
       ref={refs(drag.ref, drop.ref)}
@@ -642,43 +651,63 @@ function BandHeader({ release, index, total }: { release: Release | null; index:
       role="heading"
       aria-level={2}
       aria-label={`Release ${name}`}
-      {...(release ? drag.pointer : {})}
+      {...(movable ? drag.pointer : {})}
     >
-      <span className="n">
-        {release ? (
-          <InlineText
-            value={release.name}
-            label={`release ${release.name}`}
-            editable={canEdit}
-            maxLength={100}
-            onSave={(n) => run(() => api.patchRelease(ws.slug, view.map.id, release.id, { name: n }))}
-          />
-        ) : (
-          name
-        )}
-      </span>
-      {release && <TargetDate release={release} />}
+      {release && renaming ? (
+        <TextInput
+          label={`New name for ${label}`}
+          initial={release.name}
+          maxLength={100}
+          className="title-input band-input"
+          onDone={(n) => {
+            setRenaming(false)
+            if (n && n !== release.name) void run(() => api.patchRelease(ws.slug, view.map.id, release.id, { name: n }))
+          }}
+        />
+      ) : (
+        // The band stays a heading; its name takes focus for moving it with the keyboard.
+        <span
+          className={`n ${movable ? 'grab' : ''}`}
+          ref={movable ? drag.keysRef : undefined}
+          {...(movable ? { ...drag.keys, 'aria-label': `Move ${label}` } : {})}
+        >
+          {name}
+        </span>
+      )}
+      {release && (
+        <span data-no-drag>
+          <TargetDate release={release} />
+        </span>
+      )}
       <span className="r">
         <span>{[plural(total?.steps ?? 0, 'step'), total && estimated(total, ws.estimateUnit)].filter(Boolean).join(' · ')}</span>
         {total && <Meter total={total} />}
-        {release && canEdit && (
-          <button type="button" className="btn btn-xs btn-ol drag-handle" title="Move" {...drag.handle}>
-            ⠿
-          </button>
-        )}
-        {release && canEdit && (
-          <button
-            type="button"
-            className="btn btn-xs btn-ol"
-            aria-label={`Delete release ${release.name}`}
-            onClick={() =>
-              run(() => api.deleteRelease(ws.slug, view.map.id, release.id), {
-                done: `Deleted release “${release.name}”. Its steps moved to Unscheduled.`,
-              })
-            }
-          >
-            Delete
-          </button>
+        {release && canEdit && !renaming && (
+          <CardMenu label={label}>
+            {(close) => (
+              <>
+                <MenuItem
+                  onClick={() => {
+                    close()
+                    setRenaming(true)
+                  }}
+                >
+                  Rename
+                </MenuItem>
+                <MenuItem
+                  danger
+                  onClick={() => {
+                    close()
+                    void run(() => api.deleteRelease(ws.slug, view.map.id, release.id), {
+                      done: `Deleted release “${release.name}”. Its steps moved to Unscheduled.`,
+                    })
+                  }}
+                >
+                  Delete
+                </MenuItem>
+              </>
+            )}
+          </CardMenu>
         )}
       </span>
     </div>
@@ -861,9 +890,12 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
       className={`step-card ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''} ${dimmed ? 'dimmed' : ''}`}
       {...drag.pointer}
     >
+      {/* Click or Enter opens the step; Space picks it up to move it. */}
       <button
         type="button"
-        className="card-open"
+        ref={drag.keysRef}
+        {...drag.keys}
+        className={`card-open ${canEdit ? 'grab' : ''}`}
         aria-current={selected}
         aria-label={label}
         onClick={() => openStep(selected ? null : step.id)}
@@ -880,11 +912,6 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
           )}
         </span>
       </button>
-      {canEdit && (
-        <button type="button" className="icon-btn drag-handle card-handle" title="Move" {...drag.handle}>
-          <span>⠿</span>
-        </button>
-      )}
     </div>
   )
 }

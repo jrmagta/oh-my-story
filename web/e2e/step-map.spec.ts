@@ -28,6 +28,12 @@ async function typeEach(page: Page, label: string, values: string[]) {
   if (await input.count()) await input.press('Escape')
 }
 
+/** Opens a card's ⋯ menu and picks an action. */
+async function menu(page: Page, card: string, action: string) {
+  await page.getByRole('button', { name: `Actions for ${card}` }).click()
+  await page.getByRole('group', { name: `Actions for ${card}` }).getByRole('button', { name: action, exact: true }).click()
+}
+
 const card = (page: Page, name: string | RegExp) => page.getByRole('button', { name, exact: true })
 const panel = (page: Page) => page.getByRole('complementary', { name: /^Step / })
 
@@ -92,17 +98,27 @@ test('the step panel edits the description and status, and they survive a reload
 test('renaming an activity, and deleting it with undo', async ({ page }) => {
   await signIn(page)
   await page.goto(mapUrl)
-  await page.getByRole('button', { name: 'Rename activity Verify email' }).click()
+  await menu(page, 'activity Verify email', 'Rename')
   await page.getByRole('textbox', { name: 'New name for activity Verify email' }).fill('Check inbox')
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('button', { name: 'Rename activity Check inbox' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Move activity Check inbox' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Delete activity Check inbox' }).click()
+  await menu(page, 'activity Check inbox', 'Delete')
   await expect(page.getByRole('status').filter({ hasText: 'Deleted activity “Check inbox”' })).toBeVisible()
   await expect(card(page, 'MAPPING-2 Send verification email')).toHaveCount(0)
   await page.getByRole('button', { name: 'Undo' }).click()
   await expect(card(page, 'MAPPING-2 Send verification email')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Rename activity Check inbox' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Move activity Check inbox' })).toBeVisible()
+
+  // Releases rename from their menu too.
+  await menu(page, 'release MVP', 'Rename')
+  await page.getByRole('textbox', { name: 'New name for release MVP' }).fill('First')
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('heading', { name: 'Release First' })).toBeVisible()
+  await menu(page, 'release First', 'Rename')
+  await page.getByRole('textbox', { name: 'New name for release First' }).fill('MVP')
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('heading', { name: 'Release MVP' })).toBeVisible()
 })
 
 /** Step keys in a cell, in order. */
@@ -116,8 +132,8 @@ async function cellKeys(page: Page, where: string): Promise<string[]> {
 
 /** Activity titles across the backbone, left to right. */
 async function activityOrder(page: Page): Promise<string[]> {
-  const names = await page.getByRole('button', { name: /^Rename activity / }).allTextContents()
-  return names.map((n) => n.trim())
+  const names = await page.getByRole('button', { name: /^Move activity / }).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''))
+  return names.map((n) => n.replace('Move activity ', ''))
 }
 
 /** A pointer drag with intermediate moves, as a person makes it. */
@@ -143,7 +159,7 @@ async function centre(locator: ReturnType<Page["locator"]>) {
  */
 async function keyboardMove(page: Page, handle: string, key: string) {
   const target = () => page.locator('.drop').evaluateAll((els) => els.map((e) => e.textContent).join('|'))
-  await page.getByRole('button', { name: handle }).focus()
+  await page.getByRole('button', { name: handle, exact: true }).focus()
   await page.keyboard.press('Space')
   await expect(page.locator('.drag-ghost')).toBeVisible()
   const before = await target()
@@ -181,16 +197,22 @@ test('reordering with the keyboard: a step in its cell, an activity, a release',
   await signIn(page)
   await page.goto(mapUrl)
 
-  // Picking up and dropping at once moves nothing.
-  await page.getByRole('button', { name: 'Move MAPPING-2 Send verification email' }).focus()
+  // On a step card Enter opens it and Space picks it up; picking up and dropping at once moves nothing.
+  await page.getByRole('button', { name: 'MAPPING-2 Send verification email', exact: true }).focus()
+  await page.keyboard.press('Enter')
+  await expect(panel(page)).toHaveAccessibleName('Step MAPPING-2')
+  await expect(page.locator('.drag-ghost')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Close step' }).click()
+  await page.getByRole('button', { name: 'MAPPING-2 Send verification email', exact: true }).focus()
   await page.keyboard.press('Space')
   await expect(page.locator('.drag-ghost')).toBeVisible()
+  await expect(panel(page)).toHaveCount(0)
   await page.keyboard.press('Space')
   await expect(page.locator('.drag-ghost')).toHaveCount(0)
   await page.reload()
   await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAPPING-1', 'MAPPING-2'])
 
-  await keyboardMove(page, 'Move MAPPING-2 Send verification email', 'ArrowUp')
+  await keyboardMove(page, 'MAPPING-2 Send verification email', 'ArrowUp')
   await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAPPING-2', 'MAPPING-1'])
 
   await expect.poll(() => activityOrder(page)).toEqual(['Create account', 'Check inbox'])
@@ -224,14 +246,14 @@ test('a move that crosses another edit says so, and one that fails is undone', a
   // Someone else deletes MAPPING-2 while this page still shows it: the move fails and is put back.
   const json = { 'Content-Type': 'application/json' }
   expect((await page.request.delete(`${api}/steps/${id('MAPPING-2')}`, { headers: json })).status()).toBe(204)
-  await keyboardMove(page, 'Move MAPPING-2 Send verification email', 'ArrowDown')
+  await keyboardMove(page, 'MAPPING-2 Send verification email', 'ArrowDown')
   await expect(page.getByRole('alert')).toContainText('not found')
   await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAPPING-1'])
 
   // Someone else edits MAPPING-1 while this page shows the old version: the move applies, and says so.
   const me = (await (await page.request.get('/api/me')).json()) as { user: { id: string } }
   expect((await page.request.patch(`${api}/steps/${id('MAPPING-1')}`, { data: { assigneeId: me.user.id } })).status()).toBe(200)
-  await keyboardMove(page, 'Move MAPPING-1 Register with email', 'ArrowDown')
+  await keyboardMove(page, 'MAPPING-1 Register with email', 'ArrowDown')
   await expect(page.getByRole('status').filter({ hasText: 'MAPPING-1 was changed by someone else' })).toBeVisible()
   await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual([])
 })
@@ -288,13 +310,13 @@ test('two people on one map see each other and each other’s edits live', async
   await page.getByRole('button', { name: 'Add step to Check inbox / MVP' }).click()
   await typeEach(page, 'New step in Check inbox / MVP', ['Resend the link'])
   await expect(v.getByRole('group', { name: 'Steps in Check inbox / MVP' })).toContainText('Resend the link')
-  await page.getByRole('button', { name: 'Rename activity Check inbox' }).click()
+  await menu(page, 'activity Check inbox', 'Rename')
   await page.getByRole('textbox', { name: 'New name for activity Check inbox' }).fill('Open the email')
   await page.keyboard.press('Enter')
   await expect(v.getByRole('group', { name: 'Steps in Open the email / MVP' })).toContainText('Resend the link')
 
   // A move shows up too: up into the Later release.
-  await keyboardMove(page, 'Move MAPPING-3 Resend the link', 'ArrowUp')
+  await keyboardMove(page, 'MAPPING-3 Resend the link', 'ArrowUp')
   await expect(page.getByRole('group', { name: 'Steps in Open the email / Later' })).toContainText('Resend the link')
   await expect(v.getByRole('group', { name: 'Steps in Open the email / Later' })).toContainText('Resend the link')
   await expect(v.getByRole('group', { name: 'Steps in Open the email / MVP' })).not.toContainText('Resend the link')

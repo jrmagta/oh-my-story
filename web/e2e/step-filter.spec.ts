@@ -56,7 +56,7 @@ test('a filter dims or hides steps, counts only matches, and lives in the URL', 
   // Hide: the step goes, its activity column stays.
   await bar.getByRole('button', { name: 'Hide' }).click()
   await expect(card('FILTER-3')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Rename activity Renew' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Move activity Renew' })).toBeVisible()
 
   // The filter is in the URL, so a reload (or a shared link) keeps it.
   await page.reload()
