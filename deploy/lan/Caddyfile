@@ -1,0 +1,16 @@
+# HTTPS for oh-my-story on the LAN, with the test CA's server certificate
+# (deploy/lan/pki). Plain HTTP redirects to HTTPS.
+{
+	auto_https off
+	admin off
+}
+
+:8443 {
+	tls /pki/server.crt /pki/server.key
+	encode gzip
+	reverse_proxy app:8080
+}
+
+:8080 {
+	redir https://{host}{uri} permanent
+}

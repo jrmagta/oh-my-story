@@ -1,0 +1,177 @@
+{
+  "realm": "oms",
+  "displayName": "oh-my-story (LAN)",
+  "enabled": true,
+  "registrationAllowed": false,
+  "sslRequired": "external",
+  "browserFlow": "browser with certificate",
+  "clients": [
+    {
+      "clientId": "oh-my-story",
+      "name": "oh-my-story (LAN)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "${OMS_OIDC_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "redirectUris": [
+        "${OMS_BASE_URL}/*"
+      ],
+      "webOrigins": [
+        "${OMS_BASE_URL}"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${OMS_BASE_URL}/*"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email",
+        "kc-admin-api"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "jonathan",
+      "enabled": true,
+      "email": "jonathan@jrmagta.home",
+      "emailVerified": true,
+      "firstName": "Jonathan",
+      "lastName": "Magtalas",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${LAN_PASSWORD_JONATHAN}",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "alice",
+      "enabled": true,
+      "email": "alice@example.com",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Example",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${LAN_PASSWORD_ALICE}",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "email": "bob@example.com",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Example",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${LAN_PASSWORD_BOB}",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "carol",
+      "enabled": true,
+      "email": "carol@example.com",
+      "emailVerified": true,
+      "firstName": "Carol",
+      "lastName": "Directory",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${LAN_PASSWORD_CAROL}",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "service-account-oh-my-story",
+      "enabled": true,
+      "serviceAccountClientId": "oh-my-story",
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-users"
+        ]
+      }
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "certificate by email",
+      "config": {
+        "x509-cert-auth.mapping-source-selection": "Subject's e-mail",
+        "x509-cert-auth.mapper-selection": "Username or Email",
+        "x509-cert-auth.crl-checking-enabled": "false",
+        "x509-cert-auth.ocsp-checking-enabled": "false",
+        "x509-cert-auth.crldp-checking-enabled": "false",
+        "x509-cert-auth.timestamp-validation-enabled": "true",
+        "x509-cert-auth.extendedkeyusage": "1.3.6.1.5.5.7.3.2",
+        "x509-cert-auth.confirmation-page-disallowed": "false"
+      }
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "browser with certificate",
+      "description": "Cookie, then a client certificate, then username and password",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "authenticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "auth-x509-client-username-form",
+          "authenticatorConfig": "certificate by email",
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "authenticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "flowAlias": "browser with certificate forms",
+          "requirement": "ALTERNATIVE",
+          "priority": 30,
+          "authenticatorFlow": true,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "browser with certificate forms",
+      "description": "Username and password",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "authenticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ]
+}
