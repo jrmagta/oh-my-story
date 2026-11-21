@@ -51,7 +51,7 @@ function useJoined() {
   const navigate = useNavigate()
   return async (ws: Workspace) => {
     await refreshSession(qc)
-    navigate(`/w/${ws.slug}/members`, { replace: true })
+    navigate(`/w/${ws.slug}/maps`, { replace: true })
   }
 }
 

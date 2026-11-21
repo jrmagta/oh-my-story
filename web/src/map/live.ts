@@ -19,7 +19,8 @@ export interface PresentUser {
   name: string
 }
 
-type Message = { type: 'event'; event: LiveEvent } | { type: 'presence'; users: PresentUser[] } | { type: 'resync' }
+/** A presence message leaves users out when nobody is on the map (the server omits an empty list). */
+type Message = { type: 'event'; event: LiveEvent } | { type: 'presence'; users?: PresentUser[] } | { type: 'resync' }
 
 function patch<T extends { id: string }>(list: T[], id: string, fields: Record<string, unknown> | null): T[] {
   return list.map((x) => (x.id === id ? { ...x, ...fields } : x))
@@ -180,7 +181,7 @@ export function useLiveMap(slug: string, mapId: string, key: QueryKey): { users:
           recent.current = [...recent.current.slice(-keep + 1), msg.event]
           apply([msg.event])
         } else if (msg.type === 'presence') {
-          setUsers(msg.users)
+          setUsers(msg.users ?? [])
         } else {
           reload()
         }

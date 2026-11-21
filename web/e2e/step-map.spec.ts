@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page, type WebSocketRoute } from '@playwright/test'
 import { inviteLink } from './mailpit'
 
 // Runs after shell.spec.ts, which creates the owner. Uses its own workspace.
@@ -153,26 +153,29 @@ async function centre(locator: ReturnType<Page["locator"]>) {
 
 /**
  * Pick up with Space, take one arrow-key step, drop with Space. Each key waits
- * for the screen to catch up, as a person would: the step is done only when
- * the highlighted target differs from the one at pickup (the item's own place,
- * or none until dnd-kit has measured the drag).
+ * for the screen to catch up, as a person would: the step is done only when a
+ * target is highlighted that is not the item's own place (a cell or band that
+ * contains the item's text). The first highlight can arrive late, on the
+ * item's own place, after dnd-kit has measured the drag (seen on slow CI
+ * runners); an arrow pressed before that measuring is ignored, so it is
+ * pressed again if nothing else lights up.
  */
 async function keyboardMove(page: Page, handle: string, key: string) {
-  const target = () => page.locator('.drop').evaluateAll((els) => els.map((e) => e.textContent).join('|'))
+  const own = handle.replace(/^Move (activity|objective|release) /, '').replace(/^[A-Z0-9]+-\d+ /, '')
+  const elsewhere = async () => {
+    const t = await page.locator('.drop').evaluateAll((els) => els.map((e) => e.textContent ?? ''))
+    return t.length === 1 && !t[0]?.includes(own)
+  }
   await page.getByRole('button', { name: handle, exact: true }).focus()
   await page.keyboard.press('Space')
   await expect(page.locator('.drag-ghost')).toBeVisible()
-  const before = await target()
   await page.keyboard.press(key)
   try {
-    await expect.poll(target, { timeout: 2000 }).not.toBe(before)
+    await expect.poll(elsewhere, { timeout: 2000 }).toBe(true)
   } catch {
-    // dnd-kit measures the drag just after pickup, and ignores an arrow key
-    // pressed before that (seen on slow CI runners). Nothing moved, so press again.
     await page.keyboard.press(key)
-    await expect.poll(target).not.toBe(before)
+    await expect.poll(elsewhere).toBe(true)
   }
-  await expect(page.locator('.drop')).toHaveCount(1)
   await page.keyboard.press('Space')
   await expect(page.locator('.drag-ghost')).toHaveCount(0)
 }
@@ -355,4 +358,21 @@ test('the step history and the map activity say who changed what', async ({ page
   // Entries link to their step.
   await feed.getByRole('listitem').first().getByRole('button', { name: 'Open step' }).click()
   await expect(panel(page)).toBeVisible()
+})
+
+test('a presence message with nobody listed leaves the map working', async ({ page }) => {
+  await signIn(page)
+  // The server leaves users out when nobody is on the map, for instance while a reload swaps sockets.
+  let socket: WebSocketRoute | undefined
+  await page.routeWebSocket(/\/live\?/, (ws) => {
+    ws.connectToServer()
+    socket = ws
+  })
+  await page.goto(mapUrl)
+  await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
+  await expect(page.locator('.presence li')).toHaveCount(1)
+  socket?.send(JSON.stringify({ type: 'presence' }))
+  await expect(page.locator('.presence li')).toHaveCount(0)
+  await expect(page.getByText('Unexpected Application Error')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Onboarding' })).toBeVisible()
 })

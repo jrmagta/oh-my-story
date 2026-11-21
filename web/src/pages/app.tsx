@@ -149,13 +149,13 @@ function WorkspaceRow({ w }: { w: Membership }) {
   return (
     <li>
       <div className="min-w-0 flex-1">
-        <Link to={`/w/${w.slug}/members`} className="up block truncate text-2xl hover:underline">
+        <Link to={`/w/${w.slug}/maps`} className="up block truncate text-2xl hover:underline">
           {w.name}
         </Link>
         <span className="text-muted text-sm font-medium">/{w.slug}</span>
       </div>
       <span className="label-up">{w.role}</span>
-      <Link to={`/w/${w.slug}/members`} className="btn btn-sm btn-ol" aria-label={`Open ${w.name}`}>
+      <Link to={`/w/${w.slug}/maps`} className="btn btn-sm btn-ol" aria-label={`Open ${w.name}`}>
         Open
       </Link>
     </li>
@@ -179,7 +179,7 @@ function CreateWorkspace() {
     mutationFn: () => api.createWorkspace({ name, slug, keyPrefix: key }),
     onSuccess: async (w) => {
       await refreshSession(qc)
-      navigate(`/w/${w.slug}/members`)
+      navigate(`/w/${w.slug}/maps`)
     },
   })
   return (

@@ -42,7 +42,9 @@ test('the first visitor creates the owner account and a workspace', async ({ pag
   await expect(page.getByLabel('URL slug')).toHaveValue('acme-product')
   await page.getByRole('button', { name: 'Create workspace' }).click()
 
-  await expect(page).toHaveURL(/\/w\/acme-product\/members$/)
+  // A workspace opens on its maps.
+  await expect(page).toHaveURL(/\/w\/acme-product\/maps$/)
+  await page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Members' }).click()
   await expect(page.getByRole('heading', { name: 'Members', exact: true })).toBeVisible()
   await expect(members(page)).toHaveCount(1)
   await expect(members(page).first()).toContainText(owner.name)
@@ -77,6 +79,8 @@ test('signing in locally, and out', async ({ page }) => {
 test('an invited person accepts from the email with a new account', async ({ page, browser }) => {
   await signIn(page)
   await page.getByRole('link', { name: 'Open Acme Product' }).click()
+  await expect(page).toHaveURL(/\/w\/acme-product\/maps$/)
+  await page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Members' }).click()
   await page.getByRole('textbox', { name: 'Email', exact: true }).fill(carol.email)
   await page.getByRole('combobox', { name: 'Role', exact: true }).selectOption('editor')
   await page.getByRole('button', { name: 'Send invite' }).click()
@@ -93,7 +97,8 @@ test('an invited person accepts from the email with a new account', async ({ pag
   await guest.getByLabel('Password').fill(carol.password)
   await guest.getByRole('button', { name: 'Create account and join' }).click()
 
-  await expect(guest).toHaveURL(/\/w\/acme-product\/members$/)
+  await expect(guest).toHaveURL(/\/w\/acme-product\/maps$/)
+  await guest.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Members' }).click()
   await expect(members(guest).filter({ hasText: carol.name })).toContainText('editor')
   // An editor sees the members but cannot manage them.
   await expect(guest.getByRole('heading', { name: 'Invite someone', exact: true })).toHaveCount(0)
@@ -136,7 +141,8 @@ test('a Keycloak user accepts an invite through single sign-on', async ({ page, 
   // Single sign-on returns to the invite, now signed in.
   await expect(alice).toHaveURL(link)
   await alice.getByRole('button', { name: 'Accept invite' }).click()
-  await expect(alice).toHaveURL(/\/w\/acme-product\/members$/)
+  await expect(alice).toHaveURL(/\/w\/acme-product\/maps$/)
+  await alice.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Members' }).click()
   await expect(members(alice).filter({ hasText: 'Alice Example' })).toContainText('viewer')
   await ctx.close()
 })

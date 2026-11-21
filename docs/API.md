@@ -176,7 +176,7 @@ Both need viewer and return `{entries: [event + actorName], next}`. `actorName` 
 | Message | Meaning |
 |---|---|
 | `{type: "event", event}` | One event after `after`, oldest first: first the backlog, then live ones. Ids only grow and none repeat |
-| `{type: "presence", users: [{id, name}]}` | Everyone watching the map now, on any instance, each once, sorted by name. Sent whenever it changes |
+| `{type: "presence", users: [{id, name}]}` | Everyone watching the map now, on any instance, each once, sorted by name. Sent whenever it changes. `users` is left out when nobody is on the map |
 | `{type: "resync"}` | The client is too far behind (over 1,000 events, or too slow to read): reload the map and reconnect from its new `lastEventId`. The socket then closes |
 
 An event is `{id, mapId, actorId, entity, entityId, action, before, after, at}`. `entity` is `map`, `node`, `release`, `step`, `placement`, `workflow` or `status`; `action` is `create`, `update`, `move`, `delete` or `restore`. A create carries the whole entity in `after`; an update or move carries the changed fields in `before` and `after`, plus the new `version` where the entity has one; a placement move also carries the step's new version as `stepVersion`. A delete carries the fields that name the row in `before` (a node's `title` and `level`, a step's `key` and `title`, a release's, status's or map's `name`), a restore the same in `after`; a restore brings back rows the client no longer holds, so clients reload on it. Workspace-wide events (workflows and statuses, `mapId` null) go to every map in the workspace.
