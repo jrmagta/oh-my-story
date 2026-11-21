@@ -352,7 +352,9 @@ function MapGrid() {
 
   // Columns: row labels, one per backbone column, and one for adding at the end.
   const widths = bb.columns.map((c) => (collapsed(c) ? '52px' : '184px')).join(' ')
-  const style = { gridTemplateColumns: `max-content ${widths}${canEdit ? ' 150px' : ''}` }
+  // The last, flexible column takes up whatever width a release band needs beyond the others (on a
+  // narrow map, or with activities collapsed), so bands never stretch the label column.
+  const style = { gridTemplateColumns: `max-content ${widths}${canEdit ? ' 150px' : ''} minmax(0, 1fr)` }
   const col = (start: number, span = 1) => ({ gridColumn: `${start + 2} / span ${span}` })
   const trailing = { gridColumn: `${bb.columns.length + 2}` }
 
