@@ -12,7 +12,7 @@ A self-hosted user story mapping tool. Feature set modelled on Avion; visual des
 | Auth | OIDC (Entra ID / Keycloak / Okta) + local accounts |
 | Frontend | React + TypeScript + Vite, TanStack Query, Zustand, React Router, dnd-kit, Tailwind CSS v4 + daisyUI v5 with two custom themes |
 | Dev deploy | docker-compose: app, Postgres, Keycloak, Mailpit |
-| Prod deploy | Helm chart: Deployment, Service, Ingress, HPA, migration Job; external Postgres or CloudNativePG |
+| Prod deploy | Helm chart: Deployment, Service, Ingress, HPA, migration Job; external Postgres or CloudNativePG. A `vX.Y.Z` tag publishes the image `ghcr.io/jrmagta/oh-my-story:X.Y.Z` and the chart `oci://ghcr.io/jrmagta/charts/oh-my-story` (`.github/workflows/release.yml`) |
 | Data model | `docs/DATA_MODEL.md`. UUIDv7 ids, fractional-index ranks, per-workspace roles, invite-only sign-up, workspace-wide step keys with a server-unique project key (CHC-12) |
 | Target devices | Desktop browser first. Phone and tablet layouts are not optimised; the map scrolls sideways and may be view-only there |
 | Tests | Go tests against real Postgres, Playwright e2e |
