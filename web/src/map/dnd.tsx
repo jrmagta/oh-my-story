@@ -114,8 +114,10 @@ export function MapDnd({ view, onMove, children }: { view: MapView; onMove: (m: 
     }),
   )
   const [dragging, setDragging] = useState<DragItem | null>(null)
+  const [ghost, setGhost] = useState<{ node: HTMLElement; width: number } | null>(null)
   const end = (e: DragEndEvent) => {
     setDragging(null)
+    setGhost(null)
     const item = itemOf(e.active.data.current)
     const target = targetOf(e.over?.data.current)
     if (!item || !target) return
@@ -132,14 +134,61 @@ export function MapDnd({ view, onMove, children }: { view: MapView; onMove: (m: 
           draggable: 'To move this, press space. Use the arrow keys to choose where, then space to drop it there, or escape to cancel.',
         },
       }}
-      onDragStart={(e) => setDragging(itemOf(e.active.data.current) ?? null)}
+      onDragStart={(e) => {
+        setDragging(itemOf(e.active.data.current) ?? null)
+        setGhost(snapshot(String(e.active.id)))
+      }}
       onDragEnd={end}
-      onDragCancel={() => setDragging(null)}
+      onDragCancel={() => {
+        setDragging(null)
+        setGhost(null)
+      }}
     >
       {children}
-      <DragOverlay dropAnimation={null}>{dragging && <div className="drag-ghost">{dragging.label}</div>}</DragOverlay>
+      <DragOverlay dropAnimation={null}>
+        {dragging &&
+          (ghost ? (
+            // A smaller, see-through copy of the card being moved; inert and hidden from assistive tech.
+            <div
+              className="drag-ghost"
+              aria-hidden
+              inert
+              style={{ width: ghost.width }}
+              ref={(el) => {
+                if (el && el.firstChild !== ghost.node) el.replaceChildren(ghost.node)
+              }}
+            />
+          ) : (
+            <div className="drag-ghost plain">{dragging.label}</div>
+          ))}
+      </DragOverlay>
     </DndContext>
   )
+}
+
+/**
+ * A copy of the card a drag started from, for the drag overlay. Backbone
+ * titles are dragged by their whole card (.map-obj or .map-act), so that is
+ * what is copied, colour and all. Inline styles (a card's colour variables)
+ * are set again through the CSSOM: the Content-Security-Policy ignores
+ * inline style attributes that do not come from script.
+ */
+function snapshot(dragId: string): { node: HTMLElement; width: number } | null {
+  const el = document.querySelector(`[data-drag-id="${CSS.escape(dragId)}"]`)
+  const card = el?.closest('.map-obj, .map-act, .step-card, .band-row') ?? el
+  if (!(card instanceof HTMLElement)) return null
+  const copy = card.cloneNode(true) as HTMLElement
+  const from = [card, ...card.querySelectorAll<HTMLElement>('*')]
+  const to = [copy, ...copy.querySelectorAll<HTMLElement>('*')]
+  to.forEach((c, i) => {
+    const src = from[i]
+    c.removeAttribute('style')
+    c.removeAttribute('id')
+    c.classList.remove('drop', 'dragging')
+    if (src) for (const prop of Array.from(src.style)) c.style.setProperty(prop, src.style.getPropertyValue(prop))
+  })
+  copy.style.removeProperty('grid-column')
+  return { node: copy, width: card.getBoundingClientRect().width }
 }
 
 /** Presses that start here edit or open something, so they never start a drag. */
@@ -159,6 +208,8 @@ export function useDrag(id: string, item: DragItem, disabled: boolean) {
   }
   return {
     ref: d.setNodeRef,
+    /** Spread on the dragged element so the drag overlay can copy its card. */
+    id: { 'data-drag-id': `drag:${id}` },
     /** The focusable element keys go to; dnd-kit returns focus to it after a drop. */
     keysRef: d.setActivatorNodeRef,
     dragging: d.isDragging,

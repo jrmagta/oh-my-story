@@ -410,6 +410,7 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
     // rename and add fields and the menu are not inside a button (whose content is presentational).
     <div
       ref={refs(drag.ref, drop.ref)}
+      {...drag.id}
       className={`node-head ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''} ${canEdit ? 'grab-area' : ''}`}
       {...drag.pointer}
     >
@@ -647,6 +648,7 @@ function BandHeader({ release, index, total }: { release: Release | null; index:
   return (
     <div
       ref={refs(drag.ref, drop.ref)}
+      {...drag.id}
       className={`band-row ${tone} ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''}`}
       role="heading"
       aria-level={2}
@@ -887,6 +889,7 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
   return (
     <div
       ref={refs(drag.ref, drop.ref)}
+      {...drag.id}
       className={`step-card ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''} ${dimmed ? 'dimmed' : ''}`}
       {...drag.pointer}
     >
