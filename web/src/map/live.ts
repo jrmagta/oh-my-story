@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueryClient, type QueryKey } from '@tanstack/react-query'
 import type { Dependency, Label, MapNode, MapView, Persona, Placement, Release, Step } from '../api'
 
@@ -151,17 +151,6 @@ export function applyEvents(view: MapView, evs: LiveEvent[]): MapView | null {
 }
 
 export type LiveState = 'connecting' | 'live' | 'offline'
-
-/** The app's top bar shows the open map's connection; a map page reports it here (null when none is open). */
-export const LiveStatusContext = createContext<(s: LiveState | null) => void>(() => {})
-
-export function useReportLive(state: LiveState | null) {
-  const report = useContext(LiveStatusContext)
-  useEffect(() => {
-    report(state)
-    return () => report(null)
-  }, [state, report])
-}
 
 export const liveLabel: Record<LiveState, string> = {
   connecting: 'Connecting to live updates…',

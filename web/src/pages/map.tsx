@@ -4,7 +4,7 @@ import { Link, useOutletContext, useParams, useSearchParams } from 'react-router
 import { api, ApiError, atLeast, type Category, type Level, type MapNode, type MapView, type Membership, type Release, type Status } from '../api'
 import { MapDnd, refs, useDrag, useDrop } from '../map/dnd'
 import { HistoryList } from '../map/HistoryList'
-import { useLiveMap, useReportLive, type LiveState, type PresentUser } from '../map/live'
+import { liveLabel, useLiveMap, type LiveState, type PresentUser } from '../map/live'
 import { backbone, bands, cellKey, cells, inheritedColour, type Adding, type Band, type Card, type Column } from '../map/layout'
 import { amount, formatEstimate, totals, type Total, type Totals } from '../map/estimates'
 import { nodeStyle, palette } from '../map/colours'
@@ -298,11 +298,29 @@ export function estimated(t: Total, unit: string): string {
   return t.unestimated ? `${amount(t.hundredths, unit)} (${t.unestimated} unestimated)` : amount(t.hundredths, unit)
 }
 
-/** Who is on the map now. The connection's state shows in the top bar (see ConnectionStatus). */
+/** This map's live connection, as an icon; its words are the tooltip. */
+function ConnectionStatus({ state }: { state: LiveState }) {
+  return (
+    <span className={`conn ${state}`} role="status" title={liveLabel[state]}>
+      {/* A plug in its socket; offline, pulled out of it. */}
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+        <path d="M5 2.5h14" />
+        {state === 'offline' ? (
+          <path d="M9 8v3M15 8v3M6.5 11h11v2.5a5.5 5.5 0 0 1-11 0zM12 19v3.5" />
+        ) : (
+          <path d="M9 2.5v4M15 2.5v4M6.5 6.5h11V9a5.5 5.5 0 0 1-11 0zM12 14.5v8" />
+        )}
+      </svg>
+      <span className="sr-only">{liveLabel[state]}</span>
+    </span>
+  )
+}
+
+/** Whether this map is live, and who is on it now. */
 function Presence({ users, state }: { users: PresentUser[]; state: LiveState }) {
-  useReportLive(state)
   return (
     <div className="presence" aria-label="On this map now">
+      <ConnectionStatus state={state} />
       <ul className="flex -space-x-1">
         {users.map((u) => (
           <li key={u.id} title={u.name}>
@@ -1088,7 +1106,7 @@ function AddRelease() {
   const { ws, view, run } = useMap()
   const [open, setOpen] = useState(false)
   return (
-    <div style={{ gridColumn: '2 / span 2', marginTop: 22 }} data-export="skip">
+    <div style={{ gridColumn: '2 / span 2', marginTop: 2 }} data-export="skip">
       {open ? (
         <TextInput
           label="New release name"
@@ -1099,7 +1117,7 @@ function AddRelease() {
           }}
         />
       ) : (
-        <button type="button" className="add-slot w-full" onClick={() => setOpen(true)}>
+        <button type="button" className="add-slot add-release w-full" onClick={() => setOpen(true)}>
           + Add release
         </button>
       )}

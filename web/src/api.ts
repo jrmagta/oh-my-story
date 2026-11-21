@@ -229,6 +229,27 @@ export interface ApiToken {
   createdAt: string
 }
 
+/** An outgoing webhook; its signing secret is shown once, when made. */
+export interface Webhook {
+  id: string
+  url: string
+  events: string[]
+  active: boolean
+  createdAt: string
+}
+
+export interface Delivery {
+  id: number
+  type: string
+  status: 'pending' | 'sent' | 'failed'
+  attempts: number
+  lastStatusCode: number | null
+  lastError: string | null
+  nextAttemptAt: string | null
+  createdAt: string
+  deliveredAt: string | null
+}
+
 export interface ShareLink {
   id: string
   creatorName: string
@@ -419,6 +440,14 @@ export const api = {
     request<Comment>('PATCH', `${mp(slug, mapId)}/comments/${id}`, b),
   /** The author, or an admin. */
   deleteComment: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/comments/${id}`),
+  webhooks: (slug: string) => request<Webhook[]>('GET', `${ws(slug)}/webhooks`),
+  /** Admins. events: entity.action names, or ['*'] for all. The secret is in this reply only. */
+  createWebhook: (slug: string, b: { url: string; events: string[] }) => request<Webhook & { secret: string }>('POST', `${ws(slug)}/webhooks`, b),
+  patchWebhook: (slug: string, id: string, b: { url?: string; events?: string[]; active?: boolean }) =>
+    request<Webhook>('PATCH', `${ws(slug)}/webhooks/${id}`, b),
+  deleteWebhook: (slug: string, id: string) => request<void>('DELETE', `${ws(slug)}/webhooks/${id}`),
+  deliveries: (slug: string, id: string) => request<Delivery[]>('GET', `${ws(slug)}/webhooks/${id}/deliveries`),
+  testWebhook: (slug: string, id: string) => request<Delivery>('POST', `${ws(slug)}/webhooks/${id}/test`, {}),
   apiTokens: (slug: string) => request<ApiToken[]>('GET', `${ws(slug)}/api-tokens`),
   /** Admins. expiresInDays: 30, 90, 365 or null for never. The token is in this reply only. */
   createApiToken: (slug: string, b: { name: string; scope: 'read' | 'write'; expiresInDays: number | null }) =>

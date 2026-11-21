@@ -321,6 +321,20 @@
     align-items: center;
     gap: 8px;
   }
+  /* The theme switch in the top bar: an outlined moon or sun on the black bar. */
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    color: #F2F2F2;
+  }
+  .theme-toggle:hover { background: rgb(255 255 255 / 0.12); }
+  .theme-toggle:focus-visible { outline: 3px solid var(--color-brand-amber); outline-offset: 2px; }
+  .theme-toggle svg * { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
   /* The top bar's connection icon: a plug, green when live, amber and pulsing while connecting, red and pulled out offline. */
   .conn { display: inline-flex; color: var(--color-brand-green); }
   .conn path { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -674,6 +688,10 @@
   .map-scroll { cursor: grab; }
   .map-scroll.panning { cursor: grabbing; user-select: none; }
   .map-scroll .band-row { cursor: default; }
+  /* A release band fits the part of the map in view (--pane-w, set by MapViewport) and stays
+     pinned to its left, so it never runs off-screen on a wide map. Exports span the whole map. */
+  .map-scroll .band-row { justify-self: start; width: var(--pane-w, auto); max-width: none; }
+  .map-export.exporting .band-row { width: auto; justify-self: stretch; }
 
   /* The objective and activity rows, pinned at the top of the scroll area; a subgrid so they keep
      the map's columns. Their background hides steps scrolling underneath. */
@@ -979,6 +997,21 @@
     text-align: left;
     word-spacing: 0.14em;
   }
+  /* Between the last release and Unscheduled: a slim line, not another row of cards. */
+  .add-slot.add-release { padding: 3px 10px; font-size: 11px; }
+  /* Settings → Webhooks. */
+  .hook { border-top: 1px solid var(--oms-line); padding-top: 12px; }
+  .hook-events { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; margin: 8px 0 0 24px; }
+  .hook-deliveries { width: 100%; table-layout: fixed; font-size: 12px; }
+  .hook-deliveries th { text-align: left; @apply text-muted; font-weight: 800; text-transform: uppercase; font-size: 11px; padding: 2px 6px 4px 0; }
+  .hook-deliveries td { padding: 3px 6px 3px 0; border-top: 1px solid var(--oms-line); vertical-align: top; }
+  .hook-deliveries th:nth-child(1) { width: 34%; }
+  .hook-deliveries th:nth-child(3) { width: 9%; }
+  .hook-status { font-weight: 800; text-transform: uppercase; font-size: 11px; }
+  .hook-status.sent { color: var(--color-brand-green); }
+  .hook-status.pending { color: var(--color-brand-amber); }
+  .hook-status.failed { color: var(--color-brand-red); }
+
   .add-slot:hover {
     color: var(--color-base-content);
     border-color: currentColor;
@@ -994,7 +1027,7 @@
     /* One height for every band, Unscheduled (no date, no menu) included. */
     height: 44px;
     padding: 0 14px;
-    margin-top: 14px;
+    margin-top: 10px;
     background: #000;
     color: #F2F2F2;
     position: sticky;

@@ -58,6 +58,21 @@ test('a big map zooms, fits, pans, keeps its backbone pinned, and has a minimap'
   // An objective names itself on hover, even when its title is scrolled out of sight.
   await expect(page.locator('.map-obj').first()).toHaveAttribute('title', 'Discover')
 
+  // Release bands fit the part of the map in view, whatever the scroll or zoom: Focus is always on screen.
+  const bandInView = async () => {
+    const band = (await page.getByRole('heading', { name: 'Release MVP' }).boundingBox())!
+    const pane = (await page.locator('.map-scroll').boundingBox())!
+    return band.x >= pane.x && band.x + band.width <= pane.x + pane.width
+  }
+  await page.locator('.map-scroll').evaluate((s) => s.scrollTo(600, 0))
+  expect(await bandInView()).toBe(true)
+  await expect(page.getByRole('button', { name: 'Focus release MVP' })).toBeInViewport()
+  await page.getByRole('button', { name: 'Zoom out' }).click()
+  await page.getByRole('button', { name: 'Zoom out' }).click()
+  await expect.poll(bandInView).toBe(true)
+  await page.keyboard.press('Control+0')
+  await expect(zoomLabel).toHaveText('100%')
+
   // The minimap shows the map is bigger than the view; clicking its far corner moves there.
   const mini = page.getByRole('img', { name: /^Map overview/ })
   await expect(mini).toBeVisible()

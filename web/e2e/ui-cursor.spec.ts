@@ -63,11 +63,9 @@ test('everything clickable shows the hand cursor', async ({ page }) => {
     expect(await offenders(page), path).toEqual([])
   }
   await page.goto(`/w/${slug}/maps/${map.id}`)
-  // The map's live connection shows as an icon in the top bar, and only while a map is open.
-  await expect(page.locator('header.topnav').getByRole('status', { name: /^Live/ })).toBeVisible()
-  await page.locator('header.topnav').getByRole('link', { name: 'Maps' }).click()
+  // The map's live connection shows as an icon beside who is on the map.
+  await expect(page.getByLabel('On this map now').getByRole('status', { name: /^Live/ })).toBeVisible()
   await expect(page.locator('header.topnav').getByRole('status')).toHaveCount(0)
-  await page.goBack()
   await page.locator('.step-card').first().getByRole('button').first().click()
   await expect(page.getByRole('complementary', { name: /^Step / })).toBeVisible()
   await page.getByRole('button', { name: /^Actions for map/ }).click()
