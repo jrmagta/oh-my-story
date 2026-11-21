@@ -38,14 +38,20 @@ function childrenOf(nodes: MapNode[]): Map<string, MapNode[]> {
   return out
 }
 
-export function backbone(view: MapView): Backbone {
+/**
+ * addingUnder is the objective an activity is being added to: it gets an
+ * empty column after its activities to hold the add field. That column has
+ * the same key as the empty column of an objective with no activities, so
+ * the field stays mounted (and focused) when the first activity appears.
+ */
+export function backbone(view: MapView, addingUnder: string | null = null): Backbone {
   const kids = childrenOf(view.nodes)
   const out: Backbone = { objectives: [], columns: [] }
   for (const obj of kids.get('') ?? []) {
     const start = out.columns.length
     const acts = kids.get(obj.id) ?? []
-    if (acts.length === 0) out.columns.push({ key: `o:${obj.id}`, activity: null, objective: obj })
     for (const act of acts) out.columns.push({ key: act.id, activity: act, objective: obj })
+    if (acts.length === 0 || addingUnder === obj.id) out.columns.push({ key: `o:${obj.id}`, activity: null, objective: obj })
     out.objectives.push({ node: obj, start, span: out.columns.length - start })
   }
   return out

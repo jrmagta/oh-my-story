@@ -752,13 +752,6 @@
   }
   .title-input:focus, .title-input:focus-visible { outline: none; box-shadow: none; border-style: solid; }
   .band-input { max-width: 22rem; }
-  .node-popup {
-    position: absolute;
-    left: 0;
-    top: calc(100% + 6px);
-    width: 14rem;
-    z-index: 10;
-  }
   .icon-btn {
     font-weight: 800;
     line-height: 1;

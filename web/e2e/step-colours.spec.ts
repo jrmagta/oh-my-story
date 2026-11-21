@@ -44,6 +44,21 @@ test('backbone cards take a colour, keep it after a reload, and go back to defau
   await expect(page.locator('.map-act', { hasText: 'Search' })).toHaveCSS('color', 'rgb(0, 0, 0)')
   await pick('objective Buy', 'Green')
 
+  // Add activity from the objective's menu opens a field in a new column after its activities;
+  // entry stays open for the next one, and Escape ends it.
+  await page.getByRole('button', { name: 'Actions for objective Buy' }).click()
+  await page.getByRole('button', { name: 'Add activity', exact: true }).click()
+  const field = page.getByRole('textbox', { name: 'New activity in Buy' })
+  await field.fill('Checkout')
+  await field.press('Enter')
+  await expect(page.getByRole('button', { name: 'Move activity Checkout' })).toBeVisible()
+  await field.fill('Receipt')
+  await field.press('Enter')
+  await expect(page.getByRole('button', { name: 'Move activity Receipt' })).toBeVisible()
+  await field.press('Escape')
+  await expect(field).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Move activity / })).toHaveCount(4)
+
   await page.reload()
   await expect(activity).toHaveCSS('background-color', 'rgb(59, 130, 196)')
   await page.getByRole('button', { name: 'Actions for activity Browse' }).click()

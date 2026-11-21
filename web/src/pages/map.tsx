@@ -397,8 +397,9 @@ export function MapHeader(props: {
 const levelLabel: Record<Level, string> = { objective: 'Objective', activity: 'Activity' }
 
 export function MapGrid() {
-  const { view, canEdit, prefs } = useMap()
-  const bb = useMemo(() => backbone(view), [view])
+  const { view, canEdit, prefs, adding } = useMap()
+  const addingUnder = adding?.startsWith('activity:') ? adding.slice('activity:'.length) : null
+  const bb = useMemo(() => backbone(view, addingUnder), [view, addingUnder])
   const all = useMemo(() => bands(view), [view])
   // A focused release shows alone; a focus on a release that no longer exists shows everything.
   const focused = all.filter((b) => (b.release?.id ?? UNSCHEDULED_BAND) === prefs.focus)
@@ -488,9 +489,6 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
   const sum = total && estimated(total, ws.estimateUnit)
   const [renaming, setRenaming] = useState(false)
   const add = useAddNode(child ?? 'activity', node)
-  // Until a node has children, the empty column under it holds the add field; showing it here
-  // too would put two fields on one key, and the second would close the first by taking focus.
-  const hasChildren = view.nodes.some((n) => n.parentId === node.id)
   const drag = useDrag(`node:${node.id}`, { kind: 'node', node, label }, !canEdit || renaming)
   const drop = useDrop(`node:${node.id}`, { kind: 'node', node, label })
   return (
@@ -536,11 +534,6 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
         </span>
       )}
       {node.level === 'objective' && <PersonaBadges node={node} />}
-      {child && hasChildren && add.open && (
-        <span className="node-popup" data-no-drag>
-          {add.input}
-        </span>
-      )}
     </div>
   )
 }
@@ -667,10 +660,10 @@ function ColourChooser({ node, label, onPick }: { node: MapNode; label: string; 
 }
 
 /**
- * Adding backbone nodes. Which add input is open lives in the map context, not
- * in the button, because the button that opened it can unmount mid-entry: the
- * empty column that offers a first activity becomes that activity. The input then
- * reappears at the parent's own add button, still open.
+ * Adding backbone nodes. Which add input is open lives in the map context, so an
+ * objective's ⋯ menu can open it, and so the grid knows to give that objective an
+ * empty column after its activities to hold it (see backbone). Entry stays open
+ * for the next activity; Escape or leaving the field ends it.
  */
 function useAddNode(level: Level, parent: MapNode | null) {
   const { ws, view, run, adding, setAdding } = useMap()
