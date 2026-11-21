@@ -144,6 +144,33 @@ func (s *Store) DeleteDependency(ctx context.Context, actor, workspaceID, mapID,
 	})
 }
 
+// linkedElsewhere tells maps that show st only as the far end of a dependency
+// (it is not placed on them) whether it is now done, as a stepref update.
+func linkedElsewhere(ctx context.Context, tx pgx.Tx, stepID uuid.UUID, st Step) ([]change, error) {
+	var done bool
+	if err := tx.QueryRow(ctx, `SELECT category = 'done' FROM statuses WHERE id = $1`, st.StatusID).Scan(&done); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx,
+		`SELECT DISTINCT p.map_id FROM dependencies d
+		 JOIN placements p ON p.step_id = CASE WHEN d.blocker_id = $1 THEN d.blocked_id ELSE d.blocker_id END
+		 JOIN maps m ON m.id = p.map_id AND m.deleted_at IS NULL
+		 WHERE $1 IN (d.blocker_id, d.blocked_id)
+		   AND NOT EXISTS (SELECT 1 FROM placements q WHERE q.step_id = $1 AND q.map_id = p.map_id)`, stepID)
+	if err != nil {
+		return nil, err
+	}
+	maps, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, err
+	}
+	out := make([]change, 0, len(maps))
+	for _, m := range maps {
+		out = append(out, change{mapID: m, entity: "stepref", id: stepID, action: "update", after: map[string]any{"done": done, "key": st.Key}})
+	}
+	return out, nil
+}
+
 // mapDependencies loads the links touching live steps on a map, and the
 // steps at their far ends that are not on it.
 func mapDependencies(ctx context.Context, tx pgx.Tx, mapID uuid.UUID) ([]Dependency, []StepRef, error) {

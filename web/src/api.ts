@@ -173,7 +173,27 @@ export interface MapView {
   releases: Release[]
   steps: Step[]
   placements: Placement[]
+  /** Links touching steps on this map; otherSteps names their ends on other maps. */
+  dependencies: Dependency[]
+  otherSteps: StepRef[]
   lastEventId: number
+}
+
+/** The blocker step blocks the blocked step. */
+export interface Dependency {
+  id: string
+  blockerId: string
+  blockedId: string
+}
+
+/** A step on another map that one of this map's dependencies points at. */
+export interface StepRef {
+  id: string
+  key: string
+  title: string
+  done: boolean
+  mapId: string
+  mapName: string
 }
 
 /** A step found by search, with where it sits. */
@@ -399,6 +419,9 @@ export const api = {
   moveStep: (slug: string, mapId: string, id: string, b: { activityId: string; releaseId: string | null; version: number } & Position) =>
     request<{ placement: Placement; stale: boolean }>('POST', `${mp(slug, mapId)}/steps/${id}/move`, b),
   deleteStep: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/steps/${id}`),
+  createDependency: (slug: string, mapId: string, b: { blockerId: string; blockedId: string }) =>
+    request<Dependency>('POST', `${mp(slug, mapId)}/dependencies`, b),
+  deleteDependency: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/dependencies/${id}`),
   restoreStep: (slug: string, mapId: string, id: string) =>
     request<Step>('POST', `${mp(slug, mapId)}/steps/${id}/restore`, {}),
 

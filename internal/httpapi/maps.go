@@ -62,6 +62,9 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 		{"DELETE " + m + "/steps/{id}", role.Edit, s.deleteStep},
 		{"POST " + m + "/steps/{id}/restore", role.Edit, s.restoreStep},
 
+		{"POST " + m + "/dependencies", role.Edit, s.createDependency},
+		{"DELETE " + m + "/dependencies/{id}", role.Edit, s.deleteDependency},
+
 		{"GET " + m + "/steps/{id}/comments", role.View, s.listComments},
 		{"POST " + m + "/steps/{id}/comments", role.Comment, s.createComment},
 		{"PATCH " + m + "/comments/{id}", role.Comment, s.patchComment},
@@ -532,6 +535,22 @@ func (s *Server) moveStep(q mapRequest) (int, any, error) {
 
 func (s *Server) deleteStep(q mapRequest) (int, any, error) {
 	return 0, nil, s.store.DeleteStep(q.r.Context(), q.user, q.ws, q.mapID, q.id)
+}
+
+func (s *Server) createDependency(q mapRequest) (int, any, error) {
+	var in struct{ BlockerID, BlockedID uuid.UUID }
+	if err := q.read(&in); err != nil {
+		return 0, nil, err
+	}
+	if in.BlockerID == uuid.Nil || in.BlockedID == uuid.Nil {
+		return 0, nil, errBadRequest("blockerId and blockedId are required")
+	}
+	d, err := s.store.CreateDependency(q.r.Context(), q.user, q.ws, q.mapID, in.BlockerID, in.BlockedID)
+	return http.StatusCreated, d, err
+}
+
+func (s *Server) deleteDependency(q mapRequest) (int, any, error) {
+	return 0, nil, s.store.DeleteDependency(q.r.Context(), q.user, q.ws, q.mapID, q.id)
 }
 
 func (s *Server) restoreStep(q mapRequest) (int, any, error) {

@@ -13,11 +13,13 @@ export interface ViewPrefs {
   collapsedReleases: string[]
   /** A release id (or UNSCHEDULED_BAND) to show alone, or null for all. */
   focus: string | null
+  /** Draw arrows between linked steps. */
+  lines: boolean
 }
 
 export const UNSCHEDULED_BAND = 'unscheduled'
 
-export const defaultPrefs: ViewPrefs = { size: 'full', collapsedActivities: [], collapsedReleases: [], focus: null }
+export const defaultPrefs: ViewPrefs = { size: 'full', collapsedActivities: [], collapsedReleases: [], focus: null, lines: false }
 
 const storageKey = (mapId: string) => `oms-view:${mapId}`
 
@@ -31,6 +33,7 @@ function load(mapId: string): ViewPrefs {
       collapsedActivities: Array.isArray(p.collapsedActivities) ? p.collapsedActivities.filter((x) => typeof x === 'string') : [],
       collapsedReleases: Array.isArray(p.collapsedReleases) ? p.collapsedReleases.filter((x) => typeof x === 'string') : [],
       focus: typeof p.focus === 'string' ? p.focus : null,
+      lines: p.lines === true,
     }
   } catch {
     return defaultPrefs

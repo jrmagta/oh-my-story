@@ -112,6 +112,13 @@ export function describe(e: HistoryEntry, n: Names): string | null {
       return `deleted ${stepName(n, e.entityId, b)} ${b.title !== undefined ? q(b.title) : ''}`.trim()
     case 'step:restore':
       return `restored ${stepName(n, e.entityId, a)}`
+    case 'dependency:create':
+      return `linked ${String(a.blockerKey)} as blocking ${String(a.blockedKey)}`
+    case 'dependency:delete':
+      return `unlinked ${String(b.blockerKey)} from blocking ${String(b.blockedKey)}`
+    case 'stepref:update':
+      // Told this map a linked step on another map changed; its own map's history says how.
+      return null
     case 'placement:create':
       return null
     case 'placement:move': {

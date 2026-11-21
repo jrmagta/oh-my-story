@@ -8,6 +8,7 @@ import { Comments } from '../map/Comments'
 import { amount, formatEstimate } from '../map/estimates'
 import { LabelChips, mapKey, StatusLabel, useMap } from './map'
 import { colourFor, TagPicker } from '../map/TagPicker'
+import { DependencySection } from '../map/Dependencies'
 
 /** The open step, beside the map. Editors change it in place; everyone else reads. */
 export function StepPanel({ stepId }: { stepId: string }) {
@@ -152,6 +153,7 @@ export function StepPanel({ stepId }: { stepId: string }) {
             </div>
           </dl>
           <Description key={step.id} text={step.descriptionMd} editable={canEdit} onSave={(descriptionMd) => patch({ descriptionMd })} />
+          <DependencySection key={`deps:${step.id}`} stepId={step.id} stepKey={step.key} />
           {canEdit && (
             <div className="p-5">
               <ConfirmButton
