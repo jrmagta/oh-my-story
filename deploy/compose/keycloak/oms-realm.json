@@ -13,12 +13,28 @@
       "secret": "dev-only-client-secret",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
-      "redirectUris": ["http://localhost:8080/*", "http://localhost:18080/*"],
-      "webOrigins": ["http://localhost:8080", "http://localhost:18080"],
+      "redirectUris": [
+        "http://localhost:8080/*",
+        "http://localhost:18080/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8080",
+        "http://localhost:18080"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:8080/*##http://localhost:18080/*"
-      }
+      },
+      "serviceAccountsEnabled": true,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email",
+        "kc-admin-api"
+      ]
     }
   ],
   "users": [
@@ -29,7 +45,13 @@
       "lastName": "Example",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "alice", "temporary": false }]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alice",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "bob",
@@ -38,7 +60,47 @@
       "lastName": "Example",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "bob", "temporary": false }]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bob",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "carol",
+      "enabled": true,
+      "email": "carol@example.com",
+      "emailVerified": true,
+      "firstName": "Carol",
+      "lastName": "Directory",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "carol",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "dave",
+      "enabled": false,
+      "email": "dave@example.com",
+      "emailVerified": true,
+      "firstName": "Dave",
+      "lastName": "Disabled"
+    },
+    {
+      "username": "service-account-oh-my-story",
+      "enabled": true,
+      "serviceAccountClientId": "oh-my-story",
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-users"
+        ]
+      }
     }
   ]
 }
