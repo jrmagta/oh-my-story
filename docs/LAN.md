@@ -12,14 +12,14 @@ Its database and Keycloak data live in podman volumes and survive restarts. `mak
 
 ## Certificates
 
-The first `make lan` runs `deploy/lan/pki/make-certs.sh`, which writes a test PKI to `deploy/lan/pki/out/`, outside git:
+The first `make lan` runs `deploy/lan/pki/make-certs.sh`, which writes a test PKI to `~/.local/share/oh-my-story/lan-pki/` (`LAN_PKI_DIR`), outside git and outside any checkout, so every checkout and worktree runs the stack with the same files:
 
 - `ca.crt`: the test CA, **OMS LAN Test CA**. Devices that trust it see the sites as secure.
 - `server.crt` / `server.key`: HTTPS for both sites, for `LAN_HOST`, `localhost` and the container names.
 - `users/<name>.p12`: a client certificate per person, for signing in to Keycloak without a password. The person's email is in the certificate, which is how Keycloak finds their account.
 - `users.txt`: the people, their passwords, and each `.p12` file's password. `secrets.env`: the same, plus the Keycloak admin password and the app's client secret.
 
-Running it again keeps what exists, so certificates you have imported stay valid. Delete `out/` to start over; then reset Keycloak too (below).
+Running it again keeps what exists, so certificates you have imported stay valid. Delete that folder to start over; then reset Keycloak too (below).
 
 ## People in the LAN Keycloak
 
@@ -47,7 +47,7 @@ New-NetFirewallRule -DisplayName "oh-my-story LAN HTTPS" -Direction Inbound -Pro
 ```sh
 WINUSER=<your Windows user name>
 mkdir -p /mnt/c/Users/$WINUSER/Downloads/oms-lan
-cp deploy/lan/pki/out/ca.crt deploy/lan/pki/out/users/jonathan.p12 /mnt/c/Users/$WINUSER/Downloads/oms-lan/
+cp ~/.local/share/oh-my-story/lan-pki/ca.crt ~/.local/share/oh-my-story/lan-pki/users/jonathan.p12 /mnt/c/Users/$WINUSER/Downloads/oms-lan/
 ```
 
 **3. Trust the test CA** (PowerShell as administrator), so Edge and Chrome accept both sites:

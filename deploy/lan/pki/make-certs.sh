@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Makes the LAN stack's test PKI in deploy/lan/pki/out (not in git):
+# Makes the LAN stack's test PKI in <out-dir> (make lan uses
+# ~/.local/share/oh-my-story/lan-pki, outside any checkout, so every
+# checkout and worktree drives the stack with the same certificates and
+# secrets):
 #   ca.crt / ca.key        a self-signed test CA ("OMS LAN Test CA"), 10 years
 #   server.crt / .key      HTTPS for OMS and Keycloak: the LAN host, localhost,
 #                          and the compose service names, signed by the CA
@@ -10,14 +13,13 @@
 #                          and each user's password, all random
 #   users.txt              who is who, with passwords, for you to read
 #
-# Usage: make-certs.sh <lan-host>   e.g. make-certs.sh jr-pc1.jrmagta.home
+# Usage: make-certs.sh <lan-host> <out-dir>
 # Safe to run again: existing files are kept, so certificates you have
-# already imported stay valid. Delete out/ to start over.
+# already imported stay valid. Delete <out-dir> to start over.
 set -euo pipefail
 
-host=${1:?usage: make-certs.sh <lan-host>}
-cd "$(dirname "$0")"
-out=out
+host=${1:?usage: make-certs.sh <lan-host> <out-dir>}
+out=${2:?usage: make-certs.sh <lan-host> <out-dir>}
 mkdir -p "$out/users"
 chmod 700 "$out"
 
@@ -97,4 +99,4 @@ chmod 600 "$out/ca.key" "$out"/users/*.key "$out/secrets.env" "$out/users.txt"
 # Keycloak and Caddy read the server key as their own users inside their
 # containers; out/ itself is private to you (700).
 chmod 644 "$out/server.key"
-echo "done: $(pwd)/$out"
+echo "done: $out"

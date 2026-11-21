@@ -62,20 +62,23 @@ e2e: build
 # LAN_HTTPS_PORT is the port people reach HTTPS on (443: none in the address).
 LAN_COMPOSE = $(subst deploy/compose/docker-compose.yml,deploy/lan/docker-compose.yml,$(COMPOSE))
 LAN_HTTPS_PORT ?= 443
+# The test PKI and secrets, outside any checkout: one stack, one set, whichever
+# checkout or worktree runs make lan.
+LAN_PKI_DIR ?= $(HOME)/.local/share/oh-my-story/lan-pki
 LAN_BASE_URL = https://$(LAN_HOST)$(if $(filter 443,$(LAN_HTTPS_PORT)),,:$(LAN_HTTPS_PORT))
 
 lan-certs:
 	@test -n '$(LAN_HOST)' || { echo 'set LAN_HOST, e.g. make lan LAN_HOST=story.example.home'; exit 1; }
-	deploy/lan/pki/make-certs.sh '$(LAN_HOST)'
+	deploy/lan/pki/make-certs.sh '$(LAN_HOST)' '$(LAN_PKI_DIR)'
 
 lan: lan-certs
-	LAN_HOST='$(LAN_HOST)' OMS_BASE_URL='$(LAN_BASE_URL)' $(LAN_COMPOSE) up -d --build --wait
+	LAN_HOST='$(LAN_HOST)' OMS_BASE_URL='$(LAN_BASE_URL)' LAN_PKI_DIR='$(LAN_PKI_DIR)' $(LAN_COMPOSE) up -d --build --wait
 
 lan-down:
-	LAN_HOST=unused OMS_BASE_URL=unused $(LAN_COMPOSE) down
+	LAN_HOST=unused OMS_BASE_URL=unused LAN_PKI_DIR='$(LAN_PKI_DIR)' $(LAN_COMPOSE) down
 
 # Forgets the LAN Keycloak's data (users, sessions, changes made in its admin
 # console); the next make lan imports the realm afresh.
 lan-reset-keycloak:
-	LAN_HOST=unused OMS_BASE_URL=unused $(LAN_COMPOSE) rm -sf keycloak
+	LAN_HOST=unused OMS_BASE_URL=unused LAN_PKI_DIR='$(LAN_PKI_DIR)' $(LAN_COMPOSE) rm -sf keycloak
 	podman volume rm -f oh-my-story-lan_kcdata
