@@ -37,7 +37,8 @@ test('an admin makes an API token, a script uses it, history names it, and revok
   await expect(listed).not.toContainText(token)
 
   // The section links to the API description, which anyone can fetch.
-  await expect(section.getByRole('link', { name: 'API description' })).toHaveAttribute('href', '/api/openapi.yaml')
+  await expect(section.getByRole('link', { name: 'API documentation' })).toHaveAttribute('href', '/docs/api')
+  await expect(section.getByRole('link', { name: 'OpenAPI file' })).toHaveAttribute('href', '/api/openapi.yaml')
   const spec = await page.request.get('/api/openapi.yaml')
   expect(spec.headers()['content-type']).toMatch(/^application\/yaml/)
   expect(await spec.text()).toContain('openapi: "3.1.0"')

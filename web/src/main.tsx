@@ -16,6 +16,7 @@ import { SettingsPage } from './pages/settings'
 import { SharedMapPage } from './pages/share'
 import { LabelsPage } from './pages/labels'
 import { PersonasPage } from './pages/personas'
+import { ApiDocsPage } from './pages/api-docs'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +35,8 @@ const router = createBrowserRouter([
   { path: '/forgot', element: <ForgotPage /> },
   { path: '/reset/:token', element: <ResetPage /> },
   { path: '/s/:token', element: <SharedMapPage /> },
+  // Public, like the description it shows; /api/… itself is the API.
+  { path: '/docs/api', element: <ApiDocsPage /> },
   {
     element: <RequireAuth />,
     children: [
