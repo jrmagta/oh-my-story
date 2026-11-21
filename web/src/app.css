@@ -788,6 +788,11 @@
   .map-obj { position: relative; }
   .map-obj.editable { padding-left: 20px; padding-right: 20px; }
   .map-act.editable { padding-left: 18px; padding-right: 18px; }
+  /* Clear of the right-hand strip (14px wide) by 6px. */
+  .editable .card-menu { margin-right: 0; }
+  /* Each objective is as tall as its own content, not stretched to its row: a neighbour whose
+     title wraps would otherwise leave an empty line in every other objective. */
+  .map-obj { align-self: start; }
   .side-add {
     position: absolute;
     top: 0;
