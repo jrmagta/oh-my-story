@@ -709,17 +709,6 @@
     background: var(--color-base-100);
   }
 
-  /* The row labels in the pinned rows act as a frozen column: a solid strip the full height of
-     each row, reaching back over the scroll area's left gutter, so cards scrolled sideways pass
-     under it instead of showing around the words. */
-  .backbone .map-lbl {
-    align-self: stretch;
-    display: flex;
-    align-items: center;
-    z-index: 2;
-    box-shadow: -40px 0 0 var(--color-base-100), 0 -10px 0 var(--color-base-100), 0 8px 0 var(--color-base-100);
-  }
-
   /* Zoom controls and the minimap, over the map's bottom-right corner. */
   .map-nav {
     position: absolute;
@@ -780,19 +769,6 @@
     row-gap: 8px;
     width: max-content;
     min-width: 100%;
-  }
-  .map-lbl {
-    padding-right: 4px;
-    @apply text-muted;
-    position: sticky;
-    left: 0;
-    z-index: 1;
-    background: var(--color-base-100);
-    align-self: center;
-    font-size: 12px;
-    text-transform: uppercase;
-    font-weight: 800;
-    word-spacing: 0.14em;
   }
   .map-obj {
     background: var(--oms-obj-bg);
@@ -877,6 +853,10 @@
   /* A backbone card's content: the title has the full width; the ⋯ menu sits over the corner. */
   .node-head { position: relative; }
   .node-title { display: block; overflow-wrap: anywhere; }
+  /* An objective's title and persona pills: one line when they fit, the pills wrapping below when not. */
+  .node-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+  .node-line > .node-title { min-width: 0; }
+  .node-line > .personas { margin-top: 0; }
   .grab, .grab-area { cursor: grab; }
 
   /* Dependencies: the card badge, the panel lists and finder, and the arrows over the map. */

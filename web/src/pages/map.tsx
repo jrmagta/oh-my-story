@@ -558,18 +558,17 @@ export function MapGrid() {
     )
   }
 
-  // Columns: row labels, then one per backbone column.
+  // One column per backbone column, then a flexible one (see below).
   const widths = bb.columns.map((c) => (collapsed(c) ? '52px' : '184px')).join(' ')
   // The last, flexible column takes up whatever width a release band needs beyond the others (on a
   // narrow map, or with activities collapsed), so bands never stretch the label column.
-  const style = { gridTemplateColumns: `max-content ${widths} minmax(0, 1fr)` }
-  const col = (start: number, span = 1) => ({ gridColumn: `${start + 2} / span ${span}` })
+  const style = { gridTemplateColumns: `${widths} minmax(0, 1fr)` }
+  const col = (start: number, span = 1) => ({ gridColumn: `${start + 1} / span ${span}` })
 
   return (
     <div className="map-grid" style={style}>
       {/* The backbone stays pinned at the top as a long map scrolls; it shares the grid's columns. */}
       <div className="backbone">
-      <div className="map-lbl">Objective</div>
       {bb.objectives.map((o) => (
         <div
           key={o.node.id}
@@ -591,9 +590,6 @@ export function MapGrid() {
         ) : null,
       )}
 
-      <div className="map-lbl" style={{ gridColumn: 1 }}>
-        Activity
-      </div>
       {bb.columns.map((c, i) =>
         c.activity ? (
           <div
@@ -676,21 +672,24 @@ function NodeHead({ node, bold }: { node: MapNode; bold?: boolean }) {
           }}
         />
       ) : (
-        <span
-          ref={drag.keysRef}
-          {...drag.keys}
-          aria-label={canEdit ? `Move ${label}` : undefined}
-          className={`node-title ${bold ? 'up text-[15px]' : ''} ${canEdit ? 'grab' : ''}`}
-        >
-          {node.title}
-        </span>
+        // An objective's personas follow its title on the same line, wrapping below when there is no room.
+        <div className={node.level === 'objective' ? 'node-line' : undefined}>
+          <span
+            ref={drag.keysRef}
+            {...drag.keys}
+            aria-label={canEdit ? `Move ${label}` : undefined}
+            className={`node-title ${bold ? 'up text-[15px]' : ''} ${canEdit ? 'grab' : ''}`}
+          >
+            {node.title}
+          </span>
+          {node.level === 'objective' && <PersonaBadges node={node} />}
+        </div>
       )}
       {sum && (
         <span className="node-total" aria-label={`Total for ${label}: ${sum}`}>
           {sum}
         </span>
       )}
-      {node.level === 'objective' && <PersonaBadges node={node} />}
     </div>
   )
 }
@@ -921,12 +920,11 @@ function BandRows(props: {
     <>
       {props.isLast && canEdit && <AddRelease />}
       <BandHeader release={band.release} index={props.index} total={totals.releases.get(band.release?.id ?? '')} />
-      {!bandCollapsed && <div className="map-lbl" style={{ gridColumn: 1 }} />}
       {!bandCollapsed && columns.map((c, i) =>
         c.activity ? (
           <Cell
             key={c.key}
-            column={i + 2}
+            column={i + 1}
             activity={c.activity}
             release={band.release}
             bandName={name}
@@ -934,7 +932,7 @@ function BandRows(props: {
             cards={byCell.get(cellKey(c.activity.id, band.release?.id ?? null)) ?? []}
           />
         ) : (
-          <div key={c.key} style={{ gridColumn: i + 2 }} />
+          <div key={c.key} style={{ gridColumn: i + 1 }} />
         ),
       )}
     </>
@@ -1106,7 +1104,7 @@ function AddRelease() {
   const { ws, view, run } = useMap()
   const [open, setOpen] = useState(false)
   return (
-    <div style={{ gridColumn: '2 / span 2', marginTop: 2 }} data-export="skip">
+    <div style={{ gridColumn: '1 / span 2', marginTop: 2 }} data-export="skip">
       {open ? (
         <TextInput
           label="New release name"
@@ -1184,7 +1182,7 @@ export function StatusLabel({ status }: { status: Status | undefined }) {
   return <span className={`st ${status?.category ?? 'todo'}`}>{status?.name ?? 'No status'}</span>
 }
 
-/** The personas an objective serves, as pills under its title. */
+/** The personas an objective serves, as pills after its title. */
 function PersonaBadges({ node }: { node: MapNode }) {
   const { view } = useMap()
   const ps = view.personas.filter((p) => node.personaIds.includes(p.id)).sort((a, b) => a.name.localeCompare(b.name))
