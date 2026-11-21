@@ -18,8 +18,11 @@ import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toast
 import { PageBand } from './app'
 import { StepPanel } from './step-panel'
 import { ShareButton } from './share'
+import { Roadmap } from './roadmap'
 
 export const mapKey = (slug: string, mapId: string) => ['ws', slug, 'map', mapId] as const
+
+export type ViewMode = 'map' | 'roadmap'
 
 export interface MapCtx {
   ws: Membership
@@ -27,6 +30,9 @@ export interface MapCtx {
   canEdit: boolean
   /** Read-only through a share link: no people, comments, history, presence or saved views. */
   shared: boolean
+  /** The map laid out as backbone over release bands, or as a roadmap of releases across. */
+  mode: ViewMode
+  setMode: (m: ViewMode) => void
   statuses: Map<string, Status>
   /** Step counts and estimate sums for the map, each node and each release; only matching steps while a filter is on. */
   totals: Totals
@@ -81,7 +87,19 @@ export function useMapSearch() {
     },
     [setSearch],
   )
-  return { search, setSearch, selectedStep, openStep, filter, setFilter }
+  // Map or Roadmap, in the URL so a link or reload keeps it.
+  const mode: ViewMode = search.get('view') === 'roadmap' ? 'roadmap' : 'map'
+  const setMode = useCallback(
+    (m: ViewMode) =>
+      setSearch((s) => {
+        const n = new URLSearchParams(s)
+        if (m === 'roadmap') n.set('view', 'roadmap')
+        else n.delete('view')
+        return n
+      }),
+    [setSearch],
+  )
+  return { search, setSearch, selectedStep, openStep, filter, setFilter, mode, setMode }
 }
 
 /** What the map shows that follows from the payload and the filter. */
@@ -101,7 +119,7 @@ export function MapPage() {
   const ws = useOutletContext<Membership>()
   const { mapId = '' } = useParams()
   const qc = useQueryClient()
-  const { search, setSearch, selectedStep, openStep, filter, setFilter } = useMapSearch()
+  const { search, setSearch, selectedStep, openStep, filter, setFilter, mode, setMode } = useMapSearch()
   const key = useMemo(() => mapKey(ws.slug, mapId), [ws.slug, mapId])
   const query = useQuery({ queryKey: key, queryFn: () => api.map(ws.slug, mapId), retry: false })
   const live = useLiveMap(ws.slug, mapId, key)
@@ -190,6 +208,8 @@ export function MapPage() {
     return {
       ws,
       shared: false,
+      mode,
+      setMode,
       view: query.data,
       canEdit: atLeast(ws.role, 'editor'),
       statuses,
@@ -206,7 +226,7 @@ export function MapPage() {
       adding,
       setAdding,
     }
-  }, [ws, query.data, filter, setFilter, prefs, setPrefs, run, selectedStep, openStep, move, adding])
+  }, [ws, query.data, filter, setFilter, prefs, setPrefs, mode, setMode, run, selectedStep, openStep, move, adding])
 
   if (query.isPending) return <Loading />
   if (!ctx) {
@@ -246,7 +266,7 @@ export function MapPage() {
       <FilterBar panelOpen={panelOpen} />
       <div className={`map-scroll ${panelOpen ? 'with-panel' : ''}`}>
         <MapDnd view={ctx.view} onMove={move}>
-          <MapGrid />
+          {ctx.mode === 'roadmap' ? <Roadmap /> : <MapGrid />}
         </MapDnd>
       </div>
       {stepOpen && <StepPanel stepId={selectedStep} />}
@@ -263,12 +283,12 @@ const categoryOrder: { category: Category; label: string; ring: string }[] = [
   { category: 'todo', label: 'To do', ring: 'todo' },
 ]
 
-function plural(n: number, word: string): string {
+export function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`
 }
 
 /** "8 points" plus how many steps lack an estimate; empty when nothing is estimated yet. */
-function estimated(t: Total, unit: string): string {
+export function estimated(t: Total, unit: string): string {
   if (t.steps === t.unestimated) return ''
   return t.unestimated ? `${amount(t.hundredths, unit)} (${t.unestimated} unestimated)` : amount(t.hundredths, unit)
 }
@@ -291,6 +311,20 @@ function Presence({ users, state }: { users: PresentUser[]; state: LiveState }) 
         ))}
       </ul>
     </div>
+  )
+}
+
+/** Map or Roadmap: two layouts of the same steps. */
+function ModeSwitch() {
+  const { mode, setMode } = useMap()
+  return (
+    <span className="seg mt-3" role="group" aria-label="View">
+      {(['map', 'roadmap'] as const).map((m) => (
+        <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}>
+          {m === 'map' ? 'Map' : 'Roadmap'}
+        </button>
+      ))}
+    </span>
   )
 }
 
@@ -330,6 +364,7 @@ export function MapHeader(props: {
           />
         </h1>
         <p className="text-muted mt-1.5 text-sm font-semibold">{facts.join(' · ')}</p>
+        <ModeSwitch />
       </div>
       <div className="flex flex-col items-end gap-3" style={{ marginLeft: 'auto' }}>
         {live && (
@@ -718,7 +753,7 @@ function BandRows(props: {
   )
 }
 
-function formatDate(d: string): string {
+export function formatDate(d: string): string {
   return new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
@@ -831,7 +866,7 @@ function BandHeader({ release, index, total }: { release: Release | null; index:
 }
 
 /** Share of the release's steps done, in progress and blocked. */
-function Meter({ total }: { total: Total }) {
+export function Meter({ total }: { total: Total }) {
   const pct = (n: number) => `${(100 * n) / total.steps}%`
   const done = total.byCategory.done
   return (
@@ -902,7 +937,7 @@ function AddRelease() {
 }
 
 /** narrow: the activity is collapsed, so the cell shows its count and still takes drops. */
-function Cell(props: { column: number; activity: MapNode; release: Release | null; bandName: string; cards: Card[]; narrow: boolean }) {
+export function Cell(props: { column: number; activity: MapNode; release: Release | null; bandName: string; cards: Card[]; narrow: boolean }) {
   const { activity, release, bandName, cards } = props
   const { ws, view, canEdit, run, filter, match } = useMap()
   const [adding, setAdding] = useState(false)

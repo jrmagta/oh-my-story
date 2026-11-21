@@ -318,7 +318,9 @@ test('two people on one map see each other and each other’s edits live', async
   await page.keyboard.press('Enter')
   await expect(v.getByRole('group', { name: 'Steps in Open the email / MVP' })).toContainText('Resend the link')
 
-  // A move shows up too: up into the Later release.
+  // Moves show up too: Up first passes the card above it in the cell, then reaches the Later release.
+  await keyboardMove(page, 'MAP-3 Resend the link', 'ArrowUp')
+  await expect.poll(() => cellKeys(v, 'Open the email / MVP')).toEqual(['MAP-3', 'MAP-1'])
   await keyboardMove(page, 'MAP-3 Resend the link', 'ArrowUp')
   await expect(page.getByRole('group', { name: 'Steps in Open the email / Later' })).toContainText('Resend the link')
   await expect(v.getByRole('group', { name: 'Steps in Open the email / Later' })).toContainText('Resend the link')
