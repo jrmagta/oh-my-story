@@ -40,6 +40,9 @@ export interface Member {
   userId: string
   email: string
   displayName: string
+  /** From the identity provider; null for accounts made with a password. */
+  firstName: string | null
+  lastName: string | null
   role: Role
 }
 

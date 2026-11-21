@@ -48,8 +48,22 @@ func TestKeycloakDirectory(t *testing.T) {
 	owner.must(400, "POST", members, map[string]any{"directoryId": carol, "role": "owner"})
 	owner.must(400, "POST", members, map[string]any{"directoryId": "00000000-0000-0000-0000-000000000000", "role": "editor"})
 	added := owner.must(201, "POST", members, map[string]any{"directoryId": carol, "role": "editor"}).body
-	if str(added, "displayName") != "Carol Directory" || str(added, "email") != "carol@example.com" || str(added, "role") != "editor" {
+	if str(added, "displayName") != "Carol Directory" || str(added, "email") != "carol@example.com" || str(added, "role") != "editor" ||
+		str(added, "firstName") != "Carol" || str(added, "lastName") != "Directory" {
 		t.Errorf("added = %v", added)
+	}
+	// The member list has her first and last name; a password account has neither.
+	for _, m := range owner.must(200, "GET", members, nil).list {
+		switch str(m, "email") {
+		case "carol@example.com":
+			if str(m, "firstName") != "Carol" || str(m, "lastName") != "Directory" {
+				t.Errorf("carol = %v", m)
+			}
+		default:
+			if mm := m.(map[string]any); mm["firstName"] != nil || mm["lastName"] != nil {
+				t.Errorf("password account has names: %v", m)
+			}
+		}
 	}
 	owner.must(409, "POST", members, map[string]any{"directoryId": carol, "role": "viewer"})
 	if r := owner.must(200, "GET", dir+"?q=carol", nil); r.list[0].(map[string]any)["member"] != true {
