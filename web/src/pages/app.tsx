@@ -5,6 +5,7 @@ import { api, ApiError, type Membership } from '../api'
 import { refreshSession, useMe, useSession } from '../session'
 import { Avatar, ErrorAlert, Field, Loading, Logo, Stripe, ThemeToggle } from '../ui'
 import { ProjectKeyField } from './project-key'
+import { SearchPalette } from './search'
 
 /** Gate for every signed-in screen: sends visitors to setup or sign-in. */
 export function RequireAuth() {
@@ -84,6 +85,7 @@ export function AppShell() {
           </nav>
         )}
         <div className="flex-1" />
+        {current && <SearchPalette slug={current.slug} />}
         <ThemeToggle />
         <UserMenu />
       </header>

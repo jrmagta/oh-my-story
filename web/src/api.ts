@@ -158,6 +158,18 @@ export interface MapView {
   lastEventId: number
 }
 
+/** A step found by search, with where it sits. */
+export interface SearchHit {
+  stepId: string
+  key: string
+  title: string
+  statusId: string
+  mapId: string
+  mapName: string
+  activityId: string
+  activity: string
+}
+
 /** A named map filter: private to its creator until shared with the workspace. */
 export interface SavedView {
   id: string
@@ -250,6 +262,8 @@ export const api = {
 
   workflows: (slug: string) => request<Workflow[]>('GET', `${ws(slug)}/workflows`),
   labels: (slug: string) => request<Label[]>('GET', `${ws(slug)}/labels`),
+  /** A key match first, then steps whose title or description has words starting with every word of q; at most 20. */
+  search: (slug: string, q: string) => request<SearchHit[]>('GET', `${ws(slug)}/search?${new URLSearchParams({ q }).toString()}`),
   /** 409 when a label of that name exists, ignoring case. */
   createLabel: (slug: string, b: { name: string; colour?: string }) => request<Label>('POST', `${ws(slug)}/labels`, b),
   patchLabel: (slug: string, id: string, b: { name?: string; colour?: string }) =>

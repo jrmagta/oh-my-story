@@ -332,6 +332,62 @@
   .band-row:not(.green) .meter .done { background: var(--color-brand-green); }
   .band-row:not(.green):not(.amber) .meter { background: color-mix(in srgb, currentColor 25%, transparent); }
 
+  /* Search: a nav button and a palette over the page. */
+  .search-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border: 2px solid #3A3A40;
+    border-radius: 6px;
+    color: #A1A1AA;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+  .search-btn:hover, .search-btn:focus-visible { color: #F2F2F2; border-color: #F2F2F2; }
+  .search-btn kbd { font-family: inherit; font-size: 11px; opacity: 0.8; }
+  .palette-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 12vh;
+  }
+  .palette {
+    width: min(40rem, 92vw);
+    background: var(--color-base-100);
+    color: var(--color-base-content);
+    border: 2px solid var(--color-base-content);
+    border-radius: var(--oms-radius);
+    overflow: hidden;
+  }
+  .palette-input {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 17px;
+    font-weight: 700;
+    background: transparent;
+    border-bottom: 2px solid var(--oms-line);
+    outline: none;
+  }
+  .palette-list { max-height: 50vh; overflow-y: auto; }
+  .palette-list li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 12px;
+    padding: 9px 16px;
+    cursor: pointer;
+  }
+  .palette-list li[aria-selected="true"] { background: var(--color-brand-amber); color: #000; }
+  .palette-key { font-size: 12px; font-weight: 800; align-self: center; }
+  .palette-title { font-weight: 700; }
+  .palette-where { grid-column: 2; font-size: 12px; font-weight: 600; opacity: 0.7; }
+  .palette-empty { padding: 14px 16px; font-size: 14px; font-weight: 600; color: var(--oms-muted); }
+
   /* Filter bar under the map header. */
   .filter-bar {
     @apply border-b border-line;

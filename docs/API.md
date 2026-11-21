@@ -149,6 +149,12 @@ Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, t
 
 Limits: names 1 to 100 characters, titles 1 to 500, descriptions up to 50,000; colours are `#RRGGBB`.
 
+### Search
+
+| Endpoint | Role | Body → response |
+|---|---|---|
+| `GET /search?q=` | viewer | → up to 20 `{stepId, key, title, statusId, mapId, mapName, activityId, activity}`. A step whose key is `q` (ignoring case) comes first; then steps where every word of `q` starts a word of the title or description, best match first, ties by key. Deleted steps and steps on deleted maps are left out. `q` up to 200 characters; with no letters or digits the list is empty |
+
 ### Saved views
 
 A saved view is a named map filter: `{id, name, filter, shared, createdBy, creatorName}`. `filter` is `{labels, statuses, assignees, personas, releases, text, mode}` (the first five are id lists, `none` meaning Unassigned or Unscheduled; `mode` is `highlight` or `hide`), the same shape the map's filter bar uses. A view is private to its creator until shared. Views are not map content, so they are not in the event log or the live feed.
