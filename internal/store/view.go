@@ -22,7 +22,9 @@ type MapView struct {
 	// Dependencies touching steps on this map; OtherSteps names their ends on other maps.
 	Dependencies []Dependency `json:"dependencies"`
 	OtherSteps   []StepRef    `json:"otherSteps"`
-	LastEventID  int64        `json:"lastEventId"`
+	// Elsewhere lists the other maps each step on this map is also on.
+	Elsewhere   []Elsewhere `json:"elsewhere"`
+	LastEventID int64       `json:"lastEventId"`
 }
 
 func (s *Store) MapView(ctx context.Context, workspaceID, mapID uuid.UUID) (MapView, error) {
@@ -63,13 +65,18 @@ func (s *Store) MapView(ctx context.Context, workspaceID, mapID uuid.UUID) (MapV
 		}
 		if v.Steps, err = collect(ctx, tx, scanStep,
 			`SELECT `+stepCols+` FROM steps s JOIN placements p ON p.step_id = s.id
+			 JOIN nodes n ON n.id = p.activity_id AND n.deleted_at IS NULL
 			 WHERE p.map_id = $1 AND s.deleted_at IS NULL ORDER BY s.key`, mapID); err != nil {
 			return err
 		}
 		v.Placements, err = collect(ctx, tx, scanPlacement,
 			`SELECT p.id, p.step_id, p.activity_id, p.release_id, p.rank FROM placements p JOIN steps s ON s.id = p.step_id
+			 JOIN nodes n ON n.id = p.activity_id AND n.deleted_at IS NULL
 			 WHERE p.map_id = $1 AND s.deleted_at IS NULL ORDER BY p.rank`, mapID)
 		if err != nil {
+			return err
+		}
+		if v.Elsewhere, err = mapElsewhere(ctx, tx, mapID); err != nil {
 			return err
 		}
 		v.Dependencies, v.OtherSteps, err = mapDependencies(ctx, tx, mapID)

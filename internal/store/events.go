@@ -130,7 +130,7 @@ func (s *Store) StepHistory(ctx context.Context, workspaceID, mapID, stepID uuid
 		return History{}, notFound(err)
 	}
 	return s.history(ctx,
-		`e.workspace_id = $1 AND ((e.entity_type = 'step' AND e.entity_id = $2)
+		`e.workspace_id = $1 AND ((e.entity_type = 'step' AND e.entity_id = $2 AND NOT e.echo)
 		   OR (e.entity_type = 'placement' AND e.entity_id IN (SELECT id FROM placements WHERE step_id = $2))
 		   OR (e.entity_type = 'dependency' AND e.map_id = $3
 		       AND $2::text IN (coalesce(e.after, e.before)->>'blockerId', coalesce(e.after, e.before)->>'blockedId')))`,

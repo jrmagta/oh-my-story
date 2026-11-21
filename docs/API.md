@@ -127,7 +127,7 @@ An objective's personas are its `personaIds`, set with `PATCH .../nodes/{id}`; a
 |---|---|
 | `GET /maps` | → `[map]` |
 | `POST /maps` | `{name, description?, workflowId?}` → `201` map. The workflow defaults to the workspace default and cannot change later |
-| `GET /maps/{mapId}` | → `{map, workflow, labels, personas, nodes, releases, steps, placements, dependencies, otherSteps, lastEventId}`: the whole map, deleted items left out. `dependencies` are the links touching steps on this map; `otherSteps` names their ends on other maps. `lastEventId` is the newest event included, for resuming the live feed |
+| `GET /maps/{mapId}` | → `{map, workflow, labels, personas, nodes, releases, steps, placements, dependencies, otherSteps, lastEventId}`: the whole map, deleted items left out. `dependencies` are the links touching steps on this map; `otherSteps` names their ends on other maps; `elsewhere` lists `{stepId, mapId, mapName}` for steps on this map that are on other maps too. `lastEventId` is the newest event included, for resuming the live feed |
 | `PATCH /maps/{mapId}` | `{name?, description?}` → map |
 | `DELETE /maps/{mapId}` | → `204` (soft delete) |
 | `POST /maps/{mapId}/nodes` | `{level, title, parentId?, description?, colour?, afterId?, beforeId?}` → `201` node. `level` is `objective` (no parent) or `activity` (`parentId` an objective) |
@@ -144,10 +144,14 @@ An objective's personas are its `personaIds`, set with `PATCH .../nodes/{id}`; a
 | `POST /maps/{mapId}/steps/{id}/move` | `{activityId, releaseId, version, afterId?, beforeId?}` → `{placement, stale}`. `releaseId` is required, `null` for Unscheduled. `version` is the step version the client showed; the move applies regardless and `stale` says whether someone changed the step since |
 | `DELETE /maps/{mapId}/steps/{id}` | → `204` (soft delete) |
 | `POST /maps/{mapId}/steps/{id}/restore` | `{}` → step. Its activity must not be deleted |
+| `POST /maps/{mapId}/placements` | `{stepId, activityId, releaseId?, afterId?, beforeId?}` → `201 {step, placement}`. Shows an existing step of the workspace on this map too. The map must use the workflow of the step's status (`bad_request` otherwise); `conflict` when it is on this map already |
+| `DELETE /maps/{mapId}/steps/{id}/placement` | → placement (where it was, for undo). Takes the step off this map; `bad_request` when this is its only map (delete it instead) |
 | `POST /maps/{mapId}/dependencies` | `{blockerId, blockedId}` → `201` dependency. Both are live steps of this workspace, at least one on this map. `bad_request` for a step blocking itself or a link that would make a loop; `conflict` when the link exists |
 | `DELETE /maps/{mapId}/dependencies/{id}` | → `204`. The link must touch a step on this map |
 
 Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, title, description, colour, personaIds, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; step `{id, key, title, descriptionMd, statusId, assigneeId, estimate, labelIds, commentCount, version}` with `estimate` a number or null and `labelIds` sorted; placement `{id, stepId, activityId, releaseId, rank}`; dependency `{id, blockerId, blockedId}`; other step `{id, key, title, done, mapId, mapName}`.
+
+A step on several maps is one step: one key, one status, one history. A change to it (edit, delete, restore, comments, being put on or taken off a map) is an event on every map it is on; the copies for maps other than the one written through are echoes, which a step's own history leaves out. Deleting an activity keeps steps that are also on another map: they are hidden on this map until the activity is restored. Deleting a step deletes it from every map.
 
 A dependency change is an event on every map either step is on. When a step's status changes, maps that link to it without showing it get a `stepref` `update` event with `{done, key}`. Share links leave out links to steps on other maps.
 

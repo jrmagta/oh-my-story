@@ -27,6 +27,7 @@ type change struct {
 	id            uuid.UUID
 	action        string
 	before, after map[string]any
+	echo          bool // a copy for another map the step is on (see echoes)
 }
 
 // Readers follow the event log by id. Holding this lock from the first event
@@ -72,9 +73,9 @@ func appendEvents(ctx context.Context, tx pgx.Tx, actor, workspaceID uuid.UUID, 
 			mapID = &c.mapID
 		}
 		err := tx.QueryRow(ctx,
-			`INSERT INTO events (workspace_id, map_id, actor_id, actor_kind, entity_type, entity_id, action, before, after)
-			 VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, $8) RETURNING id`,
-			workspaceID, mapID, actor, c.entity, c.id, c.action, jsonOrNull(c.before), jsonOrNull(c.after)).Scan(&last)
+			`INSERT INTO events (workspace_id, map_id, actor_id, actor_kind, entity_type, entity_id, action, before, after, echo)
+			 VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, $8, $9) RETURNING id`,
+			workspaceID, mapID, actor, c.entity, c.id, c.action, jsonOrNull(c.before), jsonOrNull(c.after), c.echo).Scan(&last)
 		if err != nil {
 			return err
 		}

@@ -112,6 +112,10 @@ export function describe(e: HistoryEntry, n: Names): string | null {
       return `deleted ${stepName(n, e.entityId, b)} ${b.title !== undefined ? q(b.title) : ''}`.trim()
     case 'step:restore':
       return `restored ${stepName(n, e.entityId, a)}`
+    case 'step:place':
+      return `put ${stepName(n, e.entityId, a)} on ${q(a.mapName)}`
+    case 'step:unplace':
+      return `took ${stepName(n, e.entityId, b)} off ${q(b.mapName)}`
     case 'dependency:create':
       return `linked ${String(a.blockerKey)} as blocking ${String(a.blockedKey)}`
     case 'dependency:delete':

@@ -59,8 +59,15 @@ test('the roadmap lays releases across, flags late ones, follows live changes, a
   await expect(page.locator('.drag-ghost')).toBeVisible()
   await page.keyboard.press('ArrowLeft')
   // The highlight lands on that cell or on the card already in it ("next to it"); either is the Past release.
+  // An arrow pressed before dnd-kit has measured the drag is ignored (slow CI), so press it again if nothing lit up.
   const pastCell = roadmap.getByRole('group', { name: 'Steps in Sign up / Past' })
-  await expect(pastCell.locator('.drop').or(pastCell.and(page.locator('.drop')))).toHaveCount(1)
+  const onPast = pastCell.locator('.drop').or(pastCell.and(page.locator('.drop')))
+  try {
+    await expect(onPast).toHaveCount(1, { timeout: 2000 })
+  } catch {
+    await page.keyboard.press('ArrowLeft')
+    await expect(onPast).toHaveCount(1)
+  }
   await page.keyboard.press('Space')
   await expect(roadmap.getByRole('group', { name: 'Steps in Sign up / Past' })).toContainText('Social sign up')
   await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Map', exact: true }).click()

@@ -146,7 +146,7 @@ func (s *Store) CreateComment(ctx context.Context, actor, workspaceID, mapID, st
 		if err := commentNotice(ctx, tx, &w, without(added, actor)); err != nil {
 			return nil, err
 		}
-		return []change{created(mapID, "comment", id, w.Comment)}, nil
+		return echoes(ctx, tx, w.Comment.StepID, created(mapID, "comment", id, w.Comment))
 	})
 	return w, err
 }
@@ -202,7 +202,7 @@ func (s *Store) UpdateComment(ctx context.Context, actor, workspaceID, mapID, co
 		}
 		if c, ok := updated(mapID, "comment", commentID, "update", before, w.Comment); ok {
 			c.before["stepId"], c.after["stepId"] = before.StepID, before.StepID
-			return []change{c}, nil
+			return echoes(ctx, tx, before.StepID, c)
 		}
 		return nil, nil
 	})
@@ -224,6 +224,6 @@ func (s *Store) DeleteComment(ctx context.Context, actor, workspaceID, mapID, co
 		if _, err := tx.Exec(ctx, `UPDATE comments SET deleted_at = now() WHERE id = $1`, commentID); err != nil {
 			return nil, err
 		}
-		return []change{gone(mapID, "comment", commentID, "delete", map[string]any{"stepId": c.StepID, "parentId": c.ParentID})}, nil
+		return echoes(ctx, tx, c.StepID, gone(mapID, "comment", commentID, "delete", map[string]any{"stepId": c.StepID, "parentId": c.ParentID}))
 	})
 }

@@ -307,6 +307,11 @@ func setSubtreeDeleted(ctx context.Context, tx pgx.Tx, mapID, nodeID uuid.UUID, 
 		   UPDATE steps SET deleted_at = $3, updated_at = now()
 		   WHERE deleted_at IS NOT DISTINCT FROM $2
 		     AND id IN (SELECT step_id FROM placements WHERE map_id = $4 AND activity_id IN (SELECT id FROM sub))
+		     -- A step also shown on another map stays; it is hidden here until the activity comes back.
+		     AND ($3::timestamptz IS NULL OR NOT EXISTS (
+		       SELECT 1 FROM placements q JOIN maps m ON m.id = q.map_id AND m.deleted_at IS NULL
+		       JOIN nodes n ON n.id = q.activity_id AND n.deleted_at IS NULL
+		       WHERE q.step_id = steps.id AND q.map_id <> $4))
 		   RETURNING 'step'::text AS entity, id, jsonb_build_object('key', key, 'title', title) AS label
 		 )
 		 SELECT entity, id, label FROM nodes_done UNION ALL SELECT entity, id, label FROM steps_done`,

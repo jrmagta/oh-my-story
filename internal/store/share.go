@@ -102,6 +102,6 @@ func (s *Store) SharedMapByToken(ctx context.Context, tokenHash []byte) (SharedM
 			deps = append(deps, d)
 		}
 	}
-	out.View.Dependencies, out.View.OtherSteps = deps, []StepRef{}
+	out.View.Dependencies, out.View.OtherSteps, out.View.Elsewhere = deps, []StepRef{}, []Elsewhere{}
 	return out, nil
 }

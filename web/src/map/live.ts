@@ -92,6 +92,25 @@ export function applyEvent(view: MapView, ev: LiveEvent): MapView | null {
       return view
     case 'step:delete':
       return { ...view, steps: view.steps.filter((s) => s.id !== ev.entityId) }
+    case 'step:place': {
+      // Shown on another map too: here (the step arrives; its placement follows) or elsewhere.
+      const { mapId, mapName, ...step } = after as { mapId: string; mapName: string } & Record<string, unknown>
+      if (mapId === view.map.id) return { ...view, steps: add(view.steps, step as unknown as Step) }
+      if (view.elsewhere.some((e) => e.stepId === ev.entityId && e.mapId === mapId)) return view
+      return { ...view, elsewhere: [...view.elsewhere, { stepId: ev.entityId, mapId, mapName }] }
+    }
+    case 'step:unplace': {
+      const mapId = (ev.before ?? {}).mapId
+      if (mapId === view.map.id) {
+        return {
+          ...view,
+          steps: view.steps.filter((s) => s.id !== ev.entityId),
+          placements: view.placements.filter((p) => p.stepId !== ev.entityId),
+          elsewhere: view.elsewhere.filter((e) => e.stepId !== ev.entityId),
+        }
+      }
+      return { ...view, elsewhere: view.elsewhere.filter((e) => !(e.stepId === ev.entityId && e.mapId === mapId)) }
+    }
     case 'dependency:create': {
       // A link to a step this map has never seen needs its name: reload.
       const d = after as unknown as Dependency

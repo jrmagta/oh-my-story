@@ -62,6 +62,9 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 		{"DELETE " + m + "/steps/{id}", role.Edit, s.deleteStep},
 		{"POST " + m + "/steps/{id}/restore", role.Edit, s.restoreStep},
 
+		{"POST " + m + "/placements", role.Edit, s.placeStep},
+		{"DELETE " + m + "/steps/{id}/placement", role.Edit, s.unplaceStep},
+
 		{"POST " + m + "/dependencies", role.Edit, s.createDependency},
 		{"DELETE " + m + "/dependencies/{id}", role.Edit, s.deleteDependency},
 
@@ -535,6 +538,29 @@ func (s *Server) moveStep(q mapRequest) (int, any, error) {
 
 func (s *Server) deleteStep(q mapRequest) (int, any, error) {
 	return 0, nil, s.store.DeleteStep(q.r.Context(), q.user, q.ws, q.mapID, q.id)
+}
+
+// placeStep shows an existing step on this map too.
+func (s *Server) placeStep(q mapRequest) (int, any, error) {
+	var in struct {
+		StepID, ActivityID uuid.UUID
+		ReleaseID          *uuid.UUID
+		positionIn
+	}
+	if err := q.read(&in); err != nil {
+		return 0, nil, err
+	}
+	if in.StepID == uuid.Nil || in.ActivityID == uuid.Nil {
+		return 0, nil, errBadRequest("stepId and activityId are required")
+	}
+	st, p, err := s.store.PlaceStep(q.r.Context(), q.user, q.ws, q.mapID, in.StepID, in.ActivityID, in.ReleaseID, in.position())
+	return http.StatusCreated, stepAndPlacement{st, p}, err
+}
+
+// unplaceStep takes a step off this map and returns where it was, for undo.
+func (s *Server) unplaceStep(q mapRequest) (int, any, error) {
+	p, err := s.store.UnplaceStep(q.r.Context(), q.user, q.ws, q.mapID, q.id)
+	return http.StatusOK, p, err
 }
 
 func (s *Server) createDependency(q mapRequest) (int, any, error) {
