@@ -5,7 +5,7 @@ import { api, ApiError, atLeast, type Category, type Level, type MapNode, type M
 import { MapDnd, refs, useDrag, useDrop } from '../map/dnd'
 import { HistoryList } from '../map/HistoryList'
 import { useLiveMap, type LiveState, type PresentUser } from '../map/live'
-import { backbone, bands, cellKey, cells, type Band, type Card, type Column } from '../map/layout'
+import { backbone, bands, cellKey, cells, inheritedColour, type Band, type Card, type Column } from '../map/layout'
 import { amount, formatEstimate, totals, type Total, type Totals } from '../map/estimates'
 import { nodeStyle, palette } from '../map/colours'
 import { colourFor, TagChooser } from '../map/TagPicker'
@@ -465,7 +465,7 @@ const levelLabel: Record<Level, string> = { objective: 'Objective', activity: 'A
 export function MapGrid() {
   const { view, canEdit, prefs, adding } = useMap()
   const addingUnder = adding?.startsWith('activity:') ? adding.slice('activity:'.length) : null
-  const bb = useMemo(() => backbone(view, addingUnder), [view, addingUnder])
+  const bb = useMemo(() => backbone(view, addingUnder, canEdit), [view, addingUnder, canEdit])
   const all = useMemo(() => bands(view), [view])
   // A focused release shows alone; a focus on a release that no longer exists shows everything.
   const focused = all.filter((b) => (b.release?.id ?? UNSCHEDULED_BAND) === prefs.focus)
@@ -484,7 +484,7 @@ export function MapGrid() {
   }
 
   // Columns: row labels, one per backbone column, and one for adding at the end.
-  const widths = bb.columns.map((c) => (collapsed(c) ? '52px' : '184px')).join(' ')
+  const widths = bb.columns.map((c) => (collapsed(c) ? '52px' : c.add === 'narrow' ? '36px' : '184px')).join(' ')
   // The last, flexible column takes up whatever width a release band needs beyond the others (on a
   // narrow map, or with activities collapsed), so bands never stretch the label column.
   const style = { gridTemplateColumns: `max-content ${widths}${canEdit ? ' 150px' : ''} minmax(0, 1fr)` }
@@ -498,7 +498,8 @@ export function MapGrid() {
         <div
           key={o.node.id}
           className={`map-obj up ${o.node.colour ? 'coloured' : ''}`}
-          style={{ ...col(o.start, o.span), ...nodeStyle(o.node.colour) }}
+          // One column wide, over its first activity; the objective's other activities have nothing above them.
+          style={{ ...col(o.start, 1), ...nodeStyle(o.node.colour) }}
         >
           <NodeHead node={o.node} child="activity" />
         </div>
@@ -523,7 +524,14 @@ export function MapGrid() {
           </div>
         ) : (
           <Slot key={c.key} style={col(i)} level="activity" parent={c.objective}>
-            {canEdit && <AddNode level="activity" parent={c.objective} label={`Add activity to ${c.objective.title}`} short="Add activity" />}
+            {canEdit && (
+              <AddNode
+                level="activity"
+                parent={c.objective}
+                label={`Add activity to ${c.objective.title}`}
+                short={c.add === 'narrow' ? '' : 'Add activity'}
+              />
+            )}
           </Slot>
         ),
       )}
@@ -744,7 +752,12 @@ function useAddNode(level: Level, parent: MapNode | null) {
         keepOpen
         onDone={(title) => {
           if (!title) setAdding(null)
-          else run(() => api.createNode(ws.slug, view.map.id, { level, title, ...(parent ? { parentId: parent.id } : {}) }))
+          else {
+            const colour = inheritedColour(view, level, parent?.id ?? null)
+            run(() =>
+              api.createNode(ws.slug, view.map.id, { level, title, ...(parent ? { parentId: parent.id } : {}), ...(colour ? { colour } : {}) }),
+            )
+          }
         }}
       />
     ),
@@ -755,8 +768,8 @@ function AddNode({ level, parent, label, short }: { level: Level; parent: MapNod
   const add = useAddNode(level, parent)
   if (add.open) return add.input
   return (
-    <button type="button" className="add-slot w-full" aria-label={label} onClick={() => add.setOpen(true)}>
-      + {short ?? label}
+    <button type="button" className={`add-slot w-full ${short === '' ? 'narrow' : ''}`} aria-label={label} title={label} onClick={() => add.setOpen(true)}>
+      +{short === '' ? '' : ` ${short ?? label}`}
     </button>
   )
 }

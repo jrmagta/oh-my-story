@@ -335,7 +335,7 @@ export const api = {
   stepHistory: (slug: string, mapId: string, id: string, before?: number) =>
     request<HistoryPage>('GET', `${mp(slug, mapId)}/steps/${id}/history${before ? `?before=${before}` : ''}`),
 
-  createNode: (slug: string, mapId: string, b: { level: Level; title: string; parentId?: string } & Position) =>
+  createNode: (slug: string, mapId: string, b: { level: Level; title: string; parentId?: string; colour?: string } & Position) =>
     request<MapNode>('POST', `${mp(slug, mapId)}/nodes`, b),
   patchNode: (slug: string, mapId: string, id: string, b: { title?: string; description?: string; colour?: string | null; personaIds?: string[] }) =>
     request<MapNode>('PATCH', `${mp(slug, mapId)}/nodes/${id}`, b),

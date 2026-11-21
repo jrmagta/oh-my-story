@@ -75,6 +75,34 @@ test('backbone cards take a colour, keep it after a reload, and go back to defau
       ['Buy', '#549334'],
       ['Browse', null],
       ['Search', '#FCB131'],
+      // Added from the menu after Search, so they took its amber.
+      ['Checkout', '#FCB131'],
+      ['Receipt', '#FCB131'],
     ]),
   )
+
+  // An objective is one column wide, over its first activity.
+  const buy = page.locator('.map-obj', { hasText: 'Buy' })
+  const first = page.locator('.map-act', { hasText: 'Browse' })
+  expect((await buy.boundingBox())!.width).toBeCloseTo((await first.boundingBox())!.width, 0)
+
+  // A new objective takes the colour of the one to its left; its first activity, the activity to its left.
+  await page.getByRole('button', { name: 'Add objective' }).click()
+  await page.getByRole('textbox', { name: 'New objective' }).fill('Return')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.map-obj', { hasText: 'Return' })).toHaveCSS('background-color', 'rgb(84, 147, 52)')
+  await page.getByRole('button', { name: 'Add activity to Return' }).click()
+  await page.getByRole('textbox', { name: 'New activity in Return' }).fill('Send back')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.map-act', { hasText: 'Send back' })).toHaveCSS('background-color', 'rgb(252, 177, 49)')
+
+  // The narrow + after an objective's activities adds another, in its colour.
+  await page.getByRole('button', { name: 'Add activity to Buy' }).click()
+  await page.getByRole('textbox', { name: 'New activity in Buy' }).fill('Wish list')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.map-act', { hasText: 'Wish list' })).toHaveCSS('background-color', 'rgb(252, 177, 49)')
+  await expect(page.getByRole('button', { name: /^Move activity / })).toHaveCount(6)
 })
