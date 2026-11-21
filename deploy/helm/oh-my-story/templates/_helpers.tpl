@@ -102,6 +102,10 @@ smtp-password: {{ .Values.smtp.password | b64enc }}
 - name: OMS_OIDC_NAME
   value: {{ .name | quote }}
 {{- end }}
+{{- if .directory }}
+- name: OMS_OIDC_DIRECTORY
+  value: {{ .directory | quote }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end -}}

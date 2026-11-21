@@ -143,6 +143,7 @@ func TestOpenAPISchemasMatchStructs(t *testing.T) {
 		"ApiToken": store.APIToken{}, "SearchHit": store.SearchHit{}, "SavedView": store.SavedView{},
 		"HistoryEntry": store.HistoryEntry{}, "History": store.History{},
 		"Webhook": store.Webhook{}, "Delivery": store.Delivery{},
+		"DirectoryUser": httpapi.DirectoryUser{},
 	}
 	for name, v := range structs {
 		got, ok := schemas[name]

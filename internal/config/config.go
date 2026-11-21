@@ -35,6 +35,9 @@ type OIDC struct {
 	ClientID     string
 	ClientSecret string
 	Name         string
+	// Directory turns on searching the provider's users from Members, which
+	// needs the client's service account. Only "keycloak" is supported.
+	Directory string
 }
 
 // SecureCookies is true when the public origin is https.
@@ -79,6 +82,10 @@ func FromEnv(getenv func(string) string) (Config, error) {
 			ClientID:     getenv("OMS_OIDC_CLIENT_ID"),
 			ClientSecret: getenv("OMS_OIDC_CLIENT_SECRET"),
 			Name:         or("OMS_OIDC_NAME", "SSO"),
+			Directory:    getenv("OMS_OIDC_DIRECTORY"),
+		}
+		if o.Directory != "" && o.Directory != "keycloak" {
+			return Config{}, fmt.Errorf(`OMS_OIDC_DIRECTORY must be "keycloak" or empty`)
 		}
 		if o.ClientID == "" || o.ClientSecret == "" {
 			return Config{}, fmt.Errorf("OMS_OIDC_CLIENT_ID and OMS_OIDC_CLIENT_SECRET are required when OMS_OIDC_ISSUER is set")

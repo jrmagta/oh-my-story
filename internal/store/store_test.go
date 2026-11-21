@@ -172,7 +172,7 @@ func TestOIDCFirstLoginRace(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				users[i], errs[i] = s.ResolveOIDCUser(ctx, "https://idp", sub, email, "C")
+				users[i], errs[i] = s.ResolveOIDCUser(ctx, "https://idp", sub, store.Profile{Email: email, DisplayName: "C"})
 			}()
 		}
 		wg.Wait()
@@ -197,7 +197,7 @@ func TestOIDCDeactivatedUser(t *testing.T) {
 	if _, err := s.CreateInvite(ctx, ws.ID, "d@example.com", role.Viewer, []byte("tok"), a.ID, time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	d, err := s.ResolveOIDCUser(ctx, "https://idp", "sub-d", "d@example.com", "D")
+	d, err := s.ResolveOIDCUser(ctx, "https://idp", "sub-d", store.Profile{Email: "d@example.com", DisplayName: "D"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestOIDCDeactivatedUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, sub := range []string{"sub-d", "sub-new"} {
-		if _, err := s.ResolveOIDCUser(ctx, "https://idp", sub, "d@example.com", "D"); !errors.Is(err, store.ErrDisabled) {
+		if _, err := s.ResolveOIDCUser(ctx, "https://idp", sub, store.Profile{Email: "d@example.com", DisplayName: "D"}); !errors.Is(err, store.ErrDisabled) {
 			t.Errorf("%s: err = %v, want ErrDisabled", sub, err)
 		}
 	}

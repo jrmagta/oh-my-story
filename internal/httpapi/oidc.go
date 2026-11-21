@@ -22,10 +22,11 @@ import (
 const oidcCookie = "oms_oidc"
 
 type OIDC struct {
-	issuer   string
-	name     string
-	oauth    oauth2.Config
-	verifier *oidc.IDTokenVerifier
+	issuer    string
+	name      string
+	oauth     oauth2.Config
+	verifier  *oidc.IDTokenVerifier
+	directory *keycloakDirectory // nil unless OMS_OIDC_DIRECTORY=keycloak
 }
 
 // NewOIDC fetches the provider's discovery document. DiscoveryURL may differ from
@@ -37,9 +38,16 @@ func NewOIDC(ctx context.Context, cfg config.OIDC, baseURL string) (*OIDC, error
 	if err != nil {
 		return nil, err
 	}
+	var dir *keycloakDirectory
+	if cfg.Directory == "keycloak" {
+		if dir, err = newKeycloakDirectory(cfg, p.Endpoint().TokenURL); err != nil {
+			return nil, err
+		}
+	}
 	return &OIDC{
-		issuer: cfg.Issuer,
-		name:   cfg.Name,
+		directory: dir,
+		issuer:    cfg.Issuer,
+		name:      cfg.Name,
 		oauth: oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
@@ -151,6 +159,8 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		Email         string `json:"email"`
 		EmailVerified bool   `json:"email_verified"`
 		Name          string `json:"name"`
+		GivenName     string `json:"given_name"`
+		FamilyName    string `json:"family_name"`
 	}
 	if err := idt.Claims(&claims); err != nil {
 		fail("sso_failed", err)
@@ -161,12 +171,7 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		fail("sso_email_unverified", nil)
 		return
 	}
-	name, err := parseDisplayName(claims.Name)
-	if err != nil {
-		name = email
-	}
-
-	u, err := s.store.ResolveOIDCUser(r.Context(), s.oidc.issuer, idt.Subject, email, name)
+	u, err := s.store.ResolveOIDCUser(r.Context(), s.oidc.issuer, idt.Subject, profile(email, claims.GivenName, claims.FamilyName, claims.Name))
 	if errors.Is(err, store.ErrNotFound) {
 		fail("not_invited", nil)
 		return

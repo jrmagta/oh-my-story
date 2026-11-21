@@ -123,7 +123,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request, u store.User) {
 func (s *Server) providers(w http.ResponseWriter, r *http.Request) {
 	o := map[string]any{"enabled": false}
 	if s.oidc != nil {
-		o = map[string]any{"enabled": true, "name": s.oidc.name}
+		o = map[string]any{"enabled": true, "name": s.oidc.name, "directory": s.oidc.directory != nil}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"oidc": o})
 }

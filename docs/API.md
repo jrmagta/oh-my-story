@@ -35,7 +35,7 @@ Extra rules:
    - Signed in with the invited email: `POST /api/invites/{token}/accept` with `{}` adds the membership.
    - No account: the same call with `{displayName, password}` creates a local account, adds the membership and signs in. Holding the token proves control of the inbox.
    - Signed in with a different email: `forbidden`.
-4. **SSO:** an OIDC login whose verified email matches an existing user links to that user. With no matching user, it creates one only if an open invite exists for that email; otherwise it is refused. The new user then accepts the invite as above. A deactivated user is refused even with an open invite.
+4. **SSO:** an OIDC login whose verified email matches an existing user links to that user. First and last name and email follow the provider: they are refreshed at every SSO sign-in. With no matching user, it creates one only if an open invite exists for that email; otherwise it is refused. The new user then accepts the invite as above. A deactivated user is refused even with an open invite.
 
 ## Endpoints
 
@@ -59,6 +59,8 @@ Extra rules:
 | `PATCH /api/workspaces/{slug}` | admin | `{name?, keyPrefix?, estimateUnit?}` → workspace. A project key another workspace has is `409`; existing steps keep their keys |
 | `DELETE /api/workspaces/{slug}` | owner | → `204` |
 | `GET /api/workspaces/{slug}/members` | viewer | → `[{userId, email, displayName, role}]` |
+| `POST /api/workspaces/{slug}/members` | admin | `{directoryId, role}` → `201` member. Needs `OMS_OIDC_DIRECTORY`. Makes the person from the identity provider a member at once (no invite, no email): their account is made from the directory, or an existing one with their email is linked, and they sign in with SSO. `role` is not `owner`; `409` when they are a member already |
+| `GET /api/workspaces/{slug}/directory?q=` | admin | → up to 20 `{id, email, firstName, lastName, name, member}`: enabled people with an email in the identity provider matching `q` (name, username or email, 1 to 100 characters). `id` is their provider user id |
 | `PATCH /api/workspaces/{slug}/members/{userId}` | admin | `{role}` → member |
 | `DELETE /api/workspaces/{slug}/members/{userId}` | admin, or self | → `204` |
 | `GET /api/workspaces/{slug}/invites` | admin | → open invites |
@@ -272,6 +274,7 @@ The upgrade needs the session cookie and an `Origin` equal to `OMS_BASE_URL`'s h
 | `OMS_OIDC_DISCOVERY_URL` | the issuer | where the server fetches discovery (differs in compose) |
 | `OMS_OIDC_CLIENT_ID`, `OMS_OIDC_CLIENT_SECRET` | — | required when the issuer is set |
 | `OMS_OIDC_NAME` | `SSO` | button label |
+| `OMS_OIDC_DIRECTORY` | empty | `keycloak`: admins add people from the realm in Members (see `docs/SSO.md`) |
 | `OMS_WEBHOOK_BLOCK_PRIVATE` | empty (off) | `true` stops webhooks posting to loopback and private addresses |
 
 ## Password reset

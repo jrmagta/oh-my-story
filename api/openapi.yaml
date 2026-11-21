@@ -128,6 +128,9 @@ paths:
                         type: "boolean"
                       name:
                         type: "string"
+                      directory:
+                        type: "boolean"
+                        description: "Admins can add people from the identity provider's directory (Keycloak)."
                     required: ["enabled"]
                     additionalProperties: false
                 required: ["oidc"]
@@ -517,6 +520,76 @@ paths:
                   $ref: "#/components/schemas/Member"
         "401":
           $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["Members"]
+      summary: "Add someone from the identity provider's directory as a member, at once"
+      operationId: postWorkspacesSlugMembers
+      description: "Admin or above (not API tokens). Needs OMS_OIDC_DIRECTORY. Their account is made from the directory (or one with their email is linked); they sign in with SSO."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                directoryId:
+                  type: "string"
+                  description: "The id from GET /directory."
+                role:
+                  type: "string"
+                  enum: ["viewer", "commenter", "editor", "admin"]
+              required: ["directoryId", "role"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/workspaces/{slug}/directory:
+    get:
+      tags: ["Members"]
+      summary: "Search the identity provider's people by name, username or email"
+      operationId: getWorkspacesSlugDirectory
+      description: "Admin or above (not API tokens). Needs OMS_OIDC_DIRECTORY. Up to 20 enabled people with an email."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - name: "q"
+          in: query
+          required: true
+          schema:
+            type: "string"
+            maxLength: 100
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/DirectoryUser"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
   /api/workspaces/{slug}/members/{userId}:
@@ -3162,6 +3235,26 @@ components:
           type: "string"
           format: "date-time"
       required: ["id", "creatorName", "expiresAt", "lastUsedAt", "createdAt"]
+      additionalProperties: false
+    DirectoryUser:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          description: "The provider's user id (their OIDC subject)."
+        email:
+          type: "string"
+        firstName:
+          type: "string"
+        lastName:
+          type: "string"
+        name:
+          type: "string"
+          description: "First and last name, as the account will show it."
+        member:
+          type: "boolean"
+          description: "Already a member of this workspace."
+      required: ["id", "email", "firstName", "lastName", "name", "member"]
       additionalProperties: false
     Webhook:
       type: "object"
