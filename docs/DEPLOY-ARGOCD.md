@@ -39,6 +39,13 @@ A brief for an agent working in the target environment. It describes what the He
 
 `deploy/helm/oh-my-story`, chart version 0.1.0. Templates: Deployment, Service, Ingress, HPA, migration Job, Secret, and an optional CloudNativePG `Cluster`. Values are documented inline in `values.yaml`; `ci/external-values.yaml` is a worked example for an external database.
 
+Published on every `vX.Y.Z` tag of the OMS repository by `.github/workflows/release.yml`:
+
+- image `ghcr.io/jrmagta/oh-my-story:X.Y.Z` (also `:X.Y` and `:latest`), linux/amd64;
+- chart `oci://ghcr.io/jrmagta/charts/oh-my-story`, version `X.Y.Z`, whose `appVersion`, and so its default image tag, is also `X.Y.Z`.
+
+The packages are public unless the owner has left them private (ghcr.io creates new packages as private); if `helm pull` or an image pull is refused without credentials, ask the owner or use a pull secret.
+
 Already fits the target:
 
 - **Namespace.** No template sets `metadata.namespace`, so resources go to the Argo destination namespace.
@@ -57,7 +64,7 @@ How Argo treats the Helm hooks (Argo renders the chart and applies it; it never 
 
 Gaps:
 
-1. **No published image.** `image.repository` defaults to `ghcr.io/jrmagta/oh-my-story`, but nothing publishes it: this repository's CI only builds an image to load into kind.
+1. **The published chart can't be edited in place.** Steps 2, 3 (route B) and 5 change templates, so they need a copy of the chart you control (see [step 1](#1-image-and-chart)).
 2. **No way to trust a private CA.** There are no volume, CA or extra-env values. A Keycloak or Postgres with an internal CA fails TLS verification.
 3. **Secrets from SOPS** need the wiring in [Secrets with SOPS](#secrets-with-sops). With `existingSecret` there is a first-sync ordering problem.
 4. `OMS_WEBHOOK_BLOCK_PRIVATE`, extra env, extra pod labels and a pod-level `serviceAccountName` are not exposed.
@@ -66,15 +73,20 @@ Gaps:
 
 Work through these in order. Each one ends with a check.
 
-### 1. Image
+### 1. Image and chart
 
-Get the image into a registry the cluster can pull from.
+**Image.** Use the published image. If the cluster can't reach ghcr.io, mirror `ghcr.io/jrmagta/oh-my-story:<version>` into the internal registry (Harbor replication, or `skopeo copy`/`crane copy`) and set `image.repository` to the mirror. Building from the `Dockerfile` is the fallback only if images built outside the environment are not allowed; that build pulls `node:24-alpine`, `golang:1.26-alpine` and `gcr.io/distroless/static-debian12:nonroot`.
 
-- If the cluster can reach ghcr.io, add a workflow in the OMS repository that builds `Dockerfile` and pushes `ghcr.io/<owner>/oh-my-story:<version>` on tags. Otherwise build it in the target environment and push it to the internal registry (Harbor or similar). The build pulls `node:24-alpine`, `golang:1.26-alpine` and `gcr.io/distroless/static-debian12:nonroot`; use mirrors if the build host is air-gapped.
-- Pin a tag in values (`image.tag`); it defaults to the chart's `appVersion`, `0.1.0`.
+- Leave `image.tag` empty to get the chart's `appVersion`, or pin it.
 - Private registry: put a pull secret in `secrets.yaml` (or create it the way other apps do) and list it in `imagePullSecrets`.
 
-Check: `kubectl -n <ns> run oms-pull-test --rm -it --restart=Never --image=<image> -- healthcheck` pulls the image. (The command itself fails without a database; you are only checking the pull.)
+**Chart.** Pick one:
+
+- **Published chart, unchanged.** An Argo Helm source with repo `ghcr.io/jrmagta/charts`, chart `oh-my-story`, `targetRevision: <version>` (an OCI Helm repository in Argo, with `enableOCI: true` if it is declared as a repository secret). Enough when the certificates are public (step 2 skipped), secrets go through helm-secrets (step 3 route A) and step 5 isn't needed.
+- **Vendored copy.** `helm pull oci://ghcr.io/jrmagta/charts/oh-my-story --version <version> --untar` into the deployments repo, make the changes there and point the Application at that path. Record the upstream version in the commit message so the copy can be rebased onto later releases.
+- **Upstream.** Make the changes in the OMS repository (this one) as a PR, tag a release, then use the published chart. Best long-term if the changes are general (a CA bundle, extra env, an Argo-friendly migration) rather than specific to this environment.
+
+Check: `kubectl -n <ns> run oms-pull-test --rm -it --restart=Never --image=<image> -- healthcheck` pulls the image (the command itself fails without a database; you are only checking the pull), and `helm show chart oci://ghcr.io/jrmagta/charts/oh-my-story --version <version>` (or the mirror) answers from where Argo runs.
 
 ### 2. Private CA (skip if Postgres and Keycloak have public certificates)
 
@@ -164,6 +176,7 @@ replicaCount: 2
 
 The `Application`, following the repo's conventions:
 
+- The chart source from step 1 (published OCI chart, or the vendored path), plus the values file and `secrets.yaml` (with helm-secrets, typically a multi-source Application with a `$values` ref to the deployments repo).
 - `destination.namespace: <ns>`; `syncOptions: [CreateNamespace=true]` if Argo creates the namespace.
 - A Rancher project: `managedNamespaceMetadata.annotations: {field.cattle.io/projectId: "<cluster-id>:<project-id>"}` (with `CreateNamespace=true`), or create the namespace in Rancher first.
 - `helm.releaseName`: resource names are `<release>-oh-my-story`, or just `<release>` if the release name contains `oh-my-story`.
