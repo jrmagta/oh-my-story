@@ -18,6 +18,7 @@ import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toast
 import { PageBand } from './app'
 import { StepPanel } from './step-panel'
 import { ShareDialog } from './share'
+import { exportName, exportView, type ExportKind } from '../map/exportView'
 import { Roadmap } from './roadmap'
 
 export const mapKey = (slug: string, mapId: string) => ['ws', slug, 'map', mapId] as const
@@ -266,7 +267,7 @@ export function MapPage() {
       <FilterBar panelOpen={panelOpen} />
       <div className={`map-scroll ${panelOpen ? 'with-panel' : ''}`}>
         <MapDnd view={ctx.view} onMove={move}>
-          {ctx.mode === 'roadmap' ? <Roadmap /> : <MapGrid />}
+          <MapCanvas />
         </MapDnd>
       </div>
       {stepOpen && <StepPanel stepId={selectedStep} />}
@@ -315,6 +316,22 @@ function Presence({ users, state }: { users: PresentUser[]; state: LiveState }) 
   )
 }
 
+/**
+ * The map or the roadmap, as exported: a caption (shown only while exporting)
+ * and the grid. The export menu finds it by its id.
+ */
+export function MapCanvas() {
+  const { mode, view } = useMap()
+  return (
+    <div className="map-export" id="map-export">
+      <p className="export-caption">
+        {view.map.name} · {mode === 'roadmap' ? 'Roadmap' : 'Map'} · {new Date().toLocaleDateString()}
+      </p>
+      {mode === 'roadmap' ? <Roadmap /> : <MapGrid />}
+    </div>
+  )
+}
+
 /** Map or Roadmap: two layouts of the same steps. */
 function ModeSwitch() {
   const { mode, setMode } = useMap()
@@ -336,8 +353,21 @@ export function MapHeader(props: {
   onRefresh?: () => void
 }) {
   const { panelOpen, live } = props
-  const { ws, view, canEdit, run, shared } = useMap()
+  const { ws, view, canEdit, run, mode } = useMap()
+  const { shared } = useMap()
   const [sharing, setSharing] = useState(false)
+  const [exporting, setExporting] = useState<'idle' | 'busy' | string>('idle')
+  const exportAs = async (kind: ExportKind) => {
+    const el = document.getElementById('map-export')
+    if (!el) return
+    setExporting('busy')
+    try {
+      await exportView(el, exportName(view.map.name, mode, kind), kind)
+      setExporting('idle')
+    } catch (e) {
+      setExporting(e instanceof Error ? e.message : 'Export failed')
+    }
+  }
   return (
     <section className={`mhead ${panelOpen ? 'with-panel' : ''}`}>
       <div className="min-w-0">
@@ -370,11 +400,20 @@ export function MapHeader(props: {
             Refresh
           </button>
         )}
-        {live && (
-          <CardMenu label={`map ${view.map.name}`}>
-            {(close) => (
-              <>
-                {canEdit && (
+        {exporting === 'busy' && (
+          <span className="text-muted text-xs font-bold" role="status">
+            Exporting…
+          </span>
+        )}
+        {exporting !== 'idle' && exporting !== 'busy' && (
+          <span className="text-error text-xs font-bold" role="alert">
+            Export failed: {exporting}
+          </span>
+        )}
+        <CardMenu label={`map ${view.map.name}`}>
+          {(close) => (
+            <>
+              {live && canEdit && (
                   <MenuItem
                     onClick={() => {
                       close()
@@ -384,6 +423,7 @@ export function MapHeader(props: {
                     Share…
                   </MenuItem>
                 )}
+              {live && (
                 <MenuItem
                   onClick={() => {
                     close()
@@ -392,10 +432,26 @@ export function MapHeader(props: {
                 >
                   {live.activityOpen ? 'Hide activity' : 'Activity'}
                 </MenuItem>
-              </>
-            )}
-          </CardMenu>
-        )}
+              )}
+              <MenuItem
+                onClick={() => {
+                  close()
+                  void exportAs('png')
+                }}
+              >
+                Export as PNG
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  close()
+                  void exportAs('pdf')
+                }}
+              >
+                Export as PDF
+              </MenuItem>
+            </>
+          )}
+        </CardMenu>
       </div>
       {sharing && <ShareDialog close={() => setSharing(false)} />}
     </section>
@@ -933,6 +989,7 @@ function BandHeader({ release, index, total }: { release: Release | null; index:
           type="button"
           className="btn btn-xs btn-ol"
           data-no-drag
+          data-export="skip"
           aria-pressed={focused}
           aria-label={focused ? 'Show all releases' : `Focus ${label}`}
           onClick={() => setPrefs({ ...prefs, focus: focused ? null : bandId })}
@@ -1023,7 +1080,7 @@ function AddRelease() {
   const { ws, view, run } = useMap()
   const [open, setOpen] = useState(false)
   return (
-    <div style={{ gridColumn: '2 / span 2', marginTop: 22 }}>
+    <div style={{ gridColumn: '2 / span 2', marginTop: 22 }} data-export="skip">
       {open ? (
         <TextInput
           label="New release name"
