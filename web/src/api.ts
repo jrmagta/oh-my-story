@@ -217,6 +217,18 @@ export interface SearchHit {
 }
 
 /** A read-only link to a map. Its URL is returned only when it is made. */
+/** A workspace API token as admins see it; the token itself is shown once, when made. */
+export interface ApiToken {
+  id: string
+  name: string
+  scope: 'read' | 'write'
+  prefix: string
+  creatorName: string | null
+  expiresAt: string | null
+  lastUsedAt: string | null
+  createdAt: string
+}
+
 export interface ShareLink {
   id: string
   creatorName: string
@@ -407,6 +419,11 @@ export const api = {
     request<Comment>('PATCH', `${mp(slug, mapId)}/comments/${id}`, b),
   /** The author, or an admin. */
   deleteComment: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/comments/${id}`),
+  apiTokens: (slug: string) => request<ApiToken[]>('GET', `${ws(slug)}/api-tokens`),
+  /** Admins. expiresInDays: 30, 90, 365 or null for never. The token is in this reply only. */
+  createApiToken: (slug: string, b: { name: string; scope: 'read' | 'write'; expiresInDays: number | null }) =>
+    request<ApiToken & { token: string }>('POST', `${ws(slug)}/api-tokens`, b),
+  revokeApiToken: (slug: string, id: string) => request<void>('DELETE', `${ws(slug)}/api-tokens/${id}`),
   shareLinks: (slug: string, mapId: string) => request<ShareLink[]>('GET', `${mp(slug, mapId)}/share-links`),
   /** Editors. expiresInDays: 7, 30, 90 or null for never. The url, with the token, is in this reply only. */
   createShareLink: (slug: string, mapId: string, b: { expiresInDays: number | null }) =>

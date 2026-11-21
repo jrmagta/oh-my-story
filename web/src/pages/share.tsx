@@ -171,12 +171,14 @@ export function SharedMapPage() {
         </main>
       ) : (
         <MapProvider value={ctx}>
-          <MapHeader panelOpen={!!ctx.selectedStep} onRefresh={() => void shared.refetch()} />
-          <FilterBar panelOpen={!!ctx.selectedStep} />
-          <div className={`map-scroll ${ctx.selectedStep ? 'with-panel' : ''}`}>
-            <MapDnd view={ctx.view} onMove={() => {}}>
-              <MapCanvas />
-            </MapDnd>
+          <div className="map-page">
+            <MapHeader panelOpen={!!ctx.selectedStep} onRefresh={() => void shared.refetch()} />
+            <FilterBar panelOpen={!!ctx.selectedStep} />
+            <div className={`map-scroll ${ctx.selectedStep ? 'with-panel' : ''}`}>
+              <MapDnd view={ctx.view} onMove={() => {}}>
+                <MapCanvas />
+              </MapDnd>
+            </div>
           </div>
           {ctx.selectedStep && ctx.view.steps.some((s) => s.id === ctx.selectedStep) && <StepPanel stepId={ctx.selectedStep} />}
         </MapProvider>

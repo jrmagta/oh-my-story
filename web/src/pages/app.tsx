@@ -104,11 +104,14 @@ export function AppShell() {
 function ConnectionStatus({ state }: { state: LiveState }) {
   return (
     <span className={`conn ${state}`} role="status" title={liveLabel[state]}>
+      {/* A plug in its socket; offline, pulled out of it. */}
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
-        <circle cx="12" cy="17" r="2.2" fill="currentColor" />
-        <path d="M7.8 12.8a6 6 0 0 1 8.4 0" />
-        <path d="M4.6 9.6a10.5 10.5 0 0 1 14.8 0" />
-        {state === 'offline' && <path className="slash" d="M4 4l16 16" />}
+        <path d="M5 2.5h14" />
+        {state === 'offline' ? (
+          <path d="M9 8v3M15 8v3M6.5 11h11v2.5a5.5 5.5 0 0 1-11 0zM12 19v3.5" />
+        ) : (
+          <path d="M9 2.5v4M15 2.5v4M6.5 6.5h11V9a5.5 5.5 0 0 1-11 0zM12 14.5v8" />
+        )}
       </svg>
       <span className="sr-only">{liveLabel[state]}</span>
     </span>

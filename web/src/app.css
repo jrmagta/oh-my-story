@@ -188,6 +188,9 @@
     color: var(--color-brand-amber);
   }
   .logo {
+    /* Never wraps or squeezes when the nav is crowded. */
+    white-space: nowrap;
+    flex-shrink: 0;
     font-weight: 800;
     font-style: italic;
     font-size: 22px;
@@ -318,12 +321,11 @@
     align-items: center;
     gap: 8px;
   }
-  /* The top bar's connection icon: green when live, amber and pulsing while connecting, red and struck through offline. */
+  /* The top bar's connection icon: a plug, green when live, amber and pulsing while connecting, red and pulled out offline. */
   .conn { display: inline-flex; color: var(--color-brand-green); }
-  .conn path { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+  .conn path { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .conn.connecting { color: var(--color-brand-amber); animation: conn-pulse 1.2s ease-in-out infinite; }
   .conn.offline { color: var(--color-brand-red); }
-  .conn.offline path:not(.slash) { opacity: 0.45; }
   @keyframes conn-pulse { 50% { opacity: 0.35; } }
   @media (prefers-reduced-motion: reduce) { .conn.connecting { animation: none; } }
   .ring-disc.todo { color: #fff; }
@@ -659,7 +661,16 @@
   .step-card.dimmed { opacity: 0.25; }
   .step-card.dimmed:hover, .step-card.dimmed:focus-within { opacity: 0.6; }
 
+  /* The map fills the window below the top bar (68px) and stripe (10px) and scrolls inside
+     itself, so both its scrollbars sit at the window's edges, not at the bottom of a tall map. */
+  .map-page {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 78px);
+  }
   .map-scroll {
+    flex: 1;
+    min-height: 0;
     overflow: auto;
     padding: 22px 28px 60px;
   }
