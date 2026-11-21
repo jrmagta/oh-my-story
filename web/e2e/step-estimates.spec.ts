@@ -65,7 +65,7 @@ test('estimates add up per activity, objective, release and map, live in a secon
   await expect(total(page, 'objective Pay')).toHaveText('8.5 points')
   await expect(page.getByRole('heading', { name: 'Release MVP' })).toContainText('2 steps · 8 points')
   await expect(page.getByRole('heading', { name: 'Release Unscheduled' })).toContainText('1 step · 0.5 points')
-  await expect(page.getByText(/· 3 steps · 8\.5 points$/)).toBeVisible()
+  await expect(page.getByText(/· 3 steps · 8\.5 points/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'EST-1 Enter card', exact: true })).toContainText('3')
 
   await expect(total(other, 'objective Pay')).toHaveText('8.5 points')

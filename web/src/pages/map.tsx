@@ -17,7 +17,7 @@ import { applyMove, type Move } from '../map/moves'
 import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toasts, type ToastMessage } from '../ui'
 import { PageBand } from './app'
 import { StepPanel } from './step-panel'
-import { ShareButton } from './share'
+import { ShareDialog } from './share'
 import { Roadmap } from './roadmap'
 
 export const mapKey = (slug: string, mapId: string) => ['ws', slug, 'map', mapId] as const
@@ -299,8 +299,9 @@ const liveLabel: Record<LiveState, string> = { connecting: 'Connecting…', live
 function Presence({ users, state }: { users: PresentUser[]; state: LiveState }) {
   return (
     <div className="presence" aria-label="On this map now">
-      <span className={`live-dot ${state}`} role="status">
-        {liveLabel[state]}
+      {/* A dot, with its word for screen readers and as a tooltip. */}
+      <span className={`live-dot ${state}`} role="status" title={liveLabel[state]}>
+        <span className="sr-only">{liveLabel[state]}</span>
       </span>
       <ul className="flex -space-x-1">
         {users.map((u) => (
@@ -335,14 +336,8 @@ export function MapHeader(props: {
   onRefresh?: () => void
 }) {
   const { panelOpen, live } = props
-  const { ws, view, canEdit, totals, run, shared } = useMap()
-  const count = (level: Level) => view.nodes.filter((n) => n.level === level).length
-  const facts = [
-    plural(count('objective'), 'objective'),
-    plural(count('activity'), 'activity').replace('activitys', 'activities'),
-    plural(view.steps.length, 'step'),
-    estimated(totals.map, ws.estimateUnit),
-  ].filter(Boolean)
+  const { ws, view, canEdit, run, shared } = useMap()
+  const [sharing, setSharing] = useState(false)
   return (
     <section className={`mhead ${panelOpen ? 'with-panel' : ''}`}>
       <div className="min-w-0">
@@ -353,44 +348,115 @@ export function MapHeader(props: {
             {ws.name} › Story maps
           </Link>
         )}
-        {/* The title can be a rename button; the heading still reads as the map's name. */}
-        <h1 className="mt-1" aria-label={view.map.name}>
-          <InlineText
-            value={view.map.name}
-            label="map"
-            editable={canEdit}
-            maxLength={100}
-            onSave={(name) => run(() => api.patchMap(ws.slug, view.map.id, { name }))}
-          />
-        </h1>
-        <p className="text-muted mt-1.5 text-sm font-semibold">{facts.join(' · ')}</p>
-        <ModeSwitch />
+        <div className="mhead-title">
+          {/* The title can be a rename button; the heading still reads as the map's name. */}
+          <h1 aria-label={view.map.name}>
+            <InlineText
+              value={view.map.name}
+              label="map"
+              editable={canEdit}
+              maxLength={100}
+              onSave={(name) => run(() => api.patchMap(ws.slug, view.map.id, { name }))}
+            />
+          </h1>
+          <Summary />
+        </div>
       </div>
-      <div className="flex flex-col items-end gap-3" style={{ marginLeft: 'auto' }}>
-        {live && (
-          <>
-            <Presence users={live.users} state={live.state} />
-            <ShareButton />
-            <button type="button" className="btn btn-xs btn-ol" aria-pressed={live.activityOpen} onClick={live.toggleActivity}>
-              Activity
-            </button>
-          </>
-        )}
+      <div className="mhead-tools">
+        <ModeSwitch />
+        {live && <Presence users={live.users} state={live.state} />}
         {props.onRefresh && (
           <button type="button" className="btn btn-xs btn-ol" onClick={props.onRefresh}>
             Refresh
           </button>
         )}
+        {live && (
+          <CardMenu label={`map ${view.map.name}`}>
+            {(close) => (
+              <>
+                {canEdit && (
+                  <MenuItem
+                    onClick={() => {
+                      close()
+                      setSharing(true)
+                    }}
+                  >
+                    Share…
+                  </MenuItem>
+                )}
+                <MenuItem
+                  onClick={() => {
+                    close()
+                    live.toggleActivity()
+                  }}
+                >
+                  {live.activityOpen ? 'Hide activity' : 'Activity'}
+                </MenuItem>
+              </>
+            )}
+          </CardMenu>
+        )}
       </div>
-      <div className="kpis" aria-label="Steps by status">
-        {categoryOrder.map((c) => (
-          <div className="kpi" key={c.category}>
-            <span className={`ring-disc ${c.ring}`}>{totals.map.byCategory[c.category]}</span>
-            {c.label}
-          </div>
-        ))}
-      </div>
+      {sharing && <ShareDialog close={() => setSharing(false)} />}
     </section>
+  )
+}
+
+/**
+ * The map's counts in one line under its name; a click opens the status counts
+ * and each release's progress. They follow the filter, like the totals on the map.
+ */
+function Summary() {
+  const { ws, view, totals } = useMap()
+  const [open, setOpen] = useState(false)
+  const count = (level: Level) => view.nodes.filter((n) => n.level === level).length
+  const facts = [
+    plural(count('objective'), 'objective'),
+    plural(count('activity'), 'activity').replace('activitys', 'activities'),
+    plural(view.steps.length, 'step'),
+    estimated(totals.map, ws.estimateUnit),
+  ].filter(Boolean)
+  const releases = bands(view)
+  return (
+    <span
+      className="relative"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') setOpen(false)
+      }}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false)
+      }}
+    >
+      <button type="button" className="summary-btn" aria-expanded={open} aria-controls="map-summary" onClick={() => setOpen((o) => !o)}>
+        {facts.join(' · ')} <span aria-hidden>▾</span>
+      </button>
+      {open && (
+        <div id="map-summary" className="summary-pop" role="group" aria-label="Map summary">
+          <div className="summary-status" aria-label="Steps by status">
+            {categoryOrder.map((c) => (
+              <span key={c.category}>
+                <span className={`ring-disc ${c.ring}`}>{totals.map.byCategory[c.category]}</span>
+                {c.label}
+              </span>
+            ))}
+          </div>
+          <ul className="summary-releases" aria-label="Progress by release">
+            {releases.map((b) => {
+              const t = totals.releases.get(b.release?.id ?? '')
+              return (
+                <li key={b.key}>
+                  <span className="truncate">{b.release?.name ?? 'Unscheduled'}</span>
+                  {t ? <Meter total={t} /> : <span className="meter" />}
+                  <span className="text-muted text-right">
+                    {t?.byCategory.done ?? 0}/{t?.steps ?? 0}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+    </span>
   )
 }
 

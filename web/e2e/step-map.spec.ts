@@ -92,7 +92,9 @@ test('the step panel edits the description and status, and they survive a reload
   await expect(panel(page).getByLabel('Status')).toHaveValue(/.+/)
   await expect(panel(page).getByLabel('Status').locator('option:checked')).toHaveText('In progress')
   await expect(card(page, 'MAP-1 Register with email')).toContainText('In progress')
+  await page.locator('button[aria-controls="map-summary"]').click()
   await expect(page.getByLabel('Steps by status')).toContainText('1In progress')
+  await page.keyboard.press('Escape')
 })
 
 test('renaming an activity, and deleting it with undo', async ({ page }) => {
@@ -351,6 +353,7 @@ test('the step history and the map activity say who changed what', async ({ page
   await expect(history).toContainText('Olive Owner added MAP-1 “Register with email”')
   await expect(history).toContainText('just now')
 
+  await page.getByRole('button', { name: 'Actions for map Onboarding' }).click()
   await page.getByRole('button', { name: 'Activity', exact: true }).click()
   await expect(step).toHaveCount(0)
   const feed = page.getByRole('list', { name: 'Map activity' })

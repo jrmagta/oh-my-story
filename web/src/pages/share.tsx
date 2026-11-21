@@ -18,22 +18,8 @@ const expiries: [number | null, string][] = [
   [null, 'Never'],
 ]
 
-/** The map header's Share button: editors make, copy and revoke read-only links. */
-export function ShareButton() {
-  const { canEdit } = useMap()
-  const [open, setOpen] = useState(false)
-  if (!canEdit) return null
-  return (
-    <>
-      <button type="button" className="btn btn-xs btn-ol" onClick={() => setOpen(true)}>
-        Share
-      </button>
-      {open && <ShareDialog close={() => setOpen(false)} />}
-    </>
-  )
-}
-
-function ShareDialog({ close }: { close: () => void }) {
+/** Making, copying and revoking a map's read-only links (editors), opened from the map's ⋯ menu. */
+export function ShareDialog({ close }: { close: () => void }) {
   const { ws, view } = useMap()
   const qc = useQueryClient()
   const key = [...mapKey(ws.slug, view.map.id), 'share-links']
