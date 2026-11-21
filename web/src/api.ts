@@ -188,6 +188,22 @@ export interface SearchHit {
   activity: string
 }
 
+/** A read-only link to a map. Its URL is returned only when it is made. */
+export interface ShareLink {
+  id: string
+  creatorName: string
+  expiresAt: string | null
+  lastUsedAt: string | null
+  createdAt: string
+}
+
+/** What a share link shows: the map without assignees or comment counts. */
+export interface SharedMap {
+  workspaceName: string
+  estimateUnit: string
+  view: MapView
+}
+
 /** A named map filter: private to its creator until shared with the workspace. */
 export interface SavedView {
   id: string
@@ -363,6 +379,13 @@ export const api = {
     request<Comment>('PATCH', `${mp(slug, mapId)}/comments/${id}`, b),
   /** The author, or an admin. */
   deleteComment: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/comments/${id}`),
+  shareLinks: (slug: string, mapId: string) => request<ShareLink[]>('GET', `${mp(slug, mapId)}/share-links`),
+  /** Editors. expiresInDays: 7, 30, 90 or null for never. The url, with the token, is in this reply only. */
+  createShareLink: (slug: string, mapId: string, b: { expiresInDays: number | null }) =>
+    request<ShareLink & { url: string }>('POST', `${mp(slug, mapId)}/share-links`, b),
+  revokeShareLink: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/share-links/${id}`),
+  /** No session: the map behind a share link. 404 when it is revoked, expired or its map deleted. */
+  sharedMap: (token: string) => request<SharedMap>('GET', `/api/shared/${encodeURIComponent(token)}`),
   views: (slug: string, mapId: string) => request<SavedView[]>('GET', `${mp(slug, mapId)}/views`),
   /** shared: true needs editor. */
   createView: (slug: string, mapId: string, b: { name: string; filter: Filter; shared?: boolean }) =>

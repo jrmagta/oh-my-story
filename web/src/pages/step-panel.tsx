@@ -11,9 +11,9 @@ import { colourFor, TagPicker } from '../map/TagPicker'
 
 /** The open step, beside the map. Editors change it in place; everyone else reads. */
 export function StepPanel({ stepId }: { stepId: string }) {
-  const { ws, view, canEdit, statuses, run, openStep } = useMap()
+  const { ws, view, canEdit, statuses, run, openStep, shared } = useMap()
   const [tab, setTab] = useState<'details' | 'comments' | 'history'>('details')
-  const members = useQuery({ queryKey: ['ws', ws.slug, 'members'], queryFn: () => api.members(ws.slug) })
+  const members = useQuery({ queryKey: ['ws', ws.slug, 'members'], queryFn: () => api.members(ws.slug), enabled: !shared })
   const step = view.steps.find((s) => s.id === stepId)
   if (!step) return null
   const status = statuses.get(step.statusId)
@@ -39,7 +39,7 @@ export function StepPanel({ stepId }: { stepId: string }) {
         </h2>
       </div>
       <div role="tablist" aria-label="Step" className="step-tabs">
-        {(['details', 'comments', 'history'] as const).map((t) => (
+        {(shared ? (['details'] as const) : (['details', 'comments', 'history'] as const)).map((t) => (
           <button
             key={t}
             type="button"
@@ -77,6 +77,7 @@ export function StepPanel({ stepId }: { stepId: string }) {
                 )}
               </dd>
             </div>
+            {!shared && (
             <div className="row">
               <dt>Assignee</dt>
               <dd>
@@ -99,6 +100,7 @@ export function StepPanel({ stepId }: { stepId: string }) {
                 )}
               </dd>
             </div>
+            )}
             <div className="row">
               <dt>Estimate</dt>
               <dd>

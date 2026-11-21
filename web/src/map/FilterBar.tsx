@@ -27,19 +27,19 @@ const fieldName: Record<Field, string> = {
  * steps that do not match are dimmed or hidden. It all lives in the URL.
  */
 export function FilterBar({ panelOpen }: { panelOpen: boolean }) {
-  const { ws, view, filter, setFilter, match, prefs, setPrefs } = useMap()
+  const { ws, view, filter, setFilter, match, prefs, setPrefs, shared } = useMap()
   const focusName =
     prefs.focus === UNSCHEDULED_BAND ? 'Unscheduled' : view.releases.find((r) => r.id === prefs.focus)?.name
-  const members = useQuery({ queryKey: ['ws', ws.slug, 'members'], queryFn: () => api.members(ws.slug) })
+  const members = useQuery({ queryKey: ['ws', ws.slug, 'members'], queryFn: () => api.members(ws.slug), enabled: !shared })
   const [open, setOpen] = useState(false)
 
   const options: Record<Field, Option[]> = {
     statuses: view.workflow.statuses,
     labels: [...view.labels].sort((a, b) => a.name.localeCompare(b.name)),
-    assignees: [
-      { id: UNASSIGNED, name: 'Unassigned' },
-      ...(members.data ?? []).map((m) => ({ id: m.userId, name: m.displayName })),
-    ],
+    // A share link shows no people, so there is nothing to filter by.
+    assignees: shared
+      ? []
+      : [{ id: UNASSIGNED, name: 'Unassigned' }, ...(members.data ?? []).map((m) => ({ id: m.userId, name: m.displayName }))],
     personas: [...view.personas].sort((a, b) => a.name.localeCompare(b.name)),
     releases: [
       ...[...view.releases].sort((a, b) => (a.rank < b.rank ? -1 : 1)),
@@ -55,7 +55,7 @@ export function FilterBar({ panelOpen }: { panelOpen: boolean }) {
 
   return (
     <section className={`filter-bar ${panelOpen ? 'with-panel' : ''}`} aria-label="Filter">
-      <SavedViews />
+      {!shared && <SavedViews />}
       <input
         type="search"
         className="input input-sm w-52"

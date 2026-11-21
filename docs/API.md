@@ -160,6 +160,17 @@ A comment is `{id, stepId, parentId, authorId, authorName, bodyMd, mentionIds, r
 | `PATCH /maps/{mapId}/comments/{id}` | commenter | `{bodyMd?, mentionIds?, resolved?}` → comment. Body and mentions: the author only (`403` otherwise). `resolved`: a first comment only, by its author or an editor |
 | `DELETE /maps/{mapId}/comments/{id}` | commenter | → `204`. The author, or an admin |
 
+### Share links
+
+A share link shows a map read-only to anyone who has it, without an account. Its token is returned once, in the `url` when the link is made, and only its hash is stored. A link is `{id, creatorName, expiresAt, lastUsedAt, createdAt}`.
+
+| Endpoint | Role | Body → response |
+|---|---|---|
+| `GET /maps/{mapId}/share-links` | editor | → `[link]`, newest first; revoked links are left out, expired ones are listed |
+| `POST /maps/{mapId}/share-links` | editor | `{expiresInDays?}` (7, 30, 90, or null for never) → `201` link with `url` |
+| `DELETE /maps/{mapId}/share-links/{id}` | editor | → `204`. Revokes it |
+| `GET /api/shared/{token}` | none | → `{workspaceName, estimateUnit, view}`, `view` being the map payload with every step's `assigneeId` null and `commentCount` 0. `404` when the link is unknown, revoked or expired, or its map deleted. Records when the link was last used; sends `X-Robots-Tag: noindex` |
+
 ### Search
 
 | Endpoint | Role | Body → response |
