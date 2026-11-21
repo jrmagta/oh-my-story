@@ -55,6 +55,8 @@ test('a big map zooms, fits, pans, keeps its backbone pinned, and has a minimap'
   expect(above).toBe(true)
   expect(act.y).toBeGreaterThan(obj.y)
   await expect(page.locator('.map-act').first()).toBeInViewport()
+  // An objective names itself on hover, even when its title is scrolled out of sight.
+  await expect(page.locator('.map-obj').first()).toHaveAttribute('title', 'Discover')
 
   // The minimap shows the map is bigger than the view; clicking its far corner moves there.
   const mini = page.getByRole('img', { name: /^Map overview/ })

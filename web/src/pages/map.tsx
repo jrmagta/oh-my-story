@@ -556,6 +556,8 @@ export function MapGrid() {
         <div
           key={o.node.id}
           className={`map-obj up ${o.node.colour ? 'coloured' : ''}`}
+          // The full title (and description) on hover, for when the title is scrolled under the row labels.
+          title={o.node.description ? `${o.node.title}\n\n${o.node.description}` : o.node.title}
           // As wide as its activities (and the field for a new one while adding).
           style={{ ...col(o.start, o.span), ...nodeStyle(o.node.colour) }}
         >
