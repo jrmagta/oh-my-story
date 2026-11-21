@@ -53,6 +53,7 @@ test('personas are linked to objectives and shown on them', async ({ page }) => 
 
   await page.reload()
   await expect(objective.getByLabel('Personas: Admin, Guest')).toBeVisible()
+  await page.getByRole('button', { name: 'Actions for map Onboarding' }).click()
   await page.getByRole('button', { name: 'Activity', exact: true }).click()
   await expect(page.getByRole('complementary', { name: 'Map activity' })).toContainText('linked “Admin” to objective “Grow”')
 

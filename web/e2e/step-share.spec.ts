@@ -33,7 +33,8 @@ test('a read-only link shows the map to someone without an account, until it is 
 
   // The owner makes a link from the Share dialog and copies it.
   await page.goto(`/w/${slug}/maps/${map.id}`)
-  await page.getByRole('button', { name: 'Share', exact: true }).click()
+  await page.getByRole('button', { name: 'Actions for map Launch plan' }).click()
+  await page.getByRole('button', { name: 'Share…' }).click()
   const dialog = page.getByRole('dialog', { name: 'Share this map' })
   await dialog.getByRole('button', { name: 'Make a link' }).click()
   const url = await dialog.getByLabel('New link').inputValue()

@@ -237,11 +237,50 @@
     @apply bg-base-200 border-b border-line;
     display: flex;
     align-items: center;
-    gap: 28px;
-    padding: 24px 28px 20px;
+    gap: 20px;
+    padding: 12px 28px;
   }
+  .mhead-title { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 16px; row-gap: 2px; margin-top: 2px; }
+  .mhead-tools { display: flex; align-items: center; gap: 14px; margin-left: auto; }
+  .summary-btn {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--oms-muted);
+    white-space: nowrap;
+  }
+  .summary-btn:hover, .summary-btn[aria-expanded="true"] { color: var(--color-base-content); }
+  .summary-pop {
+    position: absolute;
+    left: 0;
+    top: calc(100% + 8px);
+    z-index: 30;
+    width: 22rem;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: var(--color-base-100);
+    border: 2px solid var(--color-base-content);
+    border-radius: var(--oms-radius);
+  }
+  .summary-status { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .summary-status > span {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--oms-muted);
+    text-align: center;
+  }
+  .summary-status .ring-disc { width: 36px; height: 36px; font-size: 15px; }
+  .summary-releases li { display: grid; grid-template-columns: 7rem 1fr 3rem; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; padding: 3px 0; }
+  .summary-releases .meter { width: 100%; background: var(--oms-cell); }
+  .summary-releases .meter .done { background: var(--color-brand-green); }
   .mhead h1 {
-    font-size: 44px;
+    font-size: 28px;
     line-height: 1;
     font-weight: 800;
     text-transform: uppercase;
@@ -250,8 +289,7 @@
   }
   .presence {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
+    align-items: center;
     gap: 8px;
   }
   .live-dot {
@@ -273,27 +311,6 @@
   }
   .live-dot.live::before { background: var(--color-brand-green); }
   .live-dot.offline::before { background: var(--color-brand-red); }
-  .kpis {
-    display: flex;
-    gap: 18px;
-  }
-  .kpi {
-    @apply text-muted;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    text-transform: uppercase;
-    font-weight: 800;
-  }
-  .kpi .ring-disc {
-    width: 58px;
-    height: 58px;
-    font-size: 22px;
-    border-width: 3px;
-    outline-width: 4px;
-  }
   .ring-disc.todo { color: #fff; }
   .ring-disc.done { --c: var(--color-brand-green); color: #fff; }
   .ring-disc.doing { --c: var(--color-brand-amber); color: #000; }
@@ -390,6 +407,7 @@
     color: var(--color-base-100);
   }
   .rm-release.late { background: var(--color-brand-red); color: #fff; }
+  .rm-release.unscheduled { background: var(--oms-cell); color: var(--color-base-content); border: 2px dashed var(--oms-line); }
   .rm-name { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; text-transform: uppercase; }
   .rm-date, .rm-sum { font-size: 12px; font-weight: 700; opacity: 0.85; }
   .late-pill { font-size: 10px; }
@@ -649,10 +667,40 @@
     border-radius: var(--oms-radius);
   }
   .map-act {
+    position: relative;
     border: 2px solid var(--color-base-content);
     padding: 8px 12px;
     border-radius: var(--oms-radius);
   }
+  /* Add a sibling before or after a backbone card: small + buttons over the gaps at its edges, on hover or focus. */
+  .map-obj { position: relative; }
+  /* Just below the ⋯ menu's row so they never cover it; ignore the pointer until their card is
+     hovered, since neighbouring cards' buttons share the gap between them. */
+  .side-add {
+    position: absolute;
+    top: 24px;
+    z-index: 3;
+    width: 18px;
+    height: 18px;
+    pointer-events: none;
+    border-radius: 50%;
+    border: 2px solid var(--color-base-content);
+    background: var(--color-base-100);
+    color: var(--color-base-content);
+    font-weight: 800;
+    font-size: 12px;
+    line-height: 1;
+    text-transform: none;
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+  .side-add.before { left: -13px; }
+  .side-add.after { right: -13px; }
+  .map-obj:hover > .side-add,
+  .map-act:hover > .side-add,
+  .side-add:focus-visible { opacity: 1; pointer-events: auto; }
+  .side-add:hover { background: var(--color-brand-amber); border-color: #000; color: #000; }
+
   /* A colour chosen for a backbone card fills it; text turns black or white to suit. */
   .map-obj.coloured,
   .map-act.coloured {
@@ -698,7 +746,8 @@
   .node-head:hover .card-menu,
   .node-head:focus-within .card-menu,
   .card-menu.open { opacity: 1; }
-  .band-row .card-menu { float: none; margin: 0; opacity: 1; }
+  .band-row .card-menu,
+  .mhead .card-menu { float: none; margin: 0; opacity: 1; }
   .menu-btn {
     width: 26px;
     height: 22px;
@@ -752,13 +801,6 @@
   }
   .title-input:focus, .title-input:focus-visible { outline: none; box-shadow: none; border-style: solid; }
   .band-input { max-width: 22rem; }
-  .node-popup {
-    position: absolute;
-    left: 0;
-    top: calc(100% + 6px);
-    width: 14rem;
-    z-index: 10;
-  }
   .icon-btn {
     font-weight: 800;
     line-height: 1;
@@ -795,18 +837,28 @@
     grid-column: 1 / -1;
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 12px 18px;
-    margin-top: 22px;
+    gap: 14px;
+    /* One height for every band, Unscheduled (no date, no menu) included. */
+    height: 44px;
+    padding: 0 14px;
+    margin-top: 14px;
     background: #000;
     color: #F2F2F2;
     position: sticky;
     left: 0;
+    /* Sticky makes the band its own stacking context; raise it so its ⋯ menu opens over the cells below. */
+    z-index: 4;
   }
   .band-row.green { background: var(--color-brand-green); color: #fff; }
   .band-row.amber { background: var(--color-brand-amber); color: #000; }
+  /* Unscheduled is not a release: an outlined band in the page's colours rather than a solid one. */
+  .band-row.unscheduled {
+    background: var(--oms-cell);
+    color: var(--color-base-content);
+    border: 2px dashed var(--oms-line);
+  }
   .band-row .n {
-    font-size: 24px;
+    font-size: 18px;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: -0.01em;
@@ -1193,6 +1245,14 @@
   .band-row .btn-ol,
   .toast-item .btn-ol {
     --btn-fg: currentColor;
+    color: inherit;
+  }
+  /* .btn-ol fills with its text colour on hover, which on a band or toast is the surface's own text
+     colour: text and fill matched (black on black on amber). Tint instead, and the same when pressed. */
+  .band-row .btn-ol:hover:not(:disabled),
+  .band-row .btn-ol[aria-pressed="true"],
+  .toast-item .btn-ol:hover:not(:disabled) {
+    --btn-bg: color-mix(in srgb, currentColor 18%, transparent);
     color: inherit;
   }
   .input,

@@ -41,7 +41,7 @@ export function Roadmap() {
         return (
           <div
             key={b.key}
-            className={`rm-release ${late ? 'late' : ''}`}
+            className={`rm-release ${late ? 'late' : ''} ${b.release ? '' : 'unscheduled'}`}
             style={{ gridColumn: i + 2 }}
             role="heading"
             aria-level={2}
@@ -64,7 +64,7 @@ export function Roadmap() {
         <RoadmapObjective
           key={o.node.id}
           objective={o.node}
-          activities={bb.columns.filter((c) => c.objective.id === o.node.id && c.activity).map((c) => c.activity!)}
+          activities={bb.columns.filter((c) => c.objective?.id === o.node.id && c.activity).map((c) => c.activity!)}
           columns={columns.map((b) => b.release)}
           byCell={byCell}
         />

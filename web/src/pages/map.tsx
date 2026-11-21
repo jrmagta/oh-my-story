@@ -5,7 +5,7 @@ import { api, ApiError, atLeast, type Category, type Level, type MapNode, type M
 import { MapDnd, refs, useDrag, useDrop } from '../map/dnd'
 import { HistoryList } from '../map/HistoryList'
 import { useLiveMap, type LiveState, type PresentUser } from '../map/live'
-import { backbone, bands, cellKey, cells, type Band, type Card, type Column } from '../map/layout'
+import { backbone, bands, cellKey, cells, inheritedColour, type Adding, type Band, type Card, type Column } from '../map/layout'
 import { amount, formatEstimate, totals, type Total, type Totals } from '../map/estimates'
 import { nodeStyle, palette } from '../map/colours'
 import { colourFor, TagChooser } from '../map/TagPicker'
@@ -17,7 +17,7 @@ import { applyMove, type Move } from '../map/moves'
 import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toasts, type ToastMessage } from '../ui'
 import { PageBand } from './app'
 import { StepPanel } from './step-panel'
-import { ShareButton } from './share'
+import { ShareDialog } from './share'
 import { Roadmap } from './roadmap'
 
 export const mapKey = (slug: string, mapId: string) => ['ws', slug, 'map', mapId] as const
@@ -49,9 +49,9 @@ export interface MapCtx {
   openStep: (id: string | null) => void
   /** Shows a move at once, saves it, and puts things back if saving fails. */
   move: (m: Move) => void
-  /** The open add-node input, as "level:parentId"; see useAddNode. */
-  adding: string | null
-  setAdding: (key: string | null) => void
+  /** The objective or activity being typed in, and where it goes; the grid gives it a column there. */
+  adding: Adding | null
+  setAdding: (a: Adding | null) => void
 }
 
 const Ctx = createContext<MapCtx | null>(null)
@@ -199,7 +199,7 @@ export function MapPage() {
     [qc, key, run, toast, ws.slug, mapId],
   )
 
-  const [adding, setAdding] = useState<string | null>(null)
+  const [adding, setAdding] = useState<Adding | null>(null)
   const [prefs, setPrefs] = useViewPrefs(mapId)
 
   const ctx = useMemo<MapCtx | null>(() => {
@@ -299,8 +299,9 @@ const liveLabel: Record<LiveState, string> = { connecting: 'Connecting…', live
 function Presence({ users, state }: { users: PresentUser[]; state: LiveState }) {
   return (
     <div className="presence" aria-label="On this map now">
-      <span className={`live-dot ${state}`} role="status">
-        {liveLabel[state]}
+      {/* A dot, with its word for screen readers and as a tooltip. */}
+      <span className={`live-dot ${state}`} role="status" title={liveLabel[state]}>
+        <span className="sr-only">{liveLabel[state]}</span>
       </span>
       <ul className="flex -space-x-1">
         {users.map((u) => (
@@ -335,14 +336,8 @@ export function MapHeader(props: {
   onRefresh?: () => void
 }) {
   const { panelOpen, live } = props
-  const { ws, view, canEdit, totals, run, shared } = useMap()
-  const count = (level: Level) => view.nodes.filter((n) => n.level === level).length
-  const facts = [
-    plural(count('objective'), 'objective'),
-    plural(count('activity'), 'activity').replace('activitys', 'activities'),
-    plural(view.steps.length, 'step'),
-    estimated(totals.map, ws.estimateUnit),
-  ].filter(Boolean)
+  const { ws, view, canEdit, run, shared } = useMap()
+  const [sharing, setSharing] = useState(false)
   return (
     <section className={`mhead ${panelOpen ? 'with-panel' : ''}`}>
       <div className="min-w-0">
@@ -353,52 +348,123 @@ export function MapHeader(props: {
             {ws.name} › Story maps
           </Link>
         )}
-        {/* The title can be a rename button; the heading still reads as the map's name. */}
-        <h1 className="mt-1" aria-label={view.map.name}>
-          <InlineText
-            value={view.map.name}
-            label="map"
-            editable={canEdit}
-            maxLength={100}
-            onSave={(name) => run(() => api.patchMap(ws.slug, view.map.id, { name }))}
-          />
-        </h1>
-        <p className="text-muted mt-1.5 text-sm font-semibold">{facts.join(' · ')}</p>
-        <ModeSwitch />
+        <div className="mhead-title">
+          {/* The title can be a rename button; the heading still reads as the map's name. */}
+          <h1 aria-label={view.map.name}>
+            <InlineText
+              value={view.map.name}
+              label="map"
+              editable={canEdit}
+              maxLength={100}
+              onSave={(name) => run(() => api.patchMap(ws.slug, view.map.id, { name }))}
+            />
+          </h1>
+          <Summary />
+        </div>
       </div>
-      <div className="flex flex-col items-end gap-3" style={{ marginLeft: 'auto' }}>
-        {live && (
-          <>
-            <Presence users={live.users} state={live.state} />
-            <ShareButton />
-            <button type="button" className="btn btn-xs btn-ol" aria-pressed={live.activityOpen} onClick={live.toggleActivity}>
-              Activity
-            </button>
-          </>
-        )}
+      <div className="mhead-tools">
+        <ModeSwitch />
+        {live && <Presence users={live.users} state={live.state} />}
         {props.onRefresh && (
           <button type="button" className="btn btn-xs btn-ol" onClick={props.onRefresh}>
             Refresh
           </button>
         )}
+        {live && (
+          <CardMenu label={`map ${view.map.name}`}>
+            {(close) => (
+              <>
+                {canEdit && (
+                  <MenuItem
+                    onClick={() => {
+                      close()
+                      setSharing(true)
+                    }}
+                  >
+                    Share…
+                  </MenuItem>
+                )}
+                <MenuItem
+                  onClick={() => {
+                    close()
+                    live.toggleActivity()
+                  }}
+                >
+                  {live.activityOpen ? 'Hide activity' : 'Activity'}
+                </MenuItem>
+              </>
+            )}
+          </CardMenu>
+        )}
       </div>
-      <div className="kpis" aria-label="Steps by status">
-        {categoryOrder.map((c) => (
-          <div className="kpi" key={c.category}>
-            <span className={`ring-disc ${c.ring}`}>{totals.map.byCategory[c.category]}</span>
-            {c.label}
-          </div>
-        ))}
-      </div>
+      {sharing && <ShareDialog close={() => setSharing(false)} />}
     </section>
+  )
+}
+
+/**
+ * The map's counts in one line under its name; a click opens the status counts
+ * and each release's progress. They follow the filter, like the totals on the map.
+ */
+function Summary() {
+  const { ws, view, totals } = useMap()
+  const [open, setOpen] = useState(false)
+  const count = (level: Level) => view.nodes.filter((n) => n.level === level).length
+  const facts = [
+    plural(count('objective'), 'objective'),
+    plural(count('activity'), 'activity').replace('activitys', 'activities'),
+    plural(view.steps.length, 'step'),
+    estimated(totals.map, ws.estimateUnit),
+  ].filter(Boolean)
+  const releases = bands(view)
+  return (
+    <span
+      className="relative"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') setOpen(false)
+      }}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false)
+      }}
+    >
+      <button type="button" className="summary-btn" aria-expanded={open} aria-controls="map-summary" onClick={() => setOpen((o) => !o)}>
+        {facts.join(' · ')} <span aria-hidden>▾</span>
+      </button>
+      {open && (
+        <div id="map-summary" className="summary-pop" role="group" aria-label="Map summary">
+          <div className="summary-status" aria-label="Steps by status">
+            {categoryOrder.map((c) => (
+              <span key={c.category}>
+                <span className={`ring-disc ${c.ring}`}>{totals.map.byCategory[c.category]}</span>
+                {c.label}
+              </span>
+            ))}
+          </div>
+          <ul className="summary-releases" aria-label="Progress by release">
+            {releases.map((b) => {
+              const t = totals.releases.get(b.release?.id ?? '')
+              return (
+                <li key={b.key}>
+                  <span className="truncate">{b.release?.name ?? 'Unscheduled'}</span>
+                  {t ? <Meter total={t} /> : <span className="meter" />}
+                  <span className="text-muted text-right">
+                    {t?.byCategory.done ?? 0}/{t?.steps ?? 0}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+    </span>
   )
 }
 
 const levelLabel: Record<Level, string> = { objective: 'Objective', activity: 'Activity' }
 
 export function MapGrid() {
-  const { view, canEdit, prefs } = useMap()
-  const bb = useMemo(() => backbone(view), [view])
+  const { view, canEdit, prefs, adding } = useMap()
+  const bb = useMemo(() => backbone(view, adding), [view, adding])
   const all = useMemo(() => bands(view), [view])
   // A focused release shows alone; a focus on a release that no longer exists shows everything.
   const focused = all.filter((b) => (b.release?.id ?? UNSCHEDULED_BAND) === prefs.focus)
@@ -411,18 +477,17 @@ export function MapGrid() {
       <div className="max-w-xl py-10">
         <p className="up mb-2 text-2xl">An empty map</p>
         <p className="text-muted mb-6 font-medium">Start the backbone with an objective, then add its activities and the steps under them.</p>
-        {canEdit && <AddNode level="objective" parent={null} label="Add objective" />}
+        {canEdit && <StartAdd adding={{ level: 'objective', parentId: null }} label="Add objective" />}
       </div>
     )
   }
 
-  // Columns: row labels, one per backbone column, and one for adding at the end.
+  // Columns: row labels, then one per backbone column.
   const widths = bb.columns.map((c) => (collapsed(c) ? '52px' : '184px')).join(' ')
   // The last, flexible column takes up whatever width a release band needs beyond the others (on a
   // narrow map, or with activities collapsed), so bands never stretch the label column.
-  const style = { gridTemplateColumns: `max-content ${widths}${canEdit ? ' 150px' : ''} minmax(0, 1fr)` }
+  const style = { gridTemplateColumns: `max-content ${widths} minmax(0, 1fr)` }
   const col = (start: number, span = 1) => ({ gridColumn: `${start + 2} / span ${span}` })
-  const trailing = { gridColumn: `${bb.columns.length + 2}` }
 
   return (
     <div className="map-grid" style={style}>
@@ -431,15 +496,19 @@ export function MapGrid() {
         <div
           key={o.node.id}
           className={`map-obj up ${o.node.colour ? 'coloured' : ''}`}
-          style={{ ...col(o.start, o.span), ...nodeStyle(o.node.colour) }}
+          // One column wide, over its first activity; the objective's other activities have nothing above them.
+          style={{ ...col(o.start, 1), ...nodeStyle(o.node.colour) }}
         >
-          <NodeHead node={o.node} child="activity" />
+          <NodeHead node={o.node} />
+          {canEdit && <SideAdds node={o.node} />}
         </div>
       ))}
-      {canEdit && (
-        <div style={trailing}>
-          <AddNode level="objective" parent={null} label="Add objective" />
-        </div>
+      {bb.columns.map((c, i) =>
+        c.entry === 'objective' ? (
+          <div key={c.key} style={col(i)}>
+            <AddEntry />
+          </div>
+        ) : null,
       )}
 
       <div className="map-lbl" style={{ gridColumn: 1 }}>
@@ -453,11 +522,19 @@ export function MapGrid() {
             style={{ ...col(i), ...nodeStyle(c.activity.colour) }}
           >
             {collapsed(c) ? <CollapsedActivity node={c.activity} /> : <NodeHead node={c.activity} bold />}
+            {canEdit && !collapsed(c) && <SideAdds node={c.activity} />}
           </div>
-        ) : (
+        ) : c.objective ? (
+          // An objective's first activity, or the one being typed in at this place.
           <Slot key={c.key} style={col(i)} level="activity" parent={c.objective}>
-            {canEdit && <AddNode level="activity" parent={c.objective} label={`Add activity to ${c.objective.title}`} short="Add activity" />}
+            {c.entry === 'activity' ? (
+              <AddEntry />
+            ) : (
+              canEdit && <StartAdd adding={{ level: 'activity', parentId: c.objective.id }} label={`Add activity to ${c.objective.title}`} short="Add activity" />
+            )}
           </Slot>
+        ) : (
+          <div key={c.key} style={col(i)} />
         ),
       )}
 
@@ -479,18 +556,14 @@ export function MapGrid() {
 /**
  * A backbone card's content. The whole card drags (with the pointer, or Space
  * once focused); its ⋯ menu renames, recolours, links personas (objectives),
- * adds an activity (objectives) and deletes.
+ * collapses (activities) and deletes.
  */
-function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: boolean }) {
+function NodeHead({ node, bold }: { node: MapNode; bold?: boolean }) {
   const { ws, view, canEdit, totals, run } = useMap()
   const label = `${node.level} ${node.title}`
   const total = totals.nodes.get(node.id)
   const sum = total && estimated(total, ws.estimateUnit)
   const [renaming, setRenaming] = useState(false)
-  const add = useAddNode(child ?? 'activity', node)
-  // Until a node has children, the empty column under it holds the add field; showing it here
-  // too would put two fields on one key, and the second would close the first by taking focus.
-  const hasChildren = view.nodes.some((n) => n.parentId === node.id)
   const drag = useDrag(`node:${node.id}`, { kind: 'node', node, label }, !canEdit || renaming)
   const drop = useDrop(`node:${node.id}`, { kind: 'node', node, label })
   return (
@@ -506,7 +579,7 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
       {(canEdit || node.level === 'activity') && !renaming && (
         <CardMenu label={label}>
           {(close) => (
-            <NodeMenu node={node} label={label} close={close} rename={() => setRenaming(true)} addChild={child ? () => add.setOpen(true) : undefined} />
+            <NodeMenu node={node} label={label} close={close} rename={() => setRenaming(true)} />
           )}
         </CardMenu>
       )}
@@ -536,11 +609,6 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
         </span>
       )}
       {node.level === 'objective' && <PersonaBadges node={node} />}
-      {child && hasChildren && add.open && (
-        <span className="node-popup" data-no-drag>
-          {add.input}
-        </span>
-      )}
     </div>
   )
 }
@@ -561,7 +629,7 @@ function CollapsedActivity({ node }: { node: MapNode }) {
   )
 }
 
-function NodeMenu(props: { node: MapNode; label: string; close: () => void; rename: () => void; addChild?: () => void }) {
+function NodeMenu(props: { node: MapNode; label: string; close: () => void; rename: () => void }) {
   const { node, label, close } = props
   const { ws, view, run, canEdit, prefs, setPrefs } = useMap()
   const [panel, setPanel] = useState<'main' | 'colour' | 'personas'>('main')
@@ -614,7 +682,6 @@ function NodeMenu(props: { node: MapNode; label: string; close: () => void; rena
     <>
       {collapse}
       <MenuItem onClick={then(props.rename)}>Rename</MenuItem>
-      {props.addChild && <MenuItem onClick={then(props.addChild)}>Add activity</MenuItem>}
       {node.level === 'objective' && <MenuItem onClick={() => setPanel('personas')}>Personas…</MenuItem>}
       <MenuItem onClick={() => setPanel('colour')}>Colour…</MenuItem>
       <MenuItem
@@ -667,38 +734,77 @@ function ColourChooser({ node, label, onPick }: { node: MapNode; label: string; 
 }
 
 /**
- * Adding backbone nodes. Which add input is open lives in the map context, not
- * in the button, because the button that opened it can unmount mid-entry: the
- * empty column that offers a first activity becomes that activity. The input then
- * reappears at the parent's own add button, still open.
+ * The name field of the objective or activity being added (MapCtx.adding), in
+ * the column the grid made for it. Enter saves and keeps the field open for the
+ * next one, which goes right after the one just made; Escape or leaving ends it.
+ * A new node takes the colour of its left neighbour.
  */
-function useAddNode(level: Level, parent: MapNode | null) {
+function AddEntry() {
   const { ws, view, run, adding, setAdding } = useMap()
-  const key = `${level}:${parent?.id ?? ''}`
-  return {
-    open: adding === key,
-    setOpen: (on: boolean) => setAdding(on ? key : null),
-    input: (
-      <TextInput
-        label={`New ${level}${parent ? ` in ${parent.title}` : ''}`}
-        placeholder={`${levelLabel[level]} name`}
-        keepOpen
-        onDone={(title) => {
-          if (!title) setAdding(null)
-          else run(() => api.createNode(ws.slug, view.map.id, { level, title, ...(parent ? { parentId: parent.id } : {}) }))
-        }}
-      />
-    ),
-  }
+  if (!adding) return null
+  const parent = adding.parentId ? view.nodes.find((n) => n.id === adding.parentId) : undefined
+  return (
+    <TextInput
+      label={`New ${adding.level}${parent ? ` in ${parent.title}` : ''}`}
+      placeholder={`${levelLabel[adding.level]} name`}
+      keepOpen
+      onDone={(title) => {
+        if (!title) {
+          setAdding(null)
+          return
+        }
+        const at = adding
+        const colour = inheritedColour(view, at)
+        void run(async () => {
+          const n = await api.createNode(ws.slug, view.map.id, {
+            level: at.level,
+            title,
+            ...(at.parentId ? { parentId: at.parentId } : {}),
+            ...(at.afterId ? { afterId: at.afterId } : at.beforeId ? { beforeId: at.beforeId } : {}),
+            ...(colour ? { colour } : {}),
+          })
+          setAdding({ level: at.level, parentId: at.parentId, afterId: n.id })
+        })
+      }}
+    />
+  )
 }
 
-function AddNode({ level, parent, label, short }: { level: Level; parent: MapNode | null; label: string; short?: string }) {
-  const add = useAddNode(level, parent)
-  if (add.open) return add.input
+/** A dashed button that starts adding (an empty map's first objective, an objective's first activity). */
+function StartAdd({ adding, label, short }: { adding: Adding; label: string; short?: string }) {
+  const { setAdding } = useMap()
   return (
-    <button type="button" className="add-slot w-full" aria-label={label} onClick={() => add.setOpen(true)}>
+    <button type="button" className="add-slot w-full" aria-label={label} onClick={() => setAdding(adding)}>
       + {short ?? label}
     </button>
+  )
+}
+
+/**
+ * Small + buttons on a backbone card's left and right edges, shown on hover or
+ * focus: add a sibling (an objective, or an activity in the same objective)
+ * before or after it.
+ */
+function SideAdds({ node }: { node: MapNode }) {
+  const { setAdding } = useMap()
+  const add = (where: 'before' | 'after') =>
+    setAdding({ level: node.level, parentId: node.parentId, ...(where === 'before' ? { beforeId: node.id } : { afterId: node.id }) })
+  return (
+    <>
+      {(['before', 'after'] as const).map((where) => (
+        <button
+          key={where}
+          type="button"
+          className={`side-add ${where}`}
+          data-no-drag
+          aria-label={`Add ${node.level} ${where} ${node.title}`}
+          title={`Add ${node.level} ${where}`}
+          onClick={() => add(where)}
+        >
+          +
+        </button>
+      ))}
+    </>
   )
 }
 
@@ -759,7 +865,7 @@ export function formatDate(d: string): string {
 
 function BandHeader({ release, index, total }: { release: Release | null; index: number; total: Total | undefined }) {
   const { ws, view, canEdit, run, prefs, setPrefs } = useMap()
-  const tone = release ? (index % 2 === 0 ? 'green' : 'amber') : ''
+  const tone = release ? (index % 2 === 0 ? 'green' : 'amber') : 'unscheduled'
   const bandId = release?.id ?? UNSCHEDULED_BAND
   const collapsed = prefs.collapsedReleases.includes(bandId)
   const focused = prefs.focus === bandId
