@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import Markdown from 'react-markdown'
 import { api, atLeast, type Comment, type Member } from '../api'
@@ -142,14 +142,21 @@ function Composer(props: {
         .slice(0, 6)
     : []
 
+  // After a mention goes in, the caret goes after it in the same render, before the next key
+  // is handled; moving it a frame later could land it mid-word if typing had carried on.
+  const caretTo = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    if (caretTo.current === null) return
+    area.current?.setSelectionRange(caretTo.current, caretTo.current)
+    caretTo.current = null
+  }, [text])
   const choose = (m: Member) => {
     if (!at) return
     const caret = at.start + 1 + at.query.length
     const next = `${text.slice(0, at.start)}@${m.displayName} ${text.slice(caret)}`
     setText(next)
     setAt(null)
-    const pos = at.start + m.displayName.length + 2
-    requestAnimationFrame(() => area.current?.setSelectionRange(pos, pos))
+    caretTo.current = at.start + m.displayName.length + 2
   }
   const submit = async () => {
     const body = text.trim()
