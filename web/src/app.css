@@ -440,6 +440,18 @@
   }
   .rm-activity.coloured { background: var(--node-bg); color: var(--node-fg); border-color: var(--node-bg); }
 
+  /* Export: the caption shows only in the exported picture, which gets some breathing room. */
+  .map-export { width: max-content; }
+  .export-caption { display: none; }
+  .map-export.exporting { padding: 24px; }
+  .map-export.exporting .export-caption {
+    display: block;
+    margin-bottom: 16px;
+    font-size: 20px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
   /* Share links. */
   .share-dialog { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
   .share-made { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }

@@ -7,9 +7,8 @@ import { FilterBar } from '../map/FilterBar'
 import { useViewPrefs } from '../map/viewPrefs'
 import { ago } from '../map/history'
 import { ErrorAlert, Loading, Logo, Stripe, ThemeToggle } from '../ui'
-import { deriveMap, mapKey, MapGrid, MapHeader, MapProvider, useMap, useMapSearch, type MapCtx } from './map'
+import { deriveMap, mapKey, MapCanvas, MapHeader, MapProvider, useMap, useMapSearch, type MapCtx } from './map'
 import { StepPanel } from './step-panel'
-import { Roadmap } from './roadmap'
 
 const expiries: [number | null, string][] = [
   [7, '7 days'],
@@ -176,7 +175,7 @@ export function SharedMapPage() {
           <FilterBar panelOpen={!!ctx.selectedStep} />
           <div className={`map-scroll ${ctx.selectedStep ? 'with-panel' : ''}`}>
             <MapDnd view={ctx.view} onMove={() => {}}>
-              {ctx.mode === 'roadmap' ? <Roadmap /> : <MapGrid />}
+              <MapCanvas />
             </MapDnd>
           </div>
           {ctx.selectedStep && ctx.view.steps.some((s) => s.id === ctx.selectedStep) && <StepPanel stepId={ctx.selectedStep} />}

@@ -8,7 +8,7 @@ Self-hosted user story mapping tool. The nav logo reads "Oh My Story". Features 
 
 ## Status
 
-M0, M1 and M2 done (see `docs/M0.md`, `docs/M1.md`, `docs/M2.md`; API contract in `docs/API.md`). Next: M3, sharing (phase plan in `docs/M3.md`).
+M0 to M3 done (see `docs/M0.md` to `docs/M3.md`; API contract in `docs/API.md`). Next: M4, connected (dependencies, linked maps, public API, webhooks, Mattermost; see the milestones in `docs/PLAN.md`).
 
 The map model is objectives › activities › steps. Objectives and activities are backbone `nodes`; steps are cards (key, title, description, status, assignee, estimate) placed in an (activity, release) cell. M0/M1 docs predate this and call steps "stories" (see the remodel note in `docs/M2.md`).
 
