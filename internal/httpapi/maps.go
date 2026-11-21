@@ -42,6 +42,13 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 		{"POST " + ws + "/api-tokens", role.ManageSettings, s.createAPIToken},
 		{"DELETE " + ws + "/api-tokens/{id}", role.ManageSettings, s.revokeAPIToken},
 
+		{"GET " + ws + "/webhooks", role.ManageSettings, s.listWebhooks},
+		{"POST " + ws + "/webhooks", role.ManageSettings, s.createWebhook},
+		{"PATCH " + ws + "/webhooks/{id}", role.ManageSettings, s.patchWebhook},
+		{"DELETE " + ws + "/webhooks/{id}", role.ManageSettings, s.deleteWebhook},
+		{"GET " + ws + "/webhooks/{id}/deliveries", role.ManageSettings, s.listDeliveries},
+		{"POST " + ws + "/webhooks/{id}/test", role.ManageSettings, s.testWebhook},
+
 		{"GET " + ws + "/search", role.View, s.search},
 		{"GET " + ws + "/maps", role.View, s.listMaps},
 		{"POST " + ws + "/maps", role.Edit, s.createMap},

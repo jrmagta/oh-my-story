@@ -80,6 +80,17 @@ func appendEvents(ctx context.Context, tx pgx.Tx, actor, workspaceID uuid.UUID, 
 		if err != nil {
 			return err
 		}
+		// Queue a delivery for each active webhook that wants this kind of event. Echoes
+		// (copies for a linked step's other maps) and internal stepref notes are not sent.
+		if !c.echo && c.entity != "stepref" {
+			if _, err := tx.Exec(ctx,
+				`INSERT INTO webhook_deliveries (webhook_id, event_id, event_type)
+				 SELECT id, $1, $2 FROM webhooks
+				 WHERE workspace_id = $3 AND active AND ($2 = ANY(events) OR '*' = ANY(events))`,
+				last, c.entity+"."+c.action, workspaceID); err != nil {
+				return err
+			}
+		}
 	}
 	_, err := tx.Exec(ctx, `SELECT pg_notify('events', $1)`, strconv.FormatInt(last, 10))
 	return err

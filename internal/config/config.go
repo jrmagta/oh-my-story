@@ -16,6 +16,10 @@ type Config struct {
 
 	SMTP SMTP
 	OIDC *OIDC // nil when SSO is off
+
+	// BlockPrivateWebhooks also stops webhooks posting to loopback and private
+	// addresses (link-local and cloud metadata addresses are always refused).
+	BlockPrivateWebhooks bool
 }
 
 type SMTP struct {
@@ -45,8 +49,9 @@ func FromEnv(getenv func(string) string) (Config, error) {
 		return def
 	}
 	c := Config{
-		DatabaseURL: getenv("OMS_DATABASE_URL"),
-		HTTPAddr:    or("OMS_HTTP_ADDR", ":8080"),
+		DatabaseURL:          getenv("OMS_DATABASE_URL"),
+		HTTPAddr:             or("OMS_HTTP_ADDR", ":8080"),
+		BlockPrivateWebhooks: getenv("OMS_WEBHOOK_BLOCK_PRIVATE") == "true",
 		SMTP: SMTP{
 			Addr:     getenv("OMS_SMTP_ADDR"),
 			Username: getenv("OMS_SMTP_USERNAME"),
