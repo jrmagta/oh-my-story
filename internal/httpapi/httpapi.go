@@ -109,13 +109,47 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 				writeError(w, errBadRequest("Content-Type must be application/json"))
 				return
 			}
-			if o := r.Header.Get("Origin"); o != "" && o != s.cfg.BaseURL {
+			// A bearer token is never sent by a browser on its own, so it needs no Origin check.
+			if o := r.Header.Get("Origin"); o != "" && o != s.cfg.BaseURL && bearer(r) == "" {
 				writeError(w, &apiError{http.StatusForbidden, "forbidden", "cross-origin request refused"})
 				return
 			}
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// bearer is the token in an "Authorization: Bearer ..." header, or "".
+func bearer(r *http.Request) string {
+	h := r.Header.Get("Authorization")
+	if t, ok := strings.CutPrefix(h, "Bearer "); ok {
+		return strings.TrimSpace(t)
+	}
+	return ""
+}
+
+// caller is who is making a request: a signed-in user, or a token's bot user
+// with the grant that token carries.
+type caller struct {
+	user  store.User
+	token *store.TokenGrant
+}
+
+// currentCaller reads an API token if the request has one (and then nothing
+// else), or else the session cookie.
+func (s *Server) currentCaller(r *http.Request) (caller, bool) {
+	if t := bearer(r); t != "" {
+		u, g, err := s.store.UserByAPIToken(r.Context(), auth.HashToken(t))
+		if err != nil {
+			if !errors.Is(err, store.ErrNotFound) {
+				slog.Error("load api token", "err", err)
+			}
+			return caller{}, false
+		}
+		return caller{user: u, token: &g}, true
+	}
+	u, ok := s.currentUser(r)
+	return caller{user: u}, ok
 }
 
 func (s *Server) currentUser(r *http.Request) (store.User, bool) {
@@ -135,14 +169,19 @@ func (s *Server) currentUser(r *http.Request) (store.User, bool) {
 
 type authedHandler func(w http.ResponseWriter, r *http.Request, u store.User)
 
+// authed serves signed-in people only; API tokens are for workspace endpoints.
 func (s *Server) authed(h authedHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		u, ok := s.currentUser(r)
+		c, ok := s.currentCaller(r)
 		if !ok {
 			writeError(w, errUnauthenticated)
 			return
 		}
-		h(w, r, u)
+		if c.token != nil {
+			writeError(w, &apiError{http.StatusForbidden, "forbidden", "API tokens can only use /api/workspaces/{slug}/… endpoints"})
+			return
+		}
+		h(w, r, c.user)
 	}
 }
 
@@ -150,9 +189,22 @@ type workspaceHandler func(w http.ResponseWriter, r *http.Request, u store.User,
 
 // inWorkspace loads the caller's membership of {slug} and requires the action.
 // Non-members get 404 so that slugs do not leak.
+// An API token acts in its own workspace only, as a viewer (read) or an editor (write).
 func (s *Server) inWorkspace(a role.Action, h workspaceHandler) http.HandlerFunc {
-	return s.authed(func(w http.ResponseWriter, r *http.Request, u store.User) {
-		m, err := s.store.Membership(r.Context(), u.ID, r.PathValue("slug"))
+	return func(w http.ResponseWriter, r *http.Request) {
+		c, ok := s.currentCaller(r)
+		if !ok {
+			writeError(w, errUnauthenticated)
+			return
+		}
+		u := c.user
+		var m store.Membership
+		var err error
+		if c.token != nil {
+			m, err = s.store.TokenMembership(r.Context(), *c.token, r.PathValue("slug"))
+		} else {
+			m, err = s.store.Membership(r.Context(), u.ID, r.PathValue("slug"))
+		}
 		if err != nil {
 			writeError(w, err)
 			return
@@ -162,7 +214,7 @@ func (s *Server) inWorkspace(a role.Action, h workspaceHandler) http.HandlerFunc
 			return
 		}
 		h(w, r, u, m)
-	})
+	}
 }
 
 // ---- sessions ----
