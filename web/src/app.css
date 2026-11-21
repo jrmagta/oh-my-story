@@ -807,36 +807,42 @@
     padding: 8px 12px;
     border-radius: var(--oms-radius);
   }
-  /* Add a sibling before or after a backbone card: small + buttons over the gaps at its edges, on hover or focus. */
+  /* Add a sibling before or after a backbone card: a thin full-height strip inside each edge, with a +,
+     on hover or focus. Editable cards keep room for the strips, so nothing moves when they appear. */
   .map-obj { position: relative; }
-  /* Objectives are one line high, so their + sits at the middle (clear of the ⋯, which is inset). */
-  .map-obj > .side-add { top: calc(50% - 9px); }
-  /* Just below the ⋯ menu's row so they never cover it; ignore the pointer until their card is
-     hovered, since neighbouring cards' buttons share the gap between them. */
+  .map-obj.editable { padding-left: 20px; padding-right: 20px; }
+  .map-act.editable { padding-left: 18px; padding-right: 18px; }
   .side-add {
     position: absolute;
-    top: 24px;
+    top: 0;
+    bottom: 0;
     z-index: 3;
-    width: 18px;
-    height: 18px;
+    width: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     pointer-events: none;
-    border-radius: 50%;
-    border: 2px solid var(--color-base-content);
-    background: var(--color-base-100);
-    color: var(--color-base-content);
+    /* Tinted from the card's own text colour, so it shows on any card colour. */
+    background: color-mix(in srgb, currentColor 16%, transparent);
+    color: inherit;
     font-weight: 800;
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1;
     text-transform: none;
     opacity: 0;
-    transition: opacity 0.1s;
+    transition: opacity 0.1s, background-color 0.1s;
   }
-  .side-add.before { left: -13px; }
-  .side-add.after { right: -13px; }
+  .side-add.before { left: 0; border-radius: var(--oms-radius) 0 0 var(--oms-radius); }
+  .side-add.after { right: 0; border-radius: 0 var(--oms-radius) var(--oms-radius) 0; }
+  /* An activity's strips sit inside its 2px border. */
+  .map-act > .side-add.before { border-radius: calc(var(--oms-radius) - 2px) 0 0 calc(var(--oms-radius) - 2px); }
+  .map-act > .side-add.after { border-radius: 0 calc(var(--oms-radius) - 2px) calc(var(--oms-radius) - 2px) 0; }
   .map-obj:hover > .side-add,
   .map-act:hover > .side-add,
   .side-add:focus-visible { opacity: 1; pointer-events: auto; }
-  .side-add:hover { background: var(--color-brand-amber); border-color: #000; color: #000; }
+  /* A deeper tint of the card's text colour: an amber highlight would vanish on an amber card. */
+  .side-add:hover { background: color-mix(in srgb, currentColor 38%, transparent); }
+  .side-add:focus-visible { outline: 3px solid var(--color-brand-amber); outline-offset: -3px; }
 
   /* A colour chosen for a backbone card fills it; text turns black or white to suit. */
   .map-obj.coloured,

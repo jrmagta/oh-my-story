@@ -573,7 +573,7 @@ export function MapGrid() {
       {bb.objectives.map((o) => (
         <div
           key={o.node.id}
-          className={`map-obj up ${o.node.colour ? 'coloured' : ''}`}
+          className={`map-obj up ${o.node.colour ? 'coloured' : ''} ${canEdit ? 'editable' : ''}`}
           // The full title (and description) on hover, for when the title is scrolled under the row labels.
           title={o.node.description ? `${o.node.title}\n\n${o.node.description}` : o.node.title}
           // As wide as its activities (and the field for a new one while adding).
@@ -598,7 +598,7 @@ export function MapGrid() {
         c.activity ? (
           <div
             key={c.key}
-            className={`map-act ${c.activity.colour ? 'coloured' : ''} ${collapsed(c) ? 'collapsed' : ''}`}
+            className={`map-act ${c.activity.colour ? 'coloured' : ''} ${collapsed(c) ? 'collapsed' : ''} ${canEdit && !collapsed(c) ? 'editable' : ''}`}
             style={{ ...col(i), ...nodeStyle(c.activity.colour) }}
           >
             {collapsed(c) ? <CollapsedActivity node={c.activity} /> : <NodeHead node={c.activity} bold />}
