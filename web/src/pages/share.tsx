@@ -8,6 +8,7 @@ import { useViewPrefs } from '../map/viewPrefs'
 import { ago } from '../map/history'
 import { ErrorAlert, Loading, Logo, Stripe, ThemeToggle } from '../ui'
 import { deriveMap, mapKey, MapCanvas, MapHeader, MapProvider, useMap, useMapSearch, type MapCtx } from './map'
+import { MapViewport } from '../map/navigation'
 import { StepPanel } from './step-panel'
 
 const expiries: [number | null, string][] = [
@@ -174,11 +175,11 @@ export function SharedMapPage() {
           <div className="map-page">
             <MapHeader panelOpen={!!ctx.selectedStep} onRefresh={() => void shared.refetch()} />
             <FilterBar panelOpen={!!ctx.selectedStep} />
-            <div className={`map-scroll ${ctx.selectedStep ? 'with-panel' : ''}`}>
+            <MapViewport panelOpen={!!ctx.selectedStep}>
               <MapDnd view={ctx.view} onMove={() => {}}>
                 <MapCanvas />
               </MapDnd>
-            </div>
+            </MapViewport>
           </div>
           {ctx.selectedStep && ctx.view.steps.some((s) => s.id === ctx.selectedStep) && <StepPanel stepId={ctx.selectedStep} />}
         </MapProvider>

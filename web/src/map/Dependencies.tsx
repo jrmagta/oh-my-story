@@ -220,7 +220,12 @@ export function DependencyLines() {
     const grid = ref.current?.parentElement
     if (!grid || !prefs.lines) return
     const box = grid.getBoundingClientRect()
-    const at = (id: string) => grid.querySelector<HTMLElement>(`[data-step="${id}"]`)?.getBoundingClientRect()
+    // Card positions come back zoomed; the arrows are drawn in the grid's own (unzoomed) units.
+    const k = grid.offsetWidth ? box.width / grid.offsetWidth : 1
+    const at = (id: string) => {
+      const r = grid.querySelector<HTMLElement>(`[data-step="${id}"]`)?.getBoundingClientRect()
+      return r && { left: (r.left - box.left) / k, right: (r.right - box.left) / k, top: (r.top - box.top) / k, bottom: (r.bottom - box.top) / k, width: r.width / k, height: r.height / k }
+    }
     const next: Line[] = []
     for (const d of view.dependencies) {
       const a = at(d.blockerId)
@@ -232,20 +237,20 @@ export function DependencyLines() {
       let x1, y1, x2, y2, c1x, c1y, c2x, c2y
       if (Math.abs(a.left - b.left) < 4) {
         const down = a.top < b.top
-        x1 = a.left + a.width / 2 - box.left
-        x2 = b.left + b.width / 2 - box.left
-        y1 = (down ? a.bottom : a.top) - box.top
-        y2 = (down ? b.top : b.bottom) - box.top
+        x1 = a.left + a.width / 2
+        x2 = b.left + b.width / 2
+        y1 = down ? a.bottom : a.top
+        y2 = down ? b.top : b.bottom
         c1x = x1 + 30
         c2x = x2 + 30
         c1y = y1 + (down ? 20 : -20)
         c2y = y2 + (down ? -20 : 20)
       } else {
         const right = a.left < b.left
-        x1 = (right ? a.right : a.left) - box.left
-        x2 = (right ? b.left : b.right) - box.left
-        y1 = a.top + a.height / 2 - box.top
-        y2 = b.top + b.height / 2 - box.top
+        x1 = right ? a.right : a.left
+        x2 = right ? b.left : b.right
+        y1 = a.top + a.height / 2
+        y2 = b.top + b.height / 2
         const bend = Math.max(30, Math.abs(x2 - x1) / 2)
         c1x = x1 + (right ? bend : -bend)
         c2x = x2 + (right ? -bend : bend)

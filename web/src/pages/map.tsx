@@ -19,6 +19,7 @@ import { PageBand } from './app'
 import { StepPanel } from './step-panel'
 import { ShareDialog } from './share'
 import { BlockedBadge, DependencyLines } from '../map/Dependencies'
+import { MapViewport } from '../map/navigation'
 import { exportName, exportView, type ExportKind } from '../map/exportView'
 import { Roadmap } from './roadmap'
 
@@ -267,11 +268,11 @@ export function MapPage() {
       <div className="map-page">
         <MapHeader panelOpen={panelOpen} live={{ users: live.users, state: live.state, activityOpen, toggleActivity }} />
         <FilterBar panelOpen={panelOpen} />
-        <div className={`map-scroll ${panelOpen ? 'with-panel' : ''}`}>
+        <MapViewport panelOpen={panelOpen}>
           <MapDnd view={ctx.view} onMove={move}>
             <MapCanvas />
           </MapDnd>
-        </div>
+        </MapViewport>
       </div>
       {stepOpen && <StepPanel stepId={selectedStep} />}
       {activityOpen && <ActivityPanel onClose={toggleActivity} />}
@@ -319,13 +320,16 @@ function Presence({ users, state }: { users: PresentUser[]; state: LiveState }) 
  * and the grid. The export menu finds it by its id.
  */
 export function MapCanvas() {
-  const { mode, view } = useMap()
+  const { mode, view, prefs } = useMap()
   return (
     <div className="map-export" id="map-export">
       <p className="export-caption">
         {view.map.name} · {mode === 'roadmap' ? 'Roadmap' : 'Map'} · {new Date().toLocaleDateString()}
       </p>
-      {mode === 'roadmap' ? <Roadmap /> : <MapGrid />}
+      {/* Zoom scales the layout itself, so scroll sizes and pinned rows stay right. Exports are at 100%. */}
+      <div className="map-zoom" style={{ zoom: prefs.zoom }}>
+        {mode === 'roadmap' ? <Roadmap /> : <MapGrid />}
+      </div>
     </div>
   )
 }
@@ -545,11 +549,15 @@ export function MapGrid() {
 
   return (
     <div className="map-grid" style={style}>
+      {/* The backbone stays pinned at the top as a long map scrolls; it shares the grid's columns. */}
+      <div className="backbone">
       <div className="map-lbl">Objective</div>
       {bb.objectives.map((o) => (
         <div
           key={o.node.id}
           className={`map-obj up ${o.node.colour ? 'coloured' : ''}`}
+          // The full title (and description) on hover, for when the title is scrolled under the row labels.
+          title={o.node.description ? `${o.node.title}\n\n${o.node.description}` : o.node.title}
           // As wide as its activities (and the field for a new one while adding).
           style={{ ...col(o.start, o.span), ...nodeStyle(o.node.colour) }}
         >
@@ -591,6 +599,7 @@ export function MapGrid() {
           <div key={c.key} style={col(i)} />
         ),
       )}
+      </div>
 
       {bs.map((b, i) => (
         <BandRows
