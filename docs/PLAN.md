@@ -126,5 +126,5 @@ Objectives and activities are one ordered tree of nodes with a `level`. Steps ar
 | M1 | The map | Backbone of 3 or 4 levels, releases, stories, drag and drop, story details, custom statuses, event log, real-time sync and presence, audit history |
 | M2 | Planning | Estimates and roll-ups, personas, labels, comments and @mentions, search, filter and highlight, saved views, zoom/collapse/focus |
 | M3 | Sharing | Public share links, PDF/PNG export, roadmap view |
-| M4 | Connected | Dependencies, linked maps, REST API with tokens and OpenAPI, webhooks, Mattermost |
+| M4 | Connected | Dependencies, linked maps, REST API with tokens and OpenAPI, webhooks, Mattermost (on hold) |
 | Later | | Jira Data Center sync, attachments and Figma, other integrations |
