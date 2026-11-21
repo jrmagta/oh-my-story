@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import { useMap } from '../pages/map'
 import { SavedViews } from './SavedViews'
+import { UNSCHEDULED_BAND, type ViewPrefs } from './viewPrefs'
 import { emptyFilter, isActive, listFields, UNASSIGNED, UNSCHEDULED, type Filter } from './filter'
 
 type Field = (typeof listFields)[number]
@@ -26,7 +27,9 @@ const fieldName: Record<Field, string> = {
  * steps that do not match are dimmed or hidden. It all lives in the URL.
  */
 export function FilterBar({ panelOpen }: { panelOpen: boolean }) {
-  const { ws, view, filter, setFilter, match } = useMap()
+  const { ws, view, filter, setFilter, match, prefs, setPrefs } = useMap()
+  const focusName =
+    prefs.focus === UNSCHEDULED_BAND ? 'Unscheduled' : view.releases.find((r) => r.id === prefs.focus)?.name
   const members = useQuery({ queryKey: ['ws', ws.slug, 'members'], queryFn: () => api.members(ws.slug) })
   const [open, setOpen] = useState(false)
 
@@ -107,6 +110,14 @@ export function FilterBar({ panelOpen }: { panelOpen: boolean }) {
           </span>
         )),
       )}
+      {focusName && (
+        <span className="filter-chip">
+          Focus: {focusName}
+          <button type="button" aria-label="Show all releases" onClick={() => setPrefs({ ...prefs, focus: null })}>
+            ✕
+          </button>
+        </span>
+      )}
       {active && (
         <>
           <span className="seg" role="group" aria-label="Steps that do not match">
@@ -125,6 +136,20 @@ export function FilterBar({ panelOpen }: { panelOpen: boolean }) {
           </button>
         </>
       )}
+      <span className="flex-1" />
+      <span className="seg" role="group" aria-label="Card size">
+        {sizes.map(([value, name]) => (
+          <button key={value} type="button" aria-pressed={prefs.size === value} onClick={() => setPrefs({ ...prefs, size: value })}>
+            {name}
+          </button>
+        ))}
+      </span>
     </section>
   )
 }
+
+const sizes: [ViewPrefs['size'], string][] = [
+  ['full', 'Full'],
+  ['compact', 'Compact'],
+  ['titles', 'Titles'],
+]

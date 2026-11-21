@@ -332,6 +332,47 @@
   .band-row:not(.green) .meter .done { background: var(--color-brand-green); }
   .band-row:not(.green):not(.amber) .meter { background: color-mix(in srgb, currentColor 25%, transparent); }
 
+  /* Zoom, collapse and focus: per-browser view settings. */
+  .step-card.size-compact .chips,
+  .step-card.size-compact .meta .st,
+  .step-card.size-compact .comment-count { display: none; }
+  .step-card.size-compact .meta { margin-top: 4px; }
+  .step-card.size-compact .card-open { padding: 6px 8px 5px; }
+  .step-card.size-titles .chips,
+  .step-card.size-titles .meta { display: none; }
+  .step-card.size-titles .card-open { padding: 5px 8px; font-size: 12px; }
+  .map-act.collapsed { padding: 0; }
+  .collapsed-act {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    min-height: 44px;
+    padding: 6px 0;
+    font-weight: 800;
+    font-size: 12px;
+    text-transform: uppercase;
+  }
+  .collapsed-act span {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    max-height: 9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .map-cell.narrow { align-items: center; justify-content: flex-start; padding: 8px 0; min-height: 40px; }
+  .narrow-count { font-size: 12px; font-weight: 800; color: var(--oms-muted); }
+  .band-toggle {
+    width: 24px;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1;
+    margin-right: -6px;
+    color: inherit;
+  }
+
   /* Comments on a step. */
   .comment-count {
     display: inline-flex;
@@ -697,6 +738,11 @@
   .band-row {
     border-radius: var(--oms-radius);
     grid-column: 1 / -1;
+    /* Fill the row without sizing the columns: a band's contents are wider than a narrow map's columns
+       (an activity collapsed), and would otherwise stretch the label column. Wrap instead. */
+    width: 0;
+    min-width: 100%;
+    flex-wrap: wrap;
     display: flex;
     align-items: center;
     gap: 16px;
