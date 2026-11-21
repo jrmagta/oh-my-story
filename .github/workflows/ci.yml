@@ -43,6 +43,8 @@ jobs:
       - name: TypeScript
         working-directory: web
         run: npm ci && npm run typecheck
+      - name: OpenAPI
+        run: npx --yes @redocly/cli@2.72.1 lint api/openapi.yaml
 
   test:
     runs-on: ubuntu-24.04

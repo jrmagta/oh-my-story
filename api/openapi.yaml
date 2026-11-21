@@ -1,0 +1,3125 @@
+openapi: "3.1.0"
+info:
+  title: "oh-my-story API"
+  version: "1.0.0"
+  license:
+    name: "All rights reserved; not open source"
+    url: "https://github.com/jrmagta/oh-my-story/blob/main/LICENSE"
+  description: "The HTTP API the oh-my-story web app uses, open to scripts with an API token.\n\nScripts send `Authorization: Bearer oms_…`, made by an admin in Settings → API tokens. A token works on its own workspace's `/api/workspaces/{slug}/…` endpoints only: a read token as a viewer, a write token as an editor. The web app uses the session cookie instead.\n\nEvery request with a body sends `Content-Type: application/json`. Errors are `{\"error\": {\"code\", \"message\"}}`. Ids from another workspace, and malformed ids, answer 404. See docs/API.md for the rules behind each endpoint."
+servers:
+  - url: "/"
+    description: "This server"
+security:
+  - bearerToken: []
+  - sessionCookie: []
+paths:
+  /api/setup:
+    get:
+      tags: ["Account"]
+      summary: "Whether the server needs its first user"
+      operationId: getSetup
+      description: "No sign-in needed."
+      security: []
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  needsBootstrap:
+                    type: "boolean"
+                required: ["needsBootstrap"]
+                additionalProperties: false
+    post:
+      tags: ["Account"]
+      summary: "Create the first user (only while there are none) and sign in"
+      operationId: postSetup
+      description: "No sign-in needed."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                email:
+                  type: "string"
+                displayName:
+                  type: "string"
+                password:
+                  type: "string"
+              required: ["email", "displayName", "password"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "410":
+          $ref: "#/components/responses/Gone"
+  /api/auth/login:
+    post:
+      tags: ["Account"]
+      summary: "Sign in with email and password"
+      operationId: postAuthLogin
+      description: "No sign-in needed."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                email:
+                  type: "string"
+                password:
+                  type: "string"
+              required: ["email", "password"]
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/auth/logout:
+    post:
+      tags: ["Account"]
+      summary: "Sign out"
+      operationId: postAuthLogout
+      description: "A signed-in person (session cookie); API tokens are refused."
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+  /api/auth/providers:
+    get:
+      tags: ["Account"]
+      summary: "Sign-in options"
+      operationId: getAuthProviders
+      description: "No sign-in needed."
+      security: []
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  oidc:
+                    type: "object"
+                    properties:
+                      enabled:
+                        type: "boolean"
+                      name:
+                        type: "string"
+                    required: ["enabled"]
+                    additionalProperties: false
+                required: ["oidc"]
+                additionalProperties: false
+  /api/auth/reset:
+    post:
+      tags: ["Account"]
+      summary: "Ask for a password reset email (always 204)"
+      operationId: postAuthReset
+      description: "No sign-in needed."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                email:
+                  type: "string"
+              required: ["email"]
+              additionalProperties: false
+      responses:
+        "204":
+          description: "Done"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/auth/reset/{token}:
+    get:
+      tags: ["Account"]
+      summary: "The account a reset link is for"
+      operationId: getAuthResetToken
+      description: "No sign-in needed."
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/token"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  email:
+                    type: "string"
+                required: ["email"]
+                additionalProperties: false
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
+    post:
+      tags: ["Account"]
+      summary: "Set a new password with a reset link, and sign in"
+      operationId: postAuthResetToken
+      description: "No sign-in needed."
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/token"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                password:
+                  type: "string"
+              required: ["password"]
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
+  /api/me:
+    get:
+      tags: ["Account"]
+      summary: "The signed-in user and their workspaces"
+      operationId: getMe
+      description: "A signed-in person (session cookie); API tokens are refused."
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  user:
+                    $ref: "#/components/schemas/User"
+                  workspaces:
+                    type: "array"
+                    items:
+                      $ref: "#/components/schemas/Membership"
+                required: ["user", "workspaces"]
+                additionalProperties: false
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+  /api/invites/{token}:
+    get:
+      tags: ["Account"]
+      summary: "What an invite is for"
+      operationId: getInvitesToken
+      description: "No sign-in needed."
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/token"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  workspaceName:
+                    type: "string"
+                  email:
+                    type: "string"
+                  role:
+                    type: "string"
+                    enum: ["viewer", "commenter", "editor", "admin", "owner"]
+                required: ["workspaceName", "email", "role"]
+                additionalProperties: false
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
+  /api/invites/{token}/accept:
+    post:
+      tags: ["Account"]
+      summary: "Accept an invite: signed in with its email, or with a new account"
+      operationId: postInvitesTokenAccept
+      description: "No sign-in needed."
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/token"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                displayName:
+                  type: "string"
+                password:
+                  type: "string"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  workspace:
+                    $ref: "#/components/schemas/Workspace"
+                required: ["workspace"]
+                additionalProperties: false
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  workspace:
+                    $ref: "#/components/schemas/Workspace"
+                  user:
+                    $ref: "#/components/schemas/User"
+                required: ["workspace", "user"]
+                additionalProperties: false
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
+  /api/shared/{token}:
+    get:
+      tags: ["Share links"]
+      summary: "A map behind a share link, read-only, without an account"
+      operationId: getSharedToken
+      description: "No sign-in needed."
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/token"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SharedMap"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces:
+    get:
+      tags: ["Workspaces"]
+      summary: "My workspaces"
+      operationId: getWorkspaces
+      description: "A signed-in person (session cookie); API tokens are refused."
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Membership"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    post:
+      tags: ["Workspaces"]
+      summary: "Create a workspace; the caller becomes its owner"
+      operationId: postWorkspaces
+      description: "A signed-in person (session cookie); API tokens are refused."
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                slug:
+                  type: "string"
+                keyPrefix:
+                  type: "string"
+              required: ["name", "slug"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/project-keys:
+    get:
+      tags: ["Workspaces"]
+      summary: "Suggest a free project key for a name, and check one"
+      operationId: getProjectKeys
+      description: "A signed-in person (session cookie); API tokens are refused."
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: "name"
+          in: query
+          schema:
+            type: "string"
+        - name: "key"
+          in: query
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  suggestion:
+                    type: "string"
+                  available:
+                    type: "boolean"
+                required: ["suggestion"]
+                additionalProperties: false
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+  /api/workspaces/{slug}:
+    get:
+      tags: ["Workspaces"]
+      summary: "A workspace, with the caller's role"
+      operationId: getWorkspacesSlug
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Membership"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: ["Workspaces"]
+      summary: "Change name, project key or estimate unit"
+      operationId: patchWorkspacesSlug
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                keyPrefix:
+                  type: "string"
+                estimateUnit:
+                  type: "string"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: ["Workspaces"]
+      summary: "Delete the workspace"
+      operationId: deleteWorkspacesSlug
+      description: "Owner (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/members:
+    get:
+      tags: ["Members"]
+      summary: "Members"
+      operationId: getWorkspacesSlugMembers
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Member"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/members/{userId}:
+    patch:
+      tags: ["Members"]
+      summary: "Change a member's role"
+      operationId: patchWorkspacesSlugMembersUserid
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/userId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                role:
+                  type: "string"
+                  enum: ["viewer", "commenter", "editor", "admin", "owner"]
+              required: ["role"]
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: ["Members"]
+      summary: "Remove a member, or leave"
+      operationId: deleteWorkspacesSlugMembersUserid
+      description: "Admin or above; any member may remove themselves."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/userId"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/workspaces/{slug}/invites:
+    get:
+      tags: ["Members"]
+      summary: "Open invites"
+      operationId: getWorkspacesSlugInvites
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Invite"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["Members"]
+      summary: "Invite someone by email"
+      operationId: postWorkspacesSlugInvites
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                email:
+                  type: "string"
+                role:
+                  type: "string"
+                  enum: ["viewer", "commenter", "editor", "admin", "owner"]
+              required: ["email", "role"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invite"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/invites/{id}:
+    delete:
+      tags: ["Members"]
+      summary: "Revoke an invite"
+      operationId: deleteWorkspacesSlugInvitesId
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/api-tokens:
+    get:
+      tags: ["API tokens"]
+      summary: "API tokens, not revoked, newest first"
+      operationId: getWorkspacesSlugApiTokens
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/ApiToken"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["API tokens"]
+      summary: "Make an API token; the token is in this reply only"
+      operationId: postWorkspacesSlugApiTokens
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                scope:
+                  type: "string"
+                  enum: ["read", "write"]
+                expiresInDays:
+                  type: ["integer", "null"]
+                  enum: [30, 90, 365, null]
+              required: ["name", "scope"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiToken"
+                  - type: "object"
+                    properties:
+                      token:
+                        type: "string"
+                    required: ["token"]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/api-tokens/{id}:
+    delete:
+      tags: ["API tokens"]
+      summary: "Revoke an API token"
+      operationId: deleteWorkspacesSlugApiTokensId
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/workflows:
+    get:
+      tags: ["Workflows"]
+      summary: "Workflows with their statuses, default first"
+      operationId: getWorkspacesSlugWorkflows
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Workflow"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["Workflows"]
+      summary: "Create a workflow with the standard four statuses"
+      operationId: postWorkspacesSlugWorkflows
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+              required: ["name"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workflow"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/workflows/{id}:
+    patch:
+      tags: ["Workflows"]
+      summary: "Rename a workflow"
+      operationId: patchWorkspacesSlugWorkflowsId
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+              required: ["name"]
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workflow"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/workflows/{id}/statuses:
+    post:
+      tags: ["Workflows"]
+      summary: "Add a status"
+      operationId: postWorkspacesSlugWorkflowsIdStatuses
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                category:
+                  type: "string"
+                  enum: ["todo", "doing", "done", "blocked"]
+                colour:
+                  type: ["string", "null"]
+                  pattern: "^#[0-9A-Fa-f]{6}$"
+                afterId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                beforeId:
+                  type: ["string", "null"]
+                  format: "uuid"
+              required: ["name", "category"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/workspaces/{slug}/statuses/{id}:
+    patch:
+      tags: ["Workflows"]
+      summary: "Change a status"
+      operationId: patchWorkspacesSlugStatusesId
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                category:
+                  type: "string"
+                  enum: ["todo", "doing", "done", "blocked"]
+                colour:
+                  type: ["string", "null"]
+                  pattern: "^#[0-9A-Fa-f]{6}$"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: ["Workflows"]
+      summary: "Delete a status, moving its steps to a replacement"
+      operationId: deleteWorkspacesSlugStatusesId
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+        - name: "replacementId"
+          in: query
+          schema:
+            type: "string"
+            format: "uuid"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/statuses/{id}/move:
+    post:
+      tags: ["Workflows"]
+      summary: "Reorder a status"
+      operationId: postWorkspacesSlugStatusesIdMove
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                afterId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                beforeId:
+                  type: ["string", "null"]
+                  format: "uuid"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/labels:
+    get:
+      tags: ["Labels"]
+      summary: "Labels, by name"
+      operationId: getWorkspacesSlugLabels
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Label"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["Labels"]
+      summary: "Create a label"
+      operationId: postWorkspacesSlugLabels
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                colour:
+                  type: "string"
+                  pattern: "^#[0-9A-Fa-f]{6}$"
+              required: ["name"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/workspaces/{slug}/labels/{id}:
+    patch:
+      tags: ["Labels"]
+      summary: "Change a label"
+      operationId: patchWorkspacesSlugLabelsId
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                colour:
+                  type: "string"
+                  pattern: "^#[0-9A-Fa-f]{6}$"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: ["Labels"]
+      summary: "Delete a label, taking it off every step"
+      operationId: deleteWorkspacesSlugLabelsId
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/personas:
+    get:
+      tags: ["Personas"]
+      summary: "Personas, by name"
+      operationId: getWorkspacesSlugPersonas
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Persona"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["Personas"]
+      summary: "Create a persona"
+      operationId: postWorkspacesSlugPersonas
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                description:
+                  type: "string"
+                colour:
+                  type: "string"
+                  pattern: "^#[0-9A-Fa-f]{6}$"
+              required: ["name"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Persona"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/workspaces/{slug}/personas/{id}:
+    patch:
+      tags: ["Personas"]
+      summary: "Change a persona"
+      operationId: patchWorkspacesSlugPersonasId
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                description:
+                  type: "string"
+                colour:
+                  type: "string"
+                  pattern: "^#[0-9A-Fa-f]{6}$"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Persona"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: ["Personas"]
+      summary: "Delete a persona, unlinking it from objectives"
+      operationId: deleteWorkspacesSlugPersonasId
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/search:
+    get:
+      tags: ["Search"]
+      summary: "Find steps by key or words"
+      operationId: getWorkspacesSlugSearch
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - name: "q"
+          in: query
+          required: true
+          schema:
+            type: "string"
+            maxLength: 200
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/SearchHit"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps:
+    get:
+      tags: ["Maps"]
+      summary: "Maps"
+      operationId: getWorkspacesSlugMaps
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Map"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["Maps"]
+      summary: "Create a map"
+      operationId: postWorkspacesSlugMaps
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                description:
+                  type: "string"
+                workflowId:
+                  type: "string"
+                  format: "uuid"
+              required: ["name"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Map"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}:
+    get:
+      tags: ["Maps"]
+      summary: "The whole map: backbone, releases, steps and their links"
+      operationId: getWorkspacesSlugMapsMapid
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapView"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: ["Maps"]
+      summary: "Rename or describe a map"
+      operationId: patchWorkspacesSlugMapsMapid
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                description:
+                  type: "string"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Map"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: ["Maps"]
+      summary: "Delete a map"
+      operationId: deleteWorkspacesSlugMapsMapid
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/nodes:
+    post:
+      tags: ["Backbone"]
+      summary: "Add an objective or activity"
+      operationId: postWorkspacesSlugMapsMapidNodes
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                level:
+                  type: "string"
+                  enum: ["objective", "activity"]
+                title:
+                  type: "string"
+                parentId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                description:
+                  type: "string"
+                colour:
+                  type: ["string", "null"]
+                  pattern: "^#[0-9A-Fa-f]{6}$"
+                afterId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                beforeId:
+                  type: ["string", "null"]
+                  format: "uuid"
+              required: ["level", "title"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Node"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/nodes/{id}:
+    patch:
+      tags: ["Backbone"]
+      summary: "Change an objective or activity"
+      operationId: patchWorkspacesSlugMapsMapidNodesId
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                title:
+                  type: "string"
+                description:
+                  type: "string"
+                colour:
+                  type: ["string", "null"]
+                  pattern: "^#[0-9A-Fa-f]{6}$"
+                personaIds:
+                  type: "array"
+                  items:
+                    type: "string"
+                    format: "uuid"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Node"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: ["Backbone"]
+      summary: "Delete an objective or activity, with what is under it"
+      operationId: deleteWorkspacesSlugMapsMapidNodesId
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/nodes/{id}/move:
+    post:
+      tags: ["Backbone"]
+      summary: "Move an objective or activity"
+      operationId: postWorkspacesSlugMapsMapidNodesIdMove
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                parentId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                afterId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                beforeId:
+                  type: ["string", "null"]
+                  format: "uuid"
+              required: ["parentId"]
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Node"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/nodes/{id}/restore:
+    post:
+      tags: ["Backbone"]
+      summary: "Undo a delete"
+      operationId: postWorkspacesSlugMapsMapidNodesIdRestore
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties: {}
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Node"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/releases:
+    post:
+      tags: ["Releases"]
+      summary: "Add a release"
+      operationId: postWorkspacesSlugMapsMapidReleases
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                description:
+                  type: "string"
+                targetDate:
+                  type: ["string", "null"]
+                  format: "date"
+                afterId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                beforeId:
+                  type: ["string", "null"]
+                  format: "uuid"
+              required: ["name"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/releases/{id}:
+    patch:
+      tags: ["Releases"]
+      summary: "Change a release"
+      operationId: patchWorkspacesSlugMapsMapidReleasesId
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                description:
+                  type: "string"
+                targetDate:
+                  type: ["string", "null"]
+                  format: "date"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: ["Releases"]
+      summary: "Delete a release; its steps go to Unscheduled"
+      operationId: deleteWorkspacesSlugMapsMapidReleasesId
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/releases/{id}/move:
+    post:
+      tags: ["Releases"]
+      summary: "Reorder a release"
+      operationId: postWorkspacesSlugMapsMapidReleasesIdMove
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                afterId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                beforeId:
+                  type: ["string", "null"]
+                  format: "uuid"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/steps:
+    post:
+      tags: ["Steps"]
+      summary: "Add a step in a cell"
+      operationId: postWorkspacesSlugMapsMapidSteps
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                title:
+                  type: "string"
+                activityId:
+                  type: "string"
+                  format: "uuid"
+                releaseId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                descriptionMd:
+                  type: "string"
+                afterId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                beforeId:
+                  type: ["string", "null"]
+                  format: "uuid"
+              required: ["title", "activityId"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StepAndPlacement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/steps/{id}:
+    patch:
+      tags: ["Steps"]
+      summary: "Change a step"
+      operationId: patchWorkspacesSlugMapsMapidStepsId
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                title:
+                  type: "string"
+                descriptionMd:
+                  type: "string"
+                statusId:
+                  type: "string"
+                  format: "uuid"
+                assigneeId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                estimate:
+                  type: ["number", "null"]
+                  minimum: 0
+                  maximum: 9999.99
+                labelIds:
+                  type: "array"
+                  items:
+                    type: "string"
+                    format: "uuid"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Step"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: ["Steps"]
+      summary: "Delete a step from every map it is on"
+      operationId: deleteWorkspacesSlugMapsMapidStepsId
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/steps/{id}/move:
+    post:
+      tags: ["Steps"]
+      summary: "Move a step to a cell"
+      operationId: postWorkspacesSlugMapsMapidStepsIdMove
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                activityId:
+                  type: "string"
+                  format: "uuid"
+                releaseId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                version:
+                  type: "integer"
+                afterId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                beforeId:
+                  type: ["string", "null"]
+                  format: "uuid"
+              required: ["activityId", "releaseId", "version"]
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  placement:
+                    $ref: "#/components/schemas/Placement"
+                  stale:
+                    type: "boolean"
+                required: ["placement", "stale"]
+                additionalProperties: false
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/steps/{id}/restore:
+    post:
+      tags: ["Steps"]
+      summary: "Undo a delete"
+      operationId: postWorkspacesSlugMapsMapidStepsIdRestore
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties: {}
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Step"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/placements:
+    post:
+      tags: ["Steps"]
+      summary: "Show an existing step on this map too"
+      operationId: postWorkspacesSlugMapsMapidPlacements
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                stepId:
+                  type: "string"
+                  format: "uuid"
+                activityId:
+                  type: "string"
+                  format: "uuid"
+                releaseId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                afterId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                beforeId:
+                  type: ["string", "null"]
+                  format: "uuid"
+              required: ["stepId", "activityId"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StepAndPlacement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/workspaces/{slug}/maps/{mapId}/steps/{id}/placement:
+    delete:
+      tags: ["Steps"]
+      summary: "Take a step off this map (it stays on its others)"
+      operationId: deleteWorkspacesSlugMapsMapidStepsIdPlacement
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Placement"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/dependencies:
+    post:
+      tags: ["Dependencies"]
+      summary: "Record that one step blocks another"
+      operationId: postWorkspacesSlugMapsMapidDependencies
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                blockerId:
+                  type: "string"
+                  format: "uuid"
+                blockedId:
+                  type: "string"
+                  format: "uuid"
+              required: ["blockerId", "blockedId"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependency"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/workspaces/{slug}/maps/{mapId}/dependencies/{id}:
+    delete:
+      tags: ["Dependencies"]
+      summary: "Remove a dependency"
+      operationId: deleteWorkspacesSlugMapsMapidDependenciesId
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/steps/{id}/comments:
+    get:
+      tags: ["Comments"]
+      summary: "A step's comments, oldest first"
+      operationId: getWorkspacesSlugMapsMapidStepsIdComments
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Comment"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["Comments"]
+      summary: "Comment on a step, or reply"
+      operationId: postWorkspacesSlugMapsMapidStepsIdComments
+      description: "Commenter or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                bodyMd:
+                  type: "string"
+                  maxLength: 10000
+                parentId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                mentionIds:
+                  type: "array"
+                  items:
+                    type: "string"
+                    format: "uuid"
+              required: ["bodyMd"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/comments/{id}:
+    patch:
+      tags: ["Comments"]
+      summary: "Edit or resolve a comment"
+      operationId: patchWorkspacesSlugMapsMapidCommentsId
+      description: "Commenter or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                bodyMd:
+                  type: "string"
+                mentionIds:
+                  type: "array"
+                  items:
+                    type: "string"
+                    format: "uuid"
+                resolved:
+                  type: "boolean"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: ["Comments"]
+      summary: "Delete a comment"
+      operationId: deleteWorkspacesSlugMapsMapidCommentsId
+      description: "Commenter or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/share-links:
+    get:
+      tags: ["Share links"]
+      summary: "A map's share links, newest first"
+      operationId: getWorkspacesSlugMapsMapidShareLinks
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/ShareLink"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["Share links"]
+      summary: "Make a share link; its url is in this reply only"
+      operationId: postWorkspacesSlugMapsMapidShareLinks
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                expiresInDays:
+                  type: ["integer", "null"]
+                  enum: [7, 30, 90, null]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ShareLink"
+                  - type: "object"
+                    properties:
+                      url:
+                        type: "string"
+                    required: ["url"]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/share-links/{id}:
+    delete:
+      tags: ["Share links"]
+      summary: "Revoke a share link"
+      operationId: deleteWorkspacesSlugMapsMapidShareLinksId
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/views:
+    get:
+      tags: ["Saved views"]
+      summary: "The map's shared views and the caller's own"
+      operationId: getWorkspacesSlugMapsMapidViews
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/SavedView"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["Saved views"]
+      summary: "Save a filter by name; sharing needs editor"
+      operationId: postWorkspacesSlugMapsMapidViews
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                filter:
+                  $ref: "#/components/schemas/Filter"
+                shared:
+                  type: "boolean"
+              required: ["name", "filter"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/views/{id}:
+    patch:
+      tags: ["Saved views"]
+      summary: "Change your saved view"
+      operationId: patchWorkspacesSlugMapsMapidViewsId
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                filter:
+                  $ref: "#/components/schemas/Filter"
+                shared:
+                  type: "boolean"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: ["Saved views"]
+      summary: "Delete your saved view (admins: any shared one)"
+      operationId: deleteWorkspacesSlugMapsMapidViewsId
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/history:
+    get:
+      tags: ["History"]
+      summary: "The map's events, newest first"
+      operationId: getWorkspacesSlugMapsMapidHistory
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/before"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/History"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/steps/{id}/history:
+    get:
+      tags: ["History"]
+      summary: "A step's events, newest first"
+      operationId: getWorkspacesSlugMapsMapidStepsIdHistory
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/before"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/History"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/live:
+    get:
+      tags: ["Live"]
+      summary: "Upgrade to a WebSocket of the map's events and presence"
+      operationId: getWorkspacesSlugMapsMapidLive
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - name: "after"
+          in: query
+          description: "The lastEventId of the map the client holds."
+          schema:
+            type: "integer"
+      responses:
+        "101":
+          description: "Switching to the WebSocket protocol. Messages: {type: event, event}, {type: presence, users}, {type: resync}."
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/openapi.yaml:
+    get:
+      tags: ["Meta"]
+      summary: "This description of the API"
+      operationId: getOpenapiYaml
+      description: "No sign-in needed."
+      security: []
+      responses:
+        "200":
+          description: "This file, as application/yaml."
+components:
+  securitySchemes:
+    bearerToken:
+      type: "http"
+      scheme: "bearer"
+      description: "A workspace API token, oms_…"
+    sessionCookie:
+      type: "apiKey"
+      in: "cookie"
+      name: "oms_session"
+      description: "The web app's session."
+  parameters:
+    slug:
+      name: "slug"
+      in: "path"
+      required: true
+      description: "The workspace's URL slug."
+      schema:
+        type: "string"
+    mapId:
+      name: "mapId"
+      in: "path"
+      required: true
+      description: "A map's id."
+      schema:
+        type: "string"
+        format: "uuid"
+    id:
+      name: "id"
+      in: "path"
+      required: true
+      description: "The item's id."
+      schema:
+        type: "string"
+        format: "uuid"
+    userId:
+      name: "userId"
+      in: "path"
+      required: true
+      description: "A member's user id."
+      schema:
+        type: "string"
+        format: "uuid"
+    token:
+      name: "token"
+      in: "path"
+      required: true
+      description: "The token from the link."
+      schema:
+        type: "string"
+    before:
+      name: "before"
+      in: "query"
+      description: "The next value from the previous page."
+      schema:
+        type: "integer"
+    limit:
+      name: "limit"
+      in: "query"
+      description: "1 to 200, default 50."
+      schema:
+        type: "integer"
+        minimum: 1
+        maximum: 200
+  responses:
+    BadRequest:
+      description: "The request breaks a rule; the message says which."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthenticated:
+      description: "No session, or a bad, revoked or expired token."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "The caller's role (or token) does not allow this."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "No such item in this workspace, or not a member."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: "Taken already, or the change would break a rule (such as removing the last owner)."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Gone:
+      description: "The link was used, replaced or has expired, or the server already has its first user."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Error:
+      type: "object"
+      properties:
+        error:
+          type: "object"
+          properties:
+            code:
+              type: "string"
+              enum: ["bad_request", "unauthenticated", "forbidden", "not_found", "conflict", "gone", "email_failed", "internal"]
+            message:
+              type: "string"
+          required: ["code", "message"]
+          additionalProperties: false
+      required: ["error"]
+      additionalProperties: false
+    User:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        email:
+          type: "string"
+        displayName:
+          type: "string"
+      required: ["id", "email", "displayName"]
+      additionalProperties: false
+    Workspace:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        name:
+          type: "string"
+        slug:
+          type: "string"
+        keyPrefix:
+          type: "string"
+        estimateUnit:
+          type: "string"
+      required: ["id", "name", "slug", "keyPrefix", "estimateUnit"]
+      additionalProperties: false
+    Membership:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        name:
+          type: "string"
+        slug:
+          type: "string"
+        keyPrefix:
+          type: "string"
+        estimateUnit:
+          type: "string"
+        role:
+          type: "string"
+          enum: ["viewer", "commenter", "editor", "admin", "owner"]
+      required: ["id", "name", "slug", "keyPrefix", "estimateUnit", "role"]
+      additionalProperties: false
+    Member:
+      type: "object"
+      properties:
+        userId:
+          type: "string"
+          format: "uuid"
+        email:
+          type: "string"
+        displayName:
+          type: "string"
+        role:
+          type: "string"
+          enum: ["viewer", "commenter", "editor", "admin", "owner"]
+      required: ["userId", "email", "displayName", "role"]
+      additionalProperties: false
+    Invite:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        workspaceName:
+          type: "string"
+        email:
+          type: "string"
+        role:
+          type: "string"
+          enum: ["viewer", "commenter", "editor", "admin", "owner"]
+        expiresAt:
+          type: "string"
+          format: "date-time"
+      required: ["id", "workspaceName", "email", "role", "expiresAt"]
+      additionalProperties: false
+    Workflow:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        name:
+          type: "string"
+        isDefault:
+          type: "boolean"
+        statuses:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Status"
+      required: ["id", "name", "isDefault"]
+      additionalProperties: false
+    Status:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        workflowId:
+          type: "string"
+          format: "uuid"
+        name:
+          type: "string"
+        category:
+          type: "string"
+          enum: ["todo", "doing", "done", "blocked"]
+        colour:
+          type: ["string", "null"]
+          pattern: "^#[0-9A-Fa-f]{6}$"
+        rank:
+          type: "string"
+      required: ["id", "workflowId", "name", "category", "colour", "rank"]
+      additionalProperties: false
+    Label:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        name:
+          type: "string"
+        colour:
+          type: "string"
+          pattern: "^#[0-9A-Fa-f]{6}$"
+      required: ["id", "name", "colour"]
+      additionalProperties: false
+    Persona:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        name:
+          type: "string"
+        description:
+          type: "string"
+        colour:
+          type: "string"
+          pattern: "^#[0-9A-Fa-f]{6}$"
+      required: ["id", "name", "description", "colour"]
+      additionalProperties: false
+    Map:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        workflowId:
+          type: "string"
+          format: "uuid"
+        name:
+          type: "string"
+        description:
+          type: "string"
+      required: ["id", "workflowId", "name", "description"]
+      additionalProperties: false
+    Node:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        parentId:
+          type: ["string", "null"]
+          format: "uuid"
+        level:
+          type: "string"
+          enum: ["objective", "activity"]
+        title:
+          type: "string"
+        description:
+          type: "string"
+        colour:
+          type: ["string", "null"]
+          pattern: "^#[0-9A-Fa-f]{6}$"
+        personaIds:
+          type: "array"
+          items:
+            type: "string"
+            format: "uuid"
+        rank:
+          type: "string"
+        version:
+          type: "integer"
+      required: ["id", "parentId", "level", "title", "description", "colour", "personaIds", "rank", "version"]
+      additionalProperties: false
+    Release:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        name:
+          type: "string"
+        description:
+          type: "string"
+        targetDate:
+          type: ["string", "null"]
+          format: "date"
+        rank:
+          type: "string"
+      required: ["id", "name", "description", "targetDate", "rank"]
+      additionalProperties: false
+    Step:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        key:
+          type: "string"
+        title:
+          type: "string"
+        descriptionMd:
+          type: "string"
+        statusId:
+          type: "string"
+          format: "uuid"
+        assigneeId:
+          type: ["string", "null"]
+          format: "uuid"
+        estimate:
+          type: ["number", "null"]
+        labelIds:
+          type: "array"
+          items:
+            type: "string"
+            format: "uuid"
+        commentCount:
+          type: "integer"
+        version:
+          type: "integer"
+      required: ["id", "key", "title", "descriptionMd", "statusId", "assigneeId", "estimate", "labelIds", "commentCount", "version"]
+      additionalProperties: false
+    Placement:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        stepId:
+          type: "string"
+          format: "uuid"
+        activityId:
+          type: "string"
+          format: "uuid"
+        releaseId:
+          type: ["string", "null"]
+          format: "uuid"
+        rank:
+          type: "string"
+      required: ["id", "stepId", "activityId", "releaseId", "rank"]
+      additionalProperties: false
+    StepAndPlacement:
+      type: "object"
+      properties:
+        step:
+          $ref: "#/components/schemas/Step"
+        placement:
+          $ref: "#/components/schemas/Placement"
+      required: ["step", "placement"]
+      additionalProperties: false
+    Dependency:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        blockerId:
+          type: "string"
+          format: "uuid"
+        blockedId:
+          type: "string"
+          format: "uuid"
+      required: ["id", "blockerId", "blockedId"]
+      additionalProperties: false
+    StepRef:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        key:
+          type: "string"
+        title:
+          type: "string"
+        done:
+          type: "boolean"
+        mapId:
+          type: "string"
+          format: "uuid"
+        mapName:
+          type: "string"
+      required: ["id", "key", "title", "done", "mapId", "mapName"]
+      additionalProperties: false
+    Elsewhere:
+      type: "object"
+      properties:
+        stepId:
+          type: "string"
+          format: "uuid"
+        mapId:
+          type: "string"
+          format: "uuid"
+        mapName:
+          type: "string"
+      required: ["stepId", "mapId", "mapName"]
+      additionalProperties: false
+    MapView:
+      type: "object"
+      properties:
+        map:
+          $ref: "#/components/schemas/Map"
+        workflow:
+          $ref: "#/components/schemas/Workflow"
+        labels:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Label"
+        personas:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Persona"
+        nodes:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Node"
+        releases:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Release"
+        steps:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Step"
+        placements:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Placement"
+        dependencies:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Dependency"
+        otherSteps:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/StepRef"
+        elsewhere:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Elsewhere"
+        lastEventId:
+          type: "integer"
+      required: ["map", "workflow", "labels", "personas", "nodes", "releases", "steps", "placements", "dependencies", "otherSteps", "elsewhere", "lastEventId"]
+      additionalProperties: false
+    SharedMap:
+      type: "object"
+      properties:
+        workspaceName:
+          type: "string"
+        estimateUnit:
+          type: "string"
+        view:
+          $ref: "#/components/schemas/MapView"
+      required: ["workspaceName", "estimateUnit", "view"]
+      additionalProperties: false
+    Comment:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        stepId:
+          type: "string"
+          format: "uuid"
+        parentId:
+          type: ["string", "null"]
+          format: "uuid"
+        authorId:
+          type: ["string", "null"]
+          format: "uuid"
+        authorName:
+          type: "string"
+        bodyMd:
+          type: "string"
+        mentionIds:
+          type: "array"
+          items:
+            type: "string"
+            format: "uuid"
+        resolved:
+          type: "boolean"
+        edited:
+          type: "boolean"
+        deleted:
+          type: "boolean"
+        createdAt:
+          type: "string"
+          format: "date-time"
+      required: ["id", "stepId", "parentId", "authorId", "authorName", "bodyMd", "mentionIds", "resolved", "edited", "deleted", "createdAt"]
+      additionalProperties: false
+    ShareLink:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        creatorName:
+          type: "string"
+        expiresAt:
+          type: ["string", "null"]
+          format: "date-time"
+        lastUsedAt:
+          type: ["string", "null"]
+          format: "date-time"
+        createdAt:
+          type: "string"
+          format: "date-time"
+      required: ["id", "creatorName", "expiresAt", "lastUsedAt", "createdAt"]
+      additionalProperties: false
+    ApiToken:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        name:
+          type: "string"
+        scope:
+          type: "string"
+          enum: ["read", "write"]
+        prefix:
+          type: "string"
+        creatorName:
+          type: ["string", "null"]
+        expiresAt:
+          type: ["string", "null"]
+          format: "date-time"
+        lastUsedAt:
+          type: ["string", "null"]
+          format: "date-time"
+        createdAt:
+          type: "string"
+          format: "date-time"
+      required: ["id", "name", "scope", "prefix", "creatorName", "expiresAt", "lastUsedAt", "createdAt"]
+      additionalProperties: false
+    SearchHit:
+      type: "object"
+      properties:
+        stepId:
+          type: "string"
+          format: "uuid"
+        key:
+          type: "string"
+        title:
+          type: "string"
+        statusId:
+          type: "string"
+          format: "uuid"
+        mapId:
+          type: "string"
+          format: "uuid"
+        mapName:
+          type: "string"
+        activityId:
+          type: "string"
+          format: "uuid"
+        activity:
+          type: "string"
+      required: ["stepId", "key", "title", "statusId", "mapId", "mapName", "activityId", "activity"]
+      additionalProperties: false
+    Filter:
+      type: "object"
+      properties:
+        labels:
+          type: "array"
+          items:
+            type: "string"
+        statuses:
+          type: "array"
+          items:
+            type: "string"
+        assignees:
+          type: "array"
+          items:
+            type: "string"
+        personas:
+          type: "array"
+          items:
+            type: "string"
+        releases:
+          type: "array"
+          items:
+            type: "string"
+        text:
+          type: "string"
+        mode:
+          type: "string"
+          enum: ["highlight", "hide"]
+      required: ["labels", "statuses", "assignees", "personas", "releases", "text", "mode"]
+      additionalProperties: false
+    SavedView:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        name:
+          type: "string"
+        filter:
+          $ref: "#/components/schemas/Filter"
+        shared:
+          type: "boolean"
+        createdBy:
+          type: "string"
+          format: "uuid"
+        creatorName:
+          type: "string"
+      required: ["id", "name", "filter", "shared", "createdBy", "creatorName"]
+      additionalProperties: false
+    HistoryEntry:
+      type: "object"
+      properties:
+        id:
+          type: "integer"
+        mapId:
+          type: ["string", "null"]
+          format: "uuid"
+        actorId:
+          type: ["string", "null"]
+          format: "uuid"
+        actorName:
+          type: "string"
+        entity:
+          type: "string"
+        entityId:
+          type: "string"
+          format: "uuid"
+        action:
+          type: "string"
+        before:
+          type: ["object", "null"]
+        after:
+          type: ["object", "null"]
+        at:
+          type: "string"
+          format: "date-time"
+      required: ["id", "mapId", "actorId", "actorName", "entity", "entityId", "action", "before", "after", "at"]
+      additionalProperties: false
+    History:
+      type: "object"
+      properties:
+        entries:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/HistoryEntry"
+        next:
+          type: ["integer", "null"]
+      required: ["entries", "next"]
+      additionalProperties: false
