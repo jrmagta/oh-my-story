@@ -4,6 +4,7 @@ import Markdown from 'react-markdown'
 import { api } from '../api'
 import { ConfirmButton, InlineText } from '../ui'
 import { HistoryList } from '../map/HistoryList'
+import { Comments } from '../map/Comments'
 import { amount, formatEstimate } from '../map/estimates'
 import { LabelChips, mapKey, StatusLabel, useMap } from './map'
 import { colourFor, TagPicker } from '../map/TagPicker'
@@ -11,7 +12,7 @@ import { colourFor, TagPicker } from '../map/TagPicker'
 /** The open step, beside the map. Editors change it in place; everyone else reads. */
 export function StepPanel({ stepId }: { stepId: string }) {
   const { ws, view, canEdit, statuses, run, openStep } = useMap()
-  const [tab, setTab] = useState<'details' | 'history'>('details')
+  const [tab, setTab] = useState<'details' | 'comments' | 'history'>('details')
   const members = useQuery({ queryKey: ['ws', ws.slug, 'members'], queryFn: () => api.members(ws.slug) })
   const step = view.steps.find((s) => s.id === stepId)
   if (!step) return null
@@ -38,7 +39,7 @@ export function StepPanel({ stepId }: { stepId: string }) {
         </h2>
       </div>
       <div role="tablist" aria-label="Step" className="step-tabs">
-        {(['details', 'history'] as const).map((t) => (
+        {(['details', 'comments', 'history'] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -48,7 +49,7 @@ export function StepPanel({ stepId }: { stepId: string }) {
             aria-controls={`step-pane-${t}`}
             onClick={() => setTab(t)}
           >
-            {t === 'details' ? 'Details' : 'History'}
+            {t === 'details' ? 'Details' : t === 'comments' ? `Comments${step.commentCount ? ` (${step.commentCount})` : ''}` : 'History'}
           </button>
         ))}
       </div>
@@ -166,6 +167,10 @@ export function StepPanel({ stepId }: { stepId: string }) {
               />
             </div>
           )}
+        </div>
+      ) : tab === 'comments' ? (
+        <div role="tabpanel" id="step-pane-comments" aria-labelledby="step-tab-comments">
+          <Comments key={step.id} stepId={step.id} />
         </div>
       ) : (
         <div role="tabpanel" id="step-pane-history" aria-labelledby="step-tab-history">

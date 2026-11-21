@@ -332,6 +332,49 @@
   .band-row:not(.green) .meter .done { background: var(--color-brand-green); }
   .band-row:not(.green):not(.amber) .meter { background: color-mix(in srgb, currentColor 25%, transparent); }
 
+  /* Comments on a step. */
+  .comment-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--oms-muted);
+  }
+  .comments { padding: 4px 0 20px; }
+  .threads > li { border-bottom: 1px solid var(--oms-line); padding: 12px 20px; }
+  .thread.resolved .comment { opacity: 0.6; }
+  .replies { margin: 8px 0 0 14px; padding-left: 12px; border-left: 2px solid var(--oms-line); display: flex; flex-direction: column; gap: 10px; }
+  .comment header { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+  .comment .markdown { margin-top: 4px; font-size: 14px; }
+  .comment footer { display: flex; gap: 12px; margin-top: 4px; }
+  .comment footer button, .reply-btn {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--oms-muted);
+  }
+  .comment footer button:hover, .reply-btn:hover { color: var(--color-base-content); }
+  .comment footer .danger:hover { color: var(--oms-blocked-text); }
+  .comment.deleted { font-size: 13px; font-style: italic; color: var(--oms-muted); }
+  .resolved-pill { font-size: 10px; color: var(--oms-done-text); }
+  .reply-btn { margin-top: 8px; }
+  .composer { position: relative; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .comments > .composer { padding: 12px 20px 0; }
+  .mention-list {
+    position: absolute;
+    left: 0;
+    top: calc(100% - 40px);
+    z-index: 30;
+    min-width: 16rem;
+    background: var(--color-base-100);
+    border: 2px solid var(--color-base-content);
+    border-radius: var(--oms-radius);
+    padding: 4px;
+  }
+  .mention-list li { padding: 5px 8px; border-radius: 5px; font-size: 13px; cursor: pointer; }
+  .mention-list li[aria-selected="true"] { background: var(--color-brand-amber); color: #000; }
+
   /* Search: a nav button and a palette over the page. */
   .search-btn {
     display: inline-flex;

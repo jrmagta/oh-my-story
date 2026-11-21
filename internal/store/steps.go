@@ -16,7 +16,8 @@ type Step struct {
 	StatusID      uuid.UUID   `json:"statusId"`
 	AssigneeID    *uuid.UUID  `json:"assigneeId"`
 	Estimate      *float64    `json:"estimate"`
-	LabelIDs      []uuid.UUID `json:"labelIds"` // sorted, never null
+	LabelIDs      []uuid.UUID `json:"labelIds"`     // sorted, never null
+	CommentCount  int         `json:"commentCount"` // live comments, replies included
 	Version       int         `json:"version"`
 }
 
@@ -35,11 +36,12 @@ type Placement struct {
 // change labels first.
 const stepCols = `s.id, s.key, s.title, s.description_md, s.status_id, s.assignee_id, s.estimate,
 	coalesce((SELECT array_agg(sl.label_id ORDER BY sl.label_id) FROM step_labels sl WHERE sl.step_id = s.id), '{}'),
+	(SELECT count(*) FROM comments cm WHERE cm.step_id = s.id AND cm.deleted_at IS NULL),
 	s.version`
 
 func scanStep(row pgx.Row) (Step, error) {
 	var st Step
-	err := row.Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.LabelIDs, &st.Version)
+	err := row.Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.LabelIDs, &st.CommentCount, &st.Version)
 	return st, notFound(err)
 }
 
@@ -79,7 +81,7 @@ func mapStep(ctx context.Context, tx pgx.Tx, mapID, stepID uuid.UUID) (Step, Pla
 		`SELECT `+stepCols+`, p.id, p.step_id, p.activity_id, p.release_id, p.rank
 		 FROM steps s JOIN placements p ON p.step_id = s.id
 		 WHERE s.id = $1 AND p.map_id = $2 AND s.deleted_at IS NULL FOR UPDATE OF s`, stepID, mapID).
-		Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.LabelIDs, &st.Version,
+		Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.LabelIDs, &st.CommentCount, &st.Version,
 			&p.ID, &p.StepID, &p.ActivityID, &p.ReleaseID, &p.Rank)
 	return st, p, notFound(err)
 }
