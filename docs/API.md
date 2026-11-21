@@ -180,6 +180,23 @@ Admins make tokens for scripts and other tools. A token is sent as `Authorizatio
 
 Shape: token `{id, name, scope, prefix, creatorName, expiresAt, lastUsedAt, createdAt}`. Only a hash of the token is stored; `prefix` is its first characters, to tell tokens apart.
 
+### Webhooks
+
+Admins send the workspace's changes to other systems. A webhook is `{id, url, events, active, createdAt}`; `events` lists `entity.action` types (such as `step.update`, `comment.create`) or `"*"` for all.
+
+| Method and path | Body → response |
+|---|---|
+| `GET /webhooks` | → `[webhook]`. Admins |
+| `POST /webhooks` | `{url, events}` → `201` webhook with `secret`, shown only here. `url` is http(s), at most 2,000 characters |
+| `PATCH /webhooks/{id}` | `{url?, events?, active?}` → webhook. `active: false` pauses it: changes made meanwhile are not sent later |
+| `DELETE /webhooks/{id}` | → `204` |
+| `GET /webhooks/{id}/deliveries` | → the latest 50 deliveries, newest first: `{id, type, status, attempts, lastStatusCode, lastError, nextAttemptAt, createdAt, deliveredAt}`; `status` is `pending`, `sent` or `failed` |
+| `POST /webhooks/{id}/test` | `{}` → `201` delivery of type `ping` |
+
+Each change a webhook asks for is queued in the same transaction as its event, so none is lost or doubled. Echoes (a linked step's copies for its other maps) and `stepref` notes are not sent. A delivery is a `POST` of JSON `{id, type, workspace: {id, slug, name}, map: {id, name} | null, actor: {id, name, kind} | null, event}`, with headers `X-OMS-Event` (the type), `X-OMS-Delivery` (the id) and `X-OMS-Signature: sha256=<hex>`, the HMAC-SHA256 of the body with the webhook's secret. A `2xx` answer within 15 seconds counts as sent; anything else, redirects included, is retried after 1 minute, 5, 30, 2 hours and 12 hours, then marked `failed`. Each server instance sends; they claim due deliveries with `FOR UPDATE SKIP LOCKED` and a two-minute lease, so each is sent once (a sender that stops mid-send leaves it to be retried). Finished deliveries are kept 30 days.
+
+Addresses are checked when a webhook is saved and again when connecting, after DNS: link-local addresses (including the cloud metadata address `169.254.169.254`) and `fd00:ec2::254` are always refused; `OMS_WEBHOOK_BLOCK_PRIVATE=true` also refuses loopback and private ranges. Proxies from the environment are not used, since they would connect on the server's behalf.
+
 ### Share links
 
 A share link shows a map read-only to anyone who has it, without an account. Its token is returned once, in the `url` when the link is made, and only its hash is stored. A link is `{id, creatorName, expiresAt, lastUsedAt, createdAt}`.
@@ -255,6 +272,7 @@ The upgrade needs the session cookie and an `Origin` equal to `OMS_BASE_URL`'s h
 | `OMS_OIDC_DISCOVERY_URL` | the issuer | where the server fetches discovery (differs in compose) |
 | `OMS_OIDC_CLIENT_ID`, `OMS_OIDC_CLIENT_SECRET` | — | required when the issuer is set |
 | `OMS_OIDC_NAME` | `SSO` | button label |
+| `OMS_WEBHOOK_BLOCK_PRIVATE` | empty (off) | `true` stops webhooks posting to loopback and private addresses |
 
 ## Password reset
 

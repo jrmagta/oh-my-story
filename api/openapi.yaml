@@ -739,6 +739,186 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/webhooks:
+    get:
+      tags: ["Webhooks"]
+      summary: "Webhooks"
+      operationId: getWorkspacesSlugWebhooks
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Webhook"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: ["Webhooks"]
+      summary: "Add a webhook; its signing secret is in this reply only"
+      operationId: postWorkspacesSlugWebhooks
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                url:
+                  type: "string"
+                  format: "uri"
+                events:
+                  type: "array"
+                  minItems: 1
+                  items:
+                    type: "string"
+                    description: "An entity.action name such as step.update, or \"*\" for all."
+              required: ["url", "events"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Webhook"
+                  - type: "object"
+                    properties:
+                      secret:
+                        type: "string"
+                    required: ["secret"]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/workspaces/{slug}/webhooks/{id}:
+    patch:
+      tags: ["Webhooks"]
+      summary: "Change a webhook's address or events, or pause it"
+      operationId: patchWorkspacesSlugWebhooksId
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                url:
+                  type: "string"
+                  format: "uri"
+                events:
+                  type: "array"
+                  minItems: 1
+                  items:
+                    type: "string"
+                    description: "An entity.action name such as step.update, or \"*\" for all."
+                active:
+                  type: "boolean"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Webhook"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: ["Webhooks"]
+      summary: "Delete a webhook"
+      operationId: deleteWorkspacesSlugWebhooksId
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/webhooks/{id}/deliveries:
+    get:
+      tags: ["Webhooks"]
+      summary: "A webhook's latest 50 deliveries, newest first"
+      operationId: getWorkspacesSlugWebhooksIdDeliveries
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Delivery"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/webhooks/{id}/test:
+    post:
+      tags: ["Webhooks"]
+      summary: "Queue a ping to the webhook"
+      operationId: postWorkspacesSlugWebhooksIdTest
+      description: "Admin or above (not API tokens)."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/workspaces/{slug}/workflows:
     get:
       tags: ["Workflows"]
@@ -2982,6 +3162,54 @@ components:
           type: "string"
           format: "date-time"
       required: ["id", "creatorName", "expiresAt", "lastUsedAt", "createdAt"]
+      additionalProperties: false
+    Webhook:
+      type: "object"
+      description: "An outgoing webhook. Each event it asks for is POSTed as JSON {id, type, workspace, map, actor, event}, signed in X-OMS-Signature (sha256= HMAC of the body with the secret), with X-OMS-Event and X-OMS-Delivery headers. A 2xx answer counts as sent; otherwise it is retried after 1 min, 5 min, 30 min, 2 h and 12 h, then marked failed."
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        url:
+          type: "string"
+        events:
+          type: "array"
+          items:
+            type: "string"
+        active:
+          type: "boolean"
+        createdAt:
+          type: "string"
+          format: "date-time"
+      required: ["id", "url", "events", "active", "createdAt"]
+      additionalProperties: false
+    Delivery:
+      type: "object"
+      properties:
+        id:
+          type: "integer"
+        type:
+          type: "string"
+          description: "The event type, or ping for a test."
+        status:
+          type: "string"
+          enum: ["pending", "sent", "failed"]
+        attempts:
+          type: "integer"
+        lastStatusCode:
+          type: ["integer", "null"]
+        lastError:
+          type: ["string", "null"]
+        nextAttemptAt:
+          type: ["string", "null"]
+          format: "date-time"
+        createdAt:
+          type: "string"
+          format: "date-time"
+        deliveredAt:
+          type: ["string", "null"]
+          format: "date-time"
+      required: ["id", "type", "status", "attempts", "lastStatusCode", "lastError", "nextAttemptAt", "createdAt", "deliveredAt"]
       additionalProperties: false
     ApiToken:
       type: "object"

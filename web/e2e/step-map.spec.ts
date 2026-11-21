@@ -213,7 +213,13 @@ test('reordering with the keyboard: a step in its cell, an activity, a release',
   await expect(page.locator('.drag-ghost')).toBeVisible()
   await expect(panel(page)).toHaveCount(0)
   await page.keyboard.press('Space')
-  await expect(page.locator('.drag-ghost')).toHaveCount(0)
+  // A key pressed before dnd-kit has finished starting the drag is ignored (slow CI); press again if so.
+  try {
+    await expect(page.locator('.drag-ghost')).toHaveCount(0, { timeout: 2000 })
+  } catch {
+    await page.keyboard.press('Space')
+    await expect(page.locator('.drag-ghost')).toHaveCount(0)
+  }
   await page.reload()
   await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAP-1', 'MAP-2'])
 

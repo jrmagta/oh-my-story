@@ -7,6 +7,7 @@ import { ErrorAlert, Field, Notice } from '../ui'
 import { PageBand } from './app'
 import { ProjectKeyField } from './project-key'
 import { ApiTokens } from './api-tokens'
+import { Webhooks } from './webhooks'
 
 /** Workspace name, step key prefix and estimate unit. Admins change them; everyone else reads. */
 export function SettingsPage() {
@@ -69,6 +70,7 @@ export function SettingsPage() {
           )}
         </form>
         {canManage && <ApiTokens ws={ws} />}
+        {canManage && <Webhooks ws={ws} />}
       </main>
     </>
   )

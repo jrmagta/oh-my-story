@@ -17,6 +17,8 @@ import (
 	"github.com/jrmagta/oh-my-story/internal/httpapi"
 	"github.com/jrmagta/oh-my-story/internal/live"
 	"github.com/jrmagta/oh-my-story/internal/mail"
+	"github.com/jrmagta/oh-my-story/internal/store"
+	"github.com/jrmagta/oh-my-story/internal/webhook"
 	"github.com/jrmagta/oh-my-story/web"
 )
 
@@ -105,6 +107,7 @@ func serve(ctx context.Context, cfg config.Config) error {
 
 	hub := live.New(pool)
 	hub.Start(ctx)
+	go webhook.New(store.New(pool), cfg.BlockPrivateWebhooks).Run(ctx)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

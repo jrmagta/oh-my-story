@@ -46,6 +46,22 @@ export function MapViewport({ panelOpen, children }: { panelOpen: boolean; child
     [setPrefs],
   )
 
+  // Release bands are as wide as the part of the map in view (see .band-row), in the map's own
+  // (zoomed) units, so the whole band, with its Focus and menu, is always on screen.
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const set = () => {
+      const style = getComputedStyle(el)
+      const room = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+      el.style.setProperty('--pane-w', `${Math.max(0, room / zoom)}px`)
+    }
+    set()
+    const ro = new ResizeObserver(set)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [zoom])
+
   useLayoutEffect(() => {
     const el = ref.current
     const before = prevZoom.current
@@ -219,9 +235,9 @@ function Minimap({ scroller }: { scroller: React.RefObject<HTMLDivElement | null
       let bg = getComputedStyle(n).backgroundColor
       if (n.matches('.step-card')) bg = 'var(--oms-muted)'
       else if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') bg = 'var(--color-base-content)'
-      // A band is pinned to the left edge as the map scrolls sideways; draw it from the grid's start.
-      const left = n.matches('.band-row') && gridBox ? gridBox.left : b.left
-      out.push({ x: toX(left), y: toY(b.top) - pinned, w: b.width, h: b.height, fill: bg })
+      // A band is pinned to the left of the view and as wide as it; draw it across the whole map.
+      const band = n.matches('.band-row') && gridBox
+      out.push({ x: toX(band ? gridBox.left : b.left), y: toY(b.top) - pinned, w: band ? gridBox.width : b.width, h: b.height, fill: bg })
     })
     setBoxes(out)
     setSize({ w: el.scrollWidth, h: el.scrollHeight })
