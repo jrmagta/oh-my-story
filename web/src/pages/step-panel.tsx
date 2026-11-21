@@ -9,6 +9,7 @@ import { amount, formatEstimate } from '../map/estimates'
 import { LabelChips, mapKey, StatusLabel, useMap } from './map'
 import { colourFor, TagPicker } from '../map/TagPicker'
 import { DependencySection } from '../map/Dependencies'
+import { LinkedMaps } from '../map/LinkedMaps'
 
 /** The open step, beside the map. Editors change it in place; everyone else reads. */
 export function StepPanel({ stepId }: { stepId: string }) {
@@ -22,6 +23,8 @@ export function StepPanel({ stepId }: { stepId: string }) {
   const activity = view.nodes.find((n) => n.id === placement?.activityId)
   const release = view.releases.find((r) => r.id === placement?.releaseId)
   const assignee = members.data?.find((m) => m.userId === step.assigneeId)
+  // Delete takes a step off every map it is on, so the confirmation says how many.
+  const onMaps = 1 + view.elsewhere.filter((e) => e.stepId === step.id).length
   const patch = (b: Parameters<typeof api.patchStep>[3]) => run(() => api.patchStep(ws.slug, view.map.id, step.id, b))
 
   return (
@@ -154,11 +157,12 @@ export function StepPanel({ stepId }: { stepId: string }) {
           </dl>
           <Description key={step.id} text={step.descriptionMd} editable={canEdit} onSave={(descriptionMd) => patch({ descriptionMd })} />
           <DependencySection key={`deps:${step.id}`} stepId={step.id} stepKey={step.key} />
+          <LinkedMaps key={`maps:${step.id}`} step={step} />
           {canEdit && (
             <div className="p-5">
               <ConfirmButton
                 label="Delete step"
-                confirm="Confirm delete"
+                confirm={onMaps > 1 ? `Delete from all ${onMaps} maps` : 'Confirm delete'}
                 name={step.key}
                 busy={false}
                 onConfirm={() => {

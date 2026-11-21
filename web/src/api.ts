@@ -176,7 +176,15 @@ export interface MapView {
   /** Links touching steps on this map; otherSteps names their ends on other maps. */
   dependencies: Dependency[]
   otherSteps: StepRef[]
+  /** For steps on this map, the other maps they are also on. */
+  elsewhere: Elsewhere[]
   lastEventId: number
+}
+
+export interface Elsewhere {
+  stepId: string
+  mapId: string
+  mapName: string
 }
 
 /** The blocker step blocks the blocked step. */
@@ -419,6 +427,11 @@ export const api = {
   moveStep: (slug: string, mapId: string, id: string, b: { activityId: string; releaseId: string | null; version: number } & Position) =>
     request<{ placement: Placement; stale: boolean }>('POST', `${mp(slug, mapId)}/steps/${id}/move`, b),
   deleteStep: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/steps/${id}`),
+  /** Shows an existing step on this map too. */
+  placeStep: (slug: string, mapId: string, b: { stepId: string; activityId: string; releaseId: string | null }) =>
+    request<{ step: Step; placement: Placement }>('POST', `${mp(slug, mapId)}/placements`, b),
+  /** Takes a step off this map (it stays on its others); returns where it was. */
+  unplaceStep: (slug: string, mapId: string, stepId: string) => request<Placement>('DELETE', `${mp(slug, mapId)}/steps/${stepId}/placement`),
   createDependency: (slug: string, mapId: string, b: { blockerId: string; blockedId: string }) =>
     request<Dependency>('POST', `${mp(slug, mapId)}/dependencies`, b),
   deleteDependency: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/dependencies/${id}`),

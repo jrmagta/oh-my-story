@@ -1196,8 +1196,9 @@ export function LabelChips({ ids, onRemove }: { ids: string[]; onRemove?: (id: s
 
 /** dimmed: a highlight filter is on and this step does not match. */
 function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
-  const { ws, canEdit, statuses, selectedStep, openStep, prefs } = useMap()
+  const { ws, view, canEdit, statuses, selectedStep, openStep, prefs } = useMap()
   const { step, placement } = card
+  const elsewhere = view.elsewhere.filter((e) => e.stepId === step.id)
   const status = statuses.get(step.statusId)
   const selected = selectedStep === step.id
   const label = `${step.key} ${step.title}`
@@ -1232,6 +1233,14 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
                 <path d="M2 3h12v8H7l-3 3v-3H2z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
               </svg>
               {step.commentCount}
+            </span>
+          )}
+          {elsewhere.length > 0 && (
+            <span className="linked-mark" title={`Also on ${elsewhere.map((e) => e.mapName).join(', ')}`}>
+              <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden>
+                <path d="M6.5 9.5l3-3M7 4.5l1-1a2.8 2.8 0 0 1 4 4l-1 1M9 11.5l-1 1a2.8 2.8 0 0 1-4-4l1-1" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              <span className="sr-only">Also on {elsewhere.map((e) => e.mapName).join(', ')}</span>
             </span>
           )}
           <span className="text-muted ml-auto text-[11px] font-extrabold">{step.key}</span>

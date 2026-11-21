@@ -23,8 +23,8 @@ type MapView struct {
 	Dependencies []Dependency `json:"dependencies"`
 	OtherSteps   []StepRef    `json:"otherSteps"`
 	// Elsewhere lists the other maps each step on this map is also on.
-	Elsewhere []Elsewhere `json:"elsewhere"`
-	LastEventID  int64        `json:"lastEventId"`
+	Elsewhere   []Elsewhere `json:"elsewhere"`
+	LastEventID int64       `json:"lastEventId"`
 }
 
 func (s *Store) MapView(ctx context.Context, workspaceID, mapID uuid.UUID) (MapView, error) {

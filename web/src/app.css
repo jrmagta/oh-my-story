@@ -783,6 +783,7 @@
     background: var(--color-brand-red, #BA3636);
   }
   .dep-row + .dep-row { margin-top: 10px; }
+  .linked-mark { display: inline-flex; align-items: center; @apply text-muted; }
   .dep-list { margin-top: 4px; }
   .dep-list li { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 14px; }
   .dep-list li.done .dep-step { text-decoration: line-through; opacity: 0.6; }
