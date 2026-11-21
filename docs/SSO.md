@@ -29,16 +29,7 @@ People need an email address in Keycloak, and it must be verified to sign in for
 | `OMS_OIDC_DIRECTORY` | `keycloak` | Optional: turns on "Add from Keycloak" in Members |
 | `OMS_OIDC_DISCOVERY_URL` | `http://keycloak:8080/realms/acme` | Only when the server reaches Keycloak at a different address than browsers do (as in the dev compose stack) |
 
-The LAN try-out stack passes these through:
-
-```sh
-make lan OMS_BASE_URL=http://jr-pc1.jrmagta.home \
-  OMS_OIDC_ISSUER=https://sso.example.com/realms/acme \
-  OMS_OIDC_CLIENT_ID=oh-my-story OMS_OIDC_CLIENT_SECRET=… \
-  OMS_OIDC_NAME=Keycloak OMS_OIDC_DIRECTORY=keycloak
-```
-
-The Helm chart takes them as `oidc.issuer`, `oidc.clientID`, `oidc.name`, `oidc.directory` and `oidc.discoveryURL`, with the secret in the chart's secret under `oidc-client-secret`.
+The LAN try-out stack runs its own Keycloak, set up this way with certificate sign-in as well (see `docs/LAN.md`). The Helm chart takes them as `oidc.issuer`, `oidc.clientID`, `oidc.name`, `oidc.directory` and `oidc.discoveryURL`, with the secret in the chart's secret under `oidc-client-secret`.
 
 ## How accounts work
 

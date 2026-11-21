@@ -1,31 +1,33 @@
 name: oh-my-story-lan
 
 # A try-out deployment for a home network, separate from the dev stack: its
-# own database volume, built from the working tree. Run it with `make lan`.
+# own database and Keycloak, built from the working tree, served over HTTPS
+# with the test CA from deploy/lan/pki. Run it with `make lan LAN_HOST=…`
+# (see docs/LAN.md).
 #
-#   app      127.0.0.1:8090, reached on the LAN at OMS_BASE_URL through a
-#            reverse proxy or port forward
-#   mailpit  127.0.0.1:8026, where invite emails land (not exposed to the LAN:
-#            invite links are credentials)
+#   proxy     https://LAN_HOST (127.0.0.1:8443; http on 127.0.0.1:8090
+#             redirects), in front of the app
+#   keycloak  https://LAN_HOST:8444 (127.0.0.1:8444), realm "oms": sign in
+#             with a client certificate or a password; admin console at /admin
+#   mailpit   127.0.0.1:8026, where invite emails land (not exposed to the LAN:
+#             invite links are credentials)
 #
-# OMS_BASE_URL must be the address people type, e.g. http://story.example.home;
-# the server refuses writes from any other origin.
-#
-# Single sign-on with an existing Keycloak (or any OIDC provider) is off
-# unless OMS_OIDC_ISSUER is set; pass the OMS_OIDC_* variables to make lan.
-# See docs/SSO.md.
+# Secrets (Keycloak admin, the app's client secret, users' passwords) come
+# from deploy/lan/pki/out/secrets.env, made by make-certs.sh, not from git.
 
 x-app-env: &app-env
   OMS_DATABASE_URL: postgres://oms:oms@postgres:5432/oms?sslmode=disable
-  OMS_BASE_URL: ${OMS_BASE_URL:?set OMS_BASE_URL to the address people will use}
+  OMS_BASE_URL: ${OMS_BASE_URL:?set by make lan from LAN_HOST}
   OMS_SMTP_ADDR: mailpit:1025
   OMS_MAIL_FROM: oh-my-story <no-reply@oh-my-story.local>
-  OMS_OIDC_ISSUER: ${OMS_OIDC_ISSUER:-}
-  OMS_OIDC_DISCOVERY_URL: ${OMS_OIDC_DISCOVERY_URL:-}
-  OMS_OIDC_CLIENT_ID: ${OMS_OIDC_CLIENT_ID:-}
-  OMS_OIDC_CLIENT_SECRET: ${OMS_OIDC_CLIENT_SECRET:-}
-  OMS_OIDC_NAME: ${OMS_OIDC_NAME:-}
-  OMS_OIDC_DIRECTORY: ${OMS_OIDC_DIRECTORY:-}
+  OMS_OIDC_ISSUER: https://${LAN_HOST:?set LAN_HOST}:8444/realms/oms
+  # The app reaches Keycloak inside the compose network; tokens still carry the LAN issuer.
+  OMS_OIDC_DISCOVERY_URL: https://keycloak:8443/realms/oms
+  OMS_OIDC_CLIENT_ID: oh-my-story
+  OMS_OIDC_NAME: Keycloak
+  OMS_OIDC_DIRECTORY: keycloak
+  # Trust the test CA (for Keycloak) as well as the usual public roots (for webhooks).
+  SSL_CERT_DIR: /etc/oms-ca
 
 services:
   postgres:
@@ -44,11 +46,47 @@ services:
       timeout: 3s
       retries: 30
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.2
+    command: ["start-dev", "--import-realm"]
+    env_file: [pki/out/secrets.env]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME: https://${LAN_HOST}:8444
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "false"
+      KC_HTTPS_CERTIFICATE_FILE: /pki/server.crt
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /pki/server.key
+      # Ask browsers for a certificate (not require it), checked against the test CA.
+      KC_HTTPS_CLIENT_AUTH: request
+      KC_TRUSTSTORE_PATHS: /pki/ca.crt
+      # The health check below talks plain HTTP to the management port.
+      KC_HTTP_MANAGEMENT_SCHEME: http
+      # Filled into the realm file's ${…} placeholders on first import.
+      OMS_BASE_URL: ${OMS_BASE_URL}
+    volumes:
+      - kcdata:/opt/keycloak/data
+      - ./keycloak/oms-realm.json:/opt/keycloak/data/import/oms-realm.json:ro
+      - ./pki/out/server.crt:/pki/server.crt:ro
+      - ./pki/out/server.key:/pki/server.key:ro
+      - ./pki/out/ca.crt:/pki/ca.crt:ro
+    ports:
+      - "127.0.0.1:8444:8443"
+    restart: unless-stopped
+    healthcheck:
+      # The image has no curl; ask the management port with bash.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 5s
+      timeout: 4s
+      retries: 60
+
   migrate:
     build:
       context: ../..
     image: localhost/oh-my-story:lan
     command: ["migrate"]
+    env_file: [pki/out/secrets.env]
     environment: *app-env
     depends_on:
       postgres:
@@ -58,12 +96,15 @@ services:
   app:
     image: localhost/oh-my-story:lan
     command: ["serve"]
+    env_file: [pki/out/secrets.env]
     environment: *app-env
-    ports:
-      - "127.0.0.1:8090:8080"
+    volumes:
+      - ./pki/out/ca.crt:/etc/oms-ca/ca.crt:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
       mailpit:
         condition: service_healthy
     restart: unless-stopped
@@ -72,6 +113,20 @@ services:
       interval: 5s
       timeout: 4s
       retries: 12
+
+  proxy:
+    image: docker.io/library/caddy:2.10.0-alpine
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./pki/out/server.crt:/pki/server.crt:ro
+      - ./pki/out/server.key:/pki/server.key:ro
+    ports:
+      - "127.0.0.1:8443:8443"
+      - "127.0.0.1:8090:8080"
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
 
   mailpit:
     image: docker.io/axllent/mailpit:v1.33.1
@@ -86,3 +141,4 @@ services:
 
 volumes:
   pgdata:
+  kcdata:
