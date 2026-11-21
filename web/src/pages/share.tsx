@@ -9,6 +9,7 @@ import { ago } from '../map/history'
 import { ErrorAlert, Loading, Logo, Stripe, ThemeToggle } from '../ui'
 import { deriveMap, mapKey, MapGrid, MapHeader, MapProvider, useMap, useMapSearch, type MapCtx } from './map'
 import { StepPanel } from './step-panel'
+import { Roadmap } from './roadmap'
 
 const expiries: [number | null, string][] = [
   [7, '7 days'],
@@ -135,7 +136,7 @@ function ShareDialog({ close }: { close: () => void }) {
 export function SharedMapPage() {
   const { token = '' } = useParams()
   const shared = useQuery({ queryKey: ['shared', token], queryFn: () => api.sharedMap(token), retry: false })
-  const { selectedStep, openStep, filter, setFilter } = useMapSearch()
+  const { selectedStep, openStep, filter, setFilter, mode, setMode } = useMapSearch()
   const [prefs, setPrefs] = useViewPrefs(shared.data?.view.map.id ?? 'shared')
   const ctx = useMemo<MapCtx | null>(() => {
     const d = shared.data
@@ -144,6 +145,8 @@ export function SharedMapPage() {
     return {
       ws,
       shared: true,
+      mode,
+      setMode,
       view: d.view,
       canEdit: false,
       ...deriveMap(d.view, filter),
@@ -158,7 +161,7 @@ export function SharedMapPage() {
       adding: null,
       setAdding: () => {},
     }
-  }, [shared.data, filter, setFilter, prefs, setPrefs, selectedStep, openStep])
+  }, [shared.data, filter, setFilter, prefs, setPrefs, mode, setMode, selectedStep, openStep])
 
   return (
     <>
@@ -187,7 +190,7 @@ export function SharedMapPage() {
           <FilterBar panelOpen={!!ctx.selectedStep} />
           <div className={`map-scroll ${ctx.selectedStep ? 'with-panel' : ''}`}>
             <MapDnd view={ctx.view} onMove={() => {}}>
-              <MapGrid />
+              {ctx.mode === 'roadmap' ? <Roadmap /> : <MapGrid />}
             </MapDnd>
           </div>
           {ctx.selectedStep && ctx.view.steps.some((s) => s.id === ctx.selectedStep) && <StepPanel stepId={ctx.selectedStep} />}

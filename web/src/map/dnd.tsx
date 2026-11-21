@@ -75,15 +75,19 @@ const keyboardCoordinates: KeyboardCoordinateGetter = (event, { context }) => {
     if (!r) return false
     const around = r.left <= cx && cx <= r.right && r.top <= cy && cy <= r.bottom
     if (around) return false
+    // Compare centres, not edges: a cell's edges sit a few pixels outside the cards in it, so by edges
+    // the cell below a card counted as "left" of it, and a cell in the same roadmap row as "up".
+    const rx = r.left + r.width / 2
+    const ry = r.top + r.height / 2
     switch (dir) {
       case 'up':
-        return r.top < collisionRect.top
+        return ry < cy
       case 'down':
-        return r.top > collisionRect.top
+        return ry > cy
       case 'left':
-        return r.left < collisionRect.left
+        return rx < cx
       default:
-        return r.left > collisionRect.left
+        return rx > cx
     }
   })
   const hits = closestCorners({ active, collisionRect, droppableRects, droppableContainers: candidates, pointerCoordinates: null })
