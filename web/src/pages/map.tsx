@@ -831,7 +831,7 @@ export function formatDate(d: string): string {
 
 function BandHeader({ release, index, total }: { release: Release | null; index: number; total: Total | undefined }) {
   const { ws, view, canEdit, run, prefs, setPrefs } = useMap()
-  const tone = release ? (index % 2 === 0 ? 'green' : 'amber') : ''
+  const tone = release ? (index % 2 === 0 ? 'green' : 'amber') : 'unscheduled'
   const bandId = release?.id ?? UNSCHEDULED_BAND
   const collapsed = prefs.collapsedReleases.includes(bandId)
   const focused = prefs.focus === bandId

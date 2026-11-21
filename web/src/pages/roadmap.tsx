@@ -41,7 +41,7 @@ export function Roadmap() {
         return (
           <div
             key={b.key}
-            className={`rm-release ${late ? 'late' : ''}`}
+            className={`rm-release ${late ? 'late' : ''} ${b.release ? '' : 'unscheduled'}`}
             style={{ gridColumn: i + 2 }}
             role="heading"
             aria-level={2}

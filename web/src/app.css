@@ -407,6 +407,7 @@
     color: var(--color-base-100);
   }
   .rm-release.late { background: var(--color-brand-red); color: #fff; }
+  .rm-release.unscheduled { background: var(--oms-cell); color: var(--color-base-content); border: 2px dashed var(--oms-line); }
   .rm-name { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; text-transform: uppercase; }
   .rm-date, .rm-sum { font-size: 12px; font-weight: 700; opacity: 0.85; }
   .late-pill { font-size: 10px; }
@@ -807,9 +808,11 @@
     grid-column: 1 / -1;
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 12px 18px;
-    margin-top: 22px;
+    gap: 14px;
+    /* One height for every band, Unscheduled (no date, no menu) included. */
+    height: 44px;
+    padding: 0 14px;
+    margin-top: 14px;
     background: #000;
     color: #F2F2F2;
     position: sticky;
@@ -817,8 +820,14 @@
   }
   .band-row.green { background: var(--color-brand-green); color: #fff; }
   .band-row.amber { background: var(--color-brand-amber); color: #000; }
+  /* Unscheduled is not a release: an outlined band in the page's colours rather than a solid one. */
+  .band-row.unscheduled {
+    background: var(--oms-cell);
+    color: var(--color-base-content);
+    border: 2px dashed var(--oms-line);
+  }
   .band-row .n {
-    font-size: 24px;
+    font-size: 18px;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: -0.01em;
@@ -1205,6 +1214,14 @@
   .band-row .btn-ol,
   .toast-item .btn-ol {
     --btn-fg: currentColor;
+    color: inherit;
+  }
+  /* .btn-ol fills with its text colour on hover, which on a band or toast is the surface's own text
+     colour: text and fill matched (black on black on amber). Tint instead, and the same when pressed. */
+  .band-row .btn-ol:hover:not(:disabled),
+  .band-row .btn-ol[aria-pressed="true"],
+  .toast-item .btn-ol:hover:not(:disabled) {
+    --btn-bg: color-mix(in srgb, currentColor 18%, transparent);
     color: inherit;
   }
   .input,
