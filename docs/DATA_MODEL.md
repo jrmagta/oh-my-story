@@ -209,8 +209,8 @@ Estimate roll-ups are computed, not stored. The browser sums them from the map p
 
 ```sql
 share_links (
-  id uuid pk, map_id fk, token_hash bytea unique not null,
-  created_by fk users, expires_at, revoked_at, created_at
+  id uuid pk, map_id fk on delete cascade, token_hash bytea unique not null,
+  created_by fk users on delete set null, expires_at, revoked_at, last_used_at, created_at
 )                                                -- read-only, anonymous, no comments
 ```
 
@@ -284,7 +284,7 @@ Retention: keep forever in v1. Partition by month if volume demands it.
 | 0006 | `saved_views` | M2 phase 5 |
 | 0007 | unique index on `workspaces.key_prefix` (project keys) | M2 |
 | 0008 | `comments`, `mentions` | M2 phase 7 |
-| later | `share_links` | M3 |
+| 0009 | `share_links` | M3 phase 1 |
 | later | `dependencies`, `api_tokens`, `webhooks`, `webhook_deliveries`, `integrations` | M4 |
 
 M0 migrates only 0001. The rest are specified here so M1 does not reshape M0 tables.

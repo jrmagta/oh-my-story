@@ -17,13 +17,16 @@ import { applyMove, type Move } from '../map/moves'
 import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toasts, type ToastMessage } from '../ui'
 import { PageBand } from './app'
 import { StepPanel } from './step-panel'
+import { ShareButton } from './share'
 
 export const mapKey = (slug: string, mapId: string) => ['ws', slug, 'map', mapId] as const
 
-interface MapCtx {
+export interface MapCtx {
   ws: Membership
   view: MapView
   canEdit: boolean
+  /** Read-only through a share link: no people, comments, history, presence or saved views. */
+  shared: boolean
   statuses: Map<string, Status>
   /** Step counts and estimate sums for the map, each node and each release; only matching steps while a filter is on. */
   totals: Totals
@@ -46,6 +49,47 @@ interface MapCtx {
 }
 
 const Ctx = createContext<MapCtx | null>(null)
+export const MapProvider = Ctx.Provider
+
+/**
+ * The map's step selection (?step=) and filter, both in the URL. The filter is state mirrored into
+ * the URL so a reload or a shared link keeps it; reading it back from the URL on every change would
+ * lag, because the router updates the URL asynchronously (a checkbox flicked back, fast typing
+ * dropped characters).
+ */
+export function useMapSearch() {
+  const [search, setSearch] = useSearchParams()
+  const selectedStep = search.get('step')
+  const openStep = useCallback(
+    (id: string | null) =>
+      setSearch(
+        (s) => {
+          const n = new URLSearchParams(s)
+          if (id) n.set('step', id)
+          else n.delete('step')
+          return n
+        },
+        { replace: true },
+      ),
+    [setSearch],
+  )
+  const [filter, setFilterState] = useState(() => readFilter(search))
+  const setFilter = useCallback(
+    (f: Filter) => {
+      setFilterState(f)
+      setSearch((s) => writeFilter(s, f), { replace: true })
+    },
+    [setSearch],
+  )
+  return { search, setSearch, selectedStep, openStep, filter, setFilter }
+}
+
+/** What the map shows that follows from the payload and the filter. */
+export function deriveMap(view: MapView, filter: Filter) {
+  const statuses = new Map(view.workflow.statuses.map((s) => [s.id, s]))
+  const match = matching(view, filter)
+  return { statuses, match, totals: totals(view, statuses, match) }
+}
 
 export function useMap(): MapCtx {
   const c = useContext(Ctx)
@@ -57,7 +101,7 @@ export function MapPage() {
   const ws = useOutletContext<Membership>()
   const { mapId = '' } = useParams()
   const qc = useQueryClient()
-  const [search, setSearch] = useSearchParams()
+  const { search, setSearch, selectedStep, openStep, filter, setFilter } = useMapSearch()
   const key = useMemo(() => mapKey(ws.slug, mapId), [ws.slug, mapId])
   const query = useQuery({ queryKey: key, queryFn: () => api.map(ws.slug, mapId), retry: false })
   const live = useLiveMap(ws.slug, mapId, key)
@@ -138,44 +182,18 @@ export function MapPage() {
   )
 
   const [adding, setAdding] = useState<string | null>(null)
-  const selectedStep = search.get('step')
-  const openStep = useCallback(
-    (id: string | null) =>
-      setSearch(
-        (s) => {
-          const n = new URLSearchParams(s)
-          if (id) n.set('step', id)
-          else n.delete('step')
-          return n
-        },
-        { replace: true },
-      ),
-    [setSearch],
-  )
-
-  // The filter is state, mirrored into the URL so a reload or a shared link keeps it. Reading it back
-  // from the URL on every change would lag: the router updates the URL asynchronously, so a checkbox
-  // would flick back and fast typing could drop characters.
   const [prefs, setPrefs] = useViewPrefs(mapId)
-  const [filter, setFilterState] = useState(() => readFilter(search))
-  const setFilter = useCallback(
-    (f: Filter) => {
-      setFilterState(f)
-      setSearch((s) => writeFilter(s, f), { replace: true })
-    },
-    [setSearch],
-  )
 
   const ctx = useMemo<MapCtx | null>(() => {
     if (!query.data) return null
-    const statuses = new Map(query.data.workflow.statuses.map((s) => [s.id, s]))
-    const match = matching(query.data, filter)
+    const { statuses, match, totals } = deriveMap(query.data, filter)
     return {
       ws,
+      shared: false,
       view: query.data,
       canEdit: atLeast(ws.role, 'editor'),
       statuses,
-      totals: totals(query.data, statuses, match),
+      totals,
       filter,
       match,
       setFilter,
@@ -224,7 +242,7 @@ export function MapPage() {
     )
   return (
     <Ctx.Provider value={ctx}>
-      <MapHeader panelOpen={panelOpen} users={live.users} state={live.state} activityOpen={activityOpen} toggleActivity={toggleActivity} />
+      <MapHeader panelOpen={panelOpen} live={{ users: live.users, state: live.state, activityOpen, toggleActivity }} />
       <FilterBar panelOpen={panelOpen} />
       <div className={`map-scroll ${panelOpen ? 'with-panel' : ''}`}>
         <MapDnd view={ctx.view} onMove={move}>
@@ -276,15 +294,14 @@ function Presence({ users, state }: { users: PresentUser[]; state: LiveState }) 
   )
 }
 
-function MapHeader(props: {
+/** The map's name and counts. live is the signed-in map's presence and Activity; a shared page offers Refresh instead. */
+export function MapHeader(props: {
   panelOpen: boolean
-  users: PresentUser[]
-  state: LiveState
-  activityOpen: boolean
-  toggleActivity: () => void
+  live?: { users: PresentUser[]; state: LiveState; activityOpen: boolean; toggleActivity: () => void }
+  onRefresh?: () => void
 }) {
-  const { panelOpen, users, state } = props
-  const { ws, view, canEdit, totals, run } = useMap()
+  const { panelOpen, live } = props
+  const { ws, view, canEdit, totals, run, shared } = useMap()
   const count = (level: Level) => view.nodes.filter((n) => n.level === level).length
   const facts = [
     plural(count('objective'), 'objective'),
@@ -295,9 +312,13 @@ function MapHeader(props: {
   return (
     <section className={`mhead ${panelOpen ? 'with-panel' : ''}`}>
       <div className="min-w-0">
-        <Link to={`/w/${ws.slug}/maps`} className="label-up hover:underline">
-          {ws.name} › Story maps
-        </Link>
+        {shared ? (
+          <span className="label-up">{ws.name} › Read-only link</span>
+        ) : (
+          <Link to={`/w/${ws.slug}/maps`} className="label-up hover:underline">
+            {ws.name} › Story maps
+          </Link>
+        )}
         {/* The title can be a rename button; the heading still reads as the map's name. */}
         <h1 className="mt-1" aria-label={view.map.name}>
           <InlineText
@@ -311,10 +332,20 @@ function MapHeader(props: {
         <p className="text-muted mt-1.5 text-sm font-semibold">{facts.join(' · ')}</p>
       </div>
       <div className="flex flex-col items-end gap-3" style={{ marginLeft: 'auto' }}>
-        <Presence users={users} state={state} />
-        <button type="button" className="btn btn-xs btn-ol" aria-pressed={props.activityOpen} onClick={props.toggleActivity}>
-          Activity
-        </button>
+        {live && (
+          <>
+            <Presence users={live.users} state={live.state} />
+            <ShareButton />
+            <button type="button" className="btn btn-xs btn-ol" aria-pressed={live.activityOpen} onClick={live.toggleActivity}>
+              Activity
+            </button>
+          </>
+        )}
+        {props.onRefresh && (
+          <button type="button" className="btn btn-xs btn-ol" onClick={props.onRefresh}>
+            Refresh
+          </button>
+        )}
       </div>
       <div className="kpis" aria-label="Steps by status">
         {categoryOrder.map((c) => (
@@ -330,7 +361,7 @@ function MapHeader(props: {
 
 const levelLabel: Record<Level, string> = { objective: 'Objective', activity: 'Activity' }
 
-function MapGrid() {
+export function MapGrid() {
   const { view, canEdit, prefs } = useMap()
   const bb = useMemo(() => backbone(view), [view])
   const all = useMemo(() => bands(view), [view])

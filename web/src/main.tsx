@@ -13,6 +13,7 @@ import { MapsPage } from './pages/maps'
 import { MembersPage } from './pages/members'
 import { WorkflowsPage } from './pages/workflows'
 import { SettingsPage } from './pages/settings'
+import { SharedMapPage } from './pages/share'
 import { LabelsPage } from './pages/labels'
 import { PersonasPage } from './pages/personas'
 
@@ -32,6 +33,7 @@ const router = createBrowserRouter([
   { path: '/invites/:token', element: <InvitePage /> },
   { path: '/forgot', element: <ForgotPage /> },
   { path: '/reset/:token', element: <ResetPage /> },
+  { path: '/s/:token', element: <SharedMapPage /> },
   {
     element: <RequireAuth />,
     children: [
