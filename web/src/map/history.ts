@@ -97,6 +97,17 @@ export function describe(e: HistoryEntry, n: Names): string | null {
       }
       return parts.length ? parts.join(', ') : null
     }
+    case 'comment:create': {
+      const key = stepName(n, typeof a.stepId === 'string' ? a.stepId : '')
+      return a.parentId ? `replied to a comment on ${key}` : `commented on ${key}`
+    }
+    case 'comment:update': {
+      const key = stepName(n, typeof a.stepId === 'string' ? a.stepId : '')
+      if (changed('resolved')) return a.resolved ? `resolved a comment on ${key}` : `reopened a comment on ${key}`
+      return changed('bodyMd') ? `edited a comment on ${key}` : null
+    }
+    case 'comment:delete':
+      return `deleted a comment on ${stepName(n, typeof b.stepId === 'string' ? b.stepId : '')}`
     case 'step:delete':
       return `deleted ${stepName(n, e.entityId, b)} ${b.title !== undefined ? q(b.title) : ''}`.trim()
     case 'step:restore':

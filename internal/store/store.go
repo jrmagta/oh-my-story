@@ -17,8 +17,11 @@ import (
 )
 
 var (
-	ErrNotFound      = errors.New("not found")
-	ErrConflict      = errors.New("conflict")
+	ErrNotFound = errors.New("not found")
+	ErrConflict = errors.New("conflict")
+	// ErrForbidden is a change the caller's role allows in general but not on
+	// this row, such as editing someone else's comment.
+	ErrForbidden     = errors.New("forbidden")
 	ErrLastOwner     = errors.New("a workspace must keep at least one owner")
 	ErrBootstrapped  = errors.New("instance already has users")
 	ErrInviteUsed    = errors.New("invite already used or expired")

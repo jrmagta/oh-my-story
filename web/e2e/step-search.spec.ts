@@ -39,8 +39,11 @@ test('the search palette finds steps across maps and opens them', async ({ page 
   const input = palette.getByRole('combobox', { name: 'Search steps by key or words' })
   const results = palette.getByRole('option')
 
-  // Ctrl+K opens it; a word from two descriptions finds both, with their map and activity.
+  // Ctrl+K opens it (its listener belongs to the nav's Search button, so wait for that to render);
+  // a word from two descriptions finds both, with their map and activity.
+  await expect(page.getByRole('button', { name: 'Search steps' })).toBeVisible()
   await page.keyboard.press('Control+k')
+  await expect(palette).toBeVisible()
   await input.fill('strip')
   await expect(results).toHaveCount(2)
   await expect(palette).toContainText('Admin › Money')

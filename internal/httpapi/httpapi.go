@@ -222,6 +222,8 @@ func writeError(w http.ResponseWriter, err error) {
 		e = &apiError{http.StatusConflict, "conflict", "already a member of this workspace"}
 	case errors.Is(err, store.ErrInvalid):
 		e = errBadRequest(err.Error())
+	case errors.Is(err, store.ErrForbidden):
+		e = errForbidden
 	case errors.Is(err, store.ErrSlugTaken):
 		e = &apiError{http.StatusConflict, "conflict", "that URL slug is taken"}
 	case errors.Is(err, store.ErrKeyTaken):

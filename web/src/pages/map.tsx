@@ -907,6 +907,14 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
         <LabelChips ids={step.labelIds} />
         <span className="meta">
           <StatusLabel status={status} />
+          {step.commentCount > 0 && (
+            <span className="comment-count" title={`${step.commentCount} comment${step.commentCount === 1 ? '' : 's'}`}>
+              <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden>
+                <path d="M2 3h12v8H7l-3 3v-3H2z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+              </svg>
+              {step.commentCount}
+            </span>
+          )}
           <span className="text-muted ml-auto text-[11px] font-extrabold">{step.key}</span>
           {step.estimate !== null && (
             <span className={`ring-disc est ${status?.category ?? 'todo'}`} title={amount(step.estimate * 100, ws.estimateUnit)}>

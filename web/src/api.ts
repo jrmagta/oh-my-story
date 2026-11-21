@@ -128,7 +128,25 @@ export interface Step {
   estimate: number | null
   /** Sorted; names and colours are in MapView.labels. */
   labelIds: string[]
+  /** Live comments, replies included. */
+  commentCount: number
   version: number
+}
+
+/** A comment on a step: a thread's first comment (parentId null) or a reply. */
+export interface Comment {
+  id: string
+  stepId: string
+  parentId: string | null
+  authorId: string | null
+  authorName: string
+  /** Empty when deleted; a deleted comment is listed only while it has replies. */
+  bodyMd: string
+  mentionIds: string[]
+  resolved: boolean
+  edited: boolean
+  deleted: boolean
+  createdAt: string
 }
 
 /** Shared by every map of the workspace. */
@@ -336,6 +354,15 @@ export const api = {
       labelIds?: string[]
     },
   ) => request<Step>('PATCH', `${mp(slug, mapId)}/steps/${id}`, b),
+  comments: (slug: string, mapId: string, stepId: string) => request<Comment[]>('GET', `${mp(slug, mapId)}/steps/${stepId}/comments`),
+  /** Commenter and up; each newly mentioned member is emailed once. */
+  createComment: (slug: string, mapId: string, stepId: string, b: { bodyMd: string; parentId?: string; mentionIds?: string[] }) =>
+    request<Comment>('POST', `${mp(slug, mapId)}/steps/${stepId}/comments`, b),
+  /** Body and mentions: the author. resolved: the thread's author or an editor. */
+  patchComment: (slug: string, mapId: string, id: string, b: { bodyMd?: string; mentionIds?: string[]; resolved?: boolean }) =>
+    request<Comment>('PATCH', `${mp(slug, mapId)}/comments/${id}`, b),
+  /** The author, or an admin. */
+  deleteComment: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/comments/${id}`),
   views: (slug: string, mapId: string) => request<SavedView[]>('GET', `${mp(slug, mapId)}/views`),
   /** shared: true needs editor. */
   createView: (slug: string, mapId: string, b: { name: string; filter: Filter; shared?: boolean }) =>

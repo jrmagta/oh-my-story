@@ -80,6 +80,16 @@ export function applyEvent(view: MapView, ev: LiveEvent): MapView | null {
       return { ...view, steps: add(view.steps, after as unknown as Step) }
     case 'step:update':
       return { ...view, steps: patch(view.steps, ev.entityId, after) }
+    case 'comment:create':
+    case 'comment:delete': {
+      // A comment changes its step's count; open comment lists reload (see apply).
+      const fields = ev.action === 'create' ? after : (ev.before ?? {})
+      const stepId = typeof fields.stepId === 'string' ? fields.stepId : null
+      const by = ev.action === 'create' ? 1 : -1
+      return { ...view, steps: view.steps.map((s) => (s.id === stepId ? { ...s, commentCount: Math.max(0, s.commentCount + by) } : s)) }
+    }
+    case 'comment:update':
+      return view
     case 'step:delete':
       return { ...view, steps: view.steps.filter((s) => s.id !== ev.entityId) }
     case 'placement:create':
@@ -140,8 +150,9 @@ export function useLiveMap(slug: string, mapId: string, key: QueryKey): { users:
       const next = applyEvents(view, evs)
       if (next) qc.setQueryData(key, next)
       else reload()
-      // History lists live under the map's key; refresh them for the new entries.
+      // History and comment lists live under the map's key; refresh them for the new entries.
       void qc.invalidateQueries({ queryKey: [...key, 'history'] })
+      if (evs.some((e) => e.entity === 'comment')) void qc.invalidateQueries({ queryKey: [...key, 'comments'] })
     }
 
     // When a fetched snapshot is older than events already applied, re-apply them.

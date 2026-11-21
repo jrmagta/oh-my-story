@@ -145,9 +145,20 @@ An objective's personas are its `personaIds`, set with `PATCH .../nodes/{id}`; a
 | `DELETE /maps/{mapId}/steps/{id}` | → `204` (soft delete) |
 | `POST /maps/{mapId}/steps/{id}/restore` | `{}` → step. Its activity must not be deleted |
 
-Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, title, description, colour, personaIds, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; step `{id, key, title, descriptionMd, statusId, assigneeId, estimate, labelIds, version}` with `estimate` a number or null and `labelIds` sorted; placement `{id, stepId, activityId, releaseId, rank}`.
+Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, title, description, colour, personaIds, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; step `{id, key, title, descriptionMd, statusId, assigneeId, estimate, labelIds, commentCount, version}` with `estimate` a number or null and `labelIds` sorted; placement `{id, stepId, activityId, releaseId, rank}`.
 
 Limits: names 1 to 100 characters, titles 1 to 500, descriptions up to 50,000; colours are `#RRGGBB`.
+
+### Comments
+
+A comment is `{id, stepId, parentId, authorId, authorName, bodyMd, mentionIds, resolved, edited, deleted, createdAt}`. A thread is a first comment (`parentId` null) and its replies, one level deep. Comments are map events (entity `comment`, carrying `stepId`), so open maps get them live; steps carry `commentCount`.
+
+| Endpoint | Role | Body → response |
+|---|---|---|
+| `GET /maps/{mapId}/steps/{id}/comments` | viewer | → `[comment]`, oldest first. A deleted comment is listed, blanked, only while it has replies |
+| `POST /maps/{mapId}/steps/{id}/comments` | commenter | `{bodyMd, parentId?, mentionIds?}` → `201` comment. `bodyMd` 1 to 10,000 characters; `parentId` a live first comment of the same step; `mentionIds` workspace members (up to 50). Each member newly mentioned, other than the author, gets one email with a link to the step |
+| `PATCH /maps/{mapId}/comments/{id}` | commenter | `{bodyMd?, mentionIds?, resolved?}` → comment. Body and mentions: the author only (`403` otherwise). `resolved`: a first comment only, by its author or an editor |
+| `DELETE /maps/{mapId}/comments/{id}` | commenter | → `204`. The author, or an admin |
 
 ### Search
 

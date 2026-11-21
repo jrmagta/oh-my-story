@@ -190,9 +190,9 @@ labels ( id uuid pk, workspace_id fk, name citext not null, colour text not null
 step_labels ( step_id fk, label_id fk, primary key (step_id, label_id) )
 
 comments (
-  id uuid pk, step_id fk, author_id fk users,
+  id uuid pk, step_id fk on delete cascade, author_id fk users on delete set null,
   body_md text not null, parent_id fk comments,  -- one level of threading
-  resolved_at, edited_at, deleted_at, created_at
+  resolved_at, resolved_by fk users, edited_at, deleted_at, created_at
 )
 mentions ( comment_id fk, user_id fk, primary key (comment_id, user_id) )
 
@@ -282,7 +282,8 @@ Retention: keep forever in v1. Partition by month if volume demands it.
 | 0004 | `labels`, `step_labels` | M2 phase 2 |
 | 0005 | `personas`, `persona_nodes` | M2 phase 3 |
 | 0006 | `saved_views` | M2 phase 5 |
-| later | `comments`, `mentions` | M2 phase 7 |
+| 0007 | unique index on `workspaces.key_prefix` (project keys) | M2 |
+| 0008 | `comments`, `mentions` | M2 phase 7 |
 | later | `share_links` | M3 |
 | later | `dependencies`, `api_tokens`, `webhooks`, `webhook_deliveries`, `integrations` | M4 |
 
