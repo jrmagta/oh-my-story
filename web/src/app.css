@@ -131,6 +131,32 @@
     font-size: 15px;
     font-weight: 600;
   }
+  /* Everything clickable shows the hand (Tailwind's reset gives buttons the arrow). Base layer,
+     so drag handles (.grab) and dragging keep their own cursors. */
+  button,
+  [role='button'],
+  [role='tab'],
+  [role='option'],
+  [role='menuitem'],
+  a[href],
+  summary,
+  select,
+  label:has(> input[type='checkbox'], > input[type='radio']),
+  input[type='checkbox'],
+  input[type='radio'],
+  input[type='color'],
+  input[type='file'],
+  input[type='range'] {
+    cursor: pointer;
+  }
+}
+
+/* Above daisyUI's .btn, which keeps the hand on disabled buttons. */
+@layer utilities {
+  :disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
 }
 
 @layer components {
@@ -292,25 +318,14 @@
     align-items: center;
     gap: 8px;
   }
-  .live-dot {
-    @apply text-muted;
-    font-size: 11px;
-    font-weight: 800;
-    text-transform: uppercase;
-    word-spacing: 0.14em;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .live-dot::before {
-    content: "";
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--color-brand-grey);
-  }
-  .live-dot.live::before { background: var(--color-brand-green); }
-  .live-dot.offline::before { background: var(--color-brand-red); }
+  /* The top bar's connection icon: green when live, amber and pulsing while connecting, red and struck through offline. */
+  .conn { display: inline-flex; color: var(--color-brand-green); }
+  .conn path { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+  .conn.connecting { color: var(--color-brand-amber); animation: conn-pulse 1.2s ease-in-out infinite; }
+  .conn.offline { color: var(--color-brand-red); }
+  .conn.offline path:not(.slash) { opacity: 0.45; }
+  @keyframes conn-pulse { 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) { .conn.connecting { animation: none; } }
   .ring-disc.todo { color: #fff; }
   .ring-disc.done { --c: var(--color-brand-green); color: #fff; }
   .ring-disc.doing { --c: var(--color-brand-amber); color: #000; }
@@ -441,7 +456,9 @@
   .rm-activity.coloured { background: var(--node-bg); color: var(--node-fg); border-color: var(--node-bg); }
 
   /* Export: the caption shows only in the exported picture, which gets some breathing room. */
-  .map-export { width: max-content; }
+  /* At least as wide as the page, so release bands run its full width; an export keeps only the map's own width. */
+  .map-export { width: max-content; min-width: 100%; }
+  .map-export.exporting, .map-export.exporting .map-grid { min-width: 0; }
   .export-caption { display: none; }
   .map-export.exporting { padding: 24px; }
   .map-export.exporting .export-caption {
@@ -653,10 +670,12 @@
     padding-right: 388px;
   }
   .map-grid {
+    position: relative;
     display: grid;
     column-gap: 8px;
     row-gap: 8px;
     width: max-content;
+    min-width: 100%;
   }
   .map-lbl {
     padding-right: 4px;
@@ -686,6 +705,8 @@
   }
   /* Add a sibling before or after a backbone card: small + buttons over the gaps at its edges, on hover or focus. */
   .map-obj { position: relative; }
+  /* Objectives are one line high, so their + sits at the middle (clear of the ⋯, which is inset). */
+  .map-obj > .side-add { top: calc(50% - 9px); }
   /* Just below the ⋯ menu's row so they never cover it; ignore the pointer until their card is
      hovered, since neighbouring cards' buttons share the gap between them. */
   .side-add {
@@ -747,6 +768,39 @@
   .node-head { position: relative; }
   .node-title { display: block; overflow-wrap: anywhere; }
   .grab, .grab-area { cursor: grab; }
+
+  /* Dependencies: the card badge, the panel lists and finder, and the arrows over the map. */
+  .blocked-badge {
+    display: block;
+    width: fit-content;
+    margin-top: 4px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #fff;
+    background: var(--color-brand-red, #BA3636);
+  }
+  .dep-row + .dep-row { margin-top: 10px; }
+  .dep-list { margin-top: 4px; }
+  .dep-list li { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 14px; }
+  .dep-list li.done .dep-step { text-decoration: line-through; opacity: 0.6; }
+  .dep-step { flex: 1; text-align: left; font-weight: 600; }
+  .dep-step:hover { text-decoration: underline; }
+  .dep-finder { margin-top: 6px; }
+  .dep-hits { margin-top: 4px; border: 2px solid var(--color-base-content); border-radius: var(--oms-radius); max-height: 220px; overflow-y: auto; }
+  .dep-hits button { display: block; width: 100%; text-align: left; padding: 5px 8px; font-size: 13px; }
+  .dep-hits button:hover, .dep-hits button:focus-visible { background: var(--oms-cell); }
+  .dep-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 2; }
+  .dep-lines path { fill: none; stroke-width: 2; }
+  .dep-lines path.open { stroke: var(--color-brand-red, #BA3636); }
+  .dep-lines path.done { stroke: var(--color-muted, #8A8A93); stroke-dasharray: 5 4; }
+  .dep-lines marker path { stroke: none; }
+  .dep-lines marker path.open { fill: var(--color-brand-red, #BA3636); }
+  .dep-lines marker path.done { fill: var(--color-muted, #8A8A93); }
+  /* A step card opens on click as well as dragging, so it shows the hand like any button. */
+  .card-open.grab { cursor: pointer; }
   .grab:focus-visible { outline: 3px solid var(--color-brand-amber); outline-offset: 3px; }
   /* Floats at the right of a backbone card's first line; the title wraps around it, never under it. */
   .card-menu {
@@ -1179,7 +1233,7 @@
   /* Editable titles keep the look of the text they replace (buttons reset it),
      unless the title carries its own .up styling. */
   .inline-edit {
-    cursor: text;
+    cursor: pointer;
     text-align: inherit;
   }
   .inline-edit:not(.up) {

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useQueryClient, type QueryKey } from '@tanstack/react-query'
-import type { Label, MapNode, MapView, Persona, Placement, Release, Step } from '../api'
+import type { Dependency, Label, MapNode, MapView, Persona, Placement, Release, Step } from '../api'
 
 /** One row of the event log, as the live socket sends it (docs/API.md, Live). */
 export interface LiveEvent {
@@ -92,6 +92,17 @@ export function applyEvent(view: MapView, ev: LiveEvent): MapView | null {
       return view
     case 'step:delete':
       return { ...view, steps: view.steps.filter((s) => s.id !== ev.entityId) }
+    case 'dependency:create': {
+      // A link to a step this map has never seen needs its name: reload.
+      const d = after as unknown as Dependency
+      const known = (id: string) => view.steps.some((s) => s.id === id) || view.otherSteps.some((s) => s.id === id)
+      if (!known(d.blockerId) || !known(d.blockedId)) return null
+      return { ...view, dependencies: add(view.dependencies, { id: d.id, blockerId: d.blockerId, blockedId: d.blockedId }) }
+    }
+    case 'dependency:delete':
+      return { ...view, dependencies: view.dependencies.filter((d) => d.id !== ev.entityId) }
+    case 'stepref:update':
+      return { ...view, otherSteps: patch(view.otherSteps, ev.entityId, { done: after.done }) }
     case 'placement:create':
       return { ...view, placements: add(view.placements, after as unknown as Placement) }
     case 'placement:move': {
@@ -121,6 +132,23 @@ export function applyEvents(view: MapView, evs: LiveEvent[]): MapView | null {
 }
 
 export type LiveState = 'connecting' | 'live' | 'offline'
+
+/** The app's top bar shows the open map's connection; a map page reports it here (null when none is open). */
+export const LiveStatusContext = createContext<(s: LiveState | null) => void>(() => {})
+
+export function useReportLive(state: LiveState | null) {
+  const report = useContext(LiveStatusContext)
+  useEffect(() => {
+    report(state)
+    return () => report(null)
+  }, [state, report])
+}
+
+export const liveLabel: Record<LiveState, string> = {
+  connecting: 'Connecting to live updates…',
+  live: 'Live: changes by others appear as they happen',
+  offline: 'Offline: reconnecting…',
+}
 
 const keep = 500
 

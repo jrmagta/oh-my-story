@@ -137,6 +137,17 @@ export function FilterBar({ panelOpen }: { panelOpen: boolean }) {
         </>
       )}
       <span className="flex-1" />
+      {view.dependencies.length > 0 && (
+        <button
+          type="button"
+          className="btn btn-xs btn-ol"
+          aria-pressed={prefs.lines}
+          title="Draw arrows from each step to the steps it blocks"
+          onClick={() => setPrefs({ ...prefs, lines: !prefs.lines })}
+        >
+          Lines
+        </button>
+      )}
       <span className="seg" role="group" aria-label="Card size">
         {sizes.map(([value, name]) => (
           <button key={value} type="button" aria-pressed={prefs.size === value} onClick={() => setPrefs({ ...prefs, size: value })}>

@@ -6,6 +6,7 @@ import { refreshSession, useMe, useSession } from '../session'
 import { Avatar, ErrorAlert, Field, Loading, Logo, Stripe, ThemeToggle } from '../ui'
 import { ProjectKeyField } from './project-key'
 import { SearchPalette } from './search'
+import { liveLabel, LiveStatusContext, type LiveState } from '../map/live'
 
 /** Gate for every signed-in screen: sends visitors to setup or sign-in. */
 export function RequireAuth() {
@@ -55,6 +56,7 @@ export function AppShell() {
   const { slug } = useParams()
   const { workspaces } = useSession()
   const current = slug ? workspaces.find((w) => w.slug === slug) : undefined
+  const [live, setLive] = useState<LiveState | null>(null)
   return (
     <>
       <header className="topnav">
@@ -87,11 +89,29 @@ export function AppShell() {
         <div className="flex-1" />
         {current && <SearchPalette slug={current.slug} />}
         <ThemeToggle />
+        {live && <ConnectionStatus state={live} />}
         <UserMenu />
       </header>
       <Stripe />
-      <Outlet />
+      <LiveStatusContext.Provider value={setLive}>
+        <Outlet />
+      </LiveStatusContext.Provider>
     </>
+  )
+}
+
+/** The open map's live connection, as an icon beside the account menu; its words are the tooltip. */
+function ConnectionStatus({ state }: { state: LiveState }) {
+  return (
+    <span className={`conn ${state}`} role="status" title={liveLabel[state]}>
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+        <circle cx="12" cy="17" r="2.2" fill="currentColor" />
+        <path d="M7.8 12.8a6 6 0 0 1 8.4 0" />
+        <path d="M4.6 9.6a10.5 10.5 0 0 1 14.8 0" />
+        {state === 'offline' && <path className="slash" d="M4 4l16 16" />}
+      </svg>
+      <span className="sr-only">{liveLabel[state]}</span>
+    </span>
   )
 }
 

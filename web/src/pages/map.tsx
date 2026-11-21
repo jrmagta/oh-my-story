@@ -4,7 +4,7 @@ import { Link, useOutletContext, useParams, useSearchParams } from 'react-router
 import { api, ApiError, atLeast, type Category, type Level, type MapNode, type MapView, type Membership, type Release, type Status } from '../api'
 import { MapDnd, refs, useDrag, useDrop } from '../map/dnd'
 import { HistoryList } from '../map/HistoryList'
-import { useLiveMap, type LiveState, type PresentUser } from '../map/live'
+import { useLiveMap, useReportLive, type LiveState, type PresentUser } from '../map/live'
 import { backbone, bands, cellKey, cells, inheritedColour, type Adding, type Band, type Card, type Column } from '../map/layout'
 import { amount, formatEstimate, totals, type Total, type Totals } from '../map/estimates'
 import { nodeStyle, palette } from '../map/colours'
@@ -18,6 +18,7 @@ import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toast
 import { PageBand } from './app'
 import { StepPanel } from './step-panel'
 import { ShareDialog } from './share'
+import { BlockedBadge, DependencyLines } from '../map/Dependencies'
 import { exportName, exportView, type ExportKind } from '../map/exportView'
 import { Roadmap } from './roadmap'
 
@@ -294,16 +295,11 @@ export function estimated(t: Total, unit: string): string {
   return t.unestimated ? `${amount(t.hundredths, unit)} (${t.unestimated} unestimated)` : amount(t.hundredths, unit)
 }
 
-const liveLabel: Record<LiveState, string> = { connecting: 'Connecting…', live: 'Live', offline: 'Offline, reconnecting…' }
-
-/** Who is on the map now, and whether this page is receiving their changes. */
+/** Who is on the map now. The connection's state shows in the top bar (see ConnectionStatus). */
 function Presence({ users, state }: { users: PresentUser[]; state: LiveState }) {
+  useReportLive(state)
   return (
     <div className="presence" aria-label="On this map now">
-      {/* A dot, with its word for screen readers and as a tooltip. */}
-      <span className={`live-dot ${state}`} role="status" title={liveLabel[state]}>
-        <span className="sr-only">{liveLabel[state]}</span>
-      </span>
       <ul className="flex -space-x-1">
         {users.map((u) => (
           <li key={u.id} title={u.name}>
@@ -552,8 +548,8 @@ export function MapGrid() {
         <div
           key={o.node.id}
           className={`map-obj up ${o.node.colour ? 'coloured' : ''}`}
-          // One column wide, over its first activity; the objective's other activities have nothing above them.
-          style={{ ...col(o.start, 1), ...nodeStyle(o.node.colour) }}
+          // As wide as its activities (and the field for a new one while adding).
+          style={{ ...col(o.start, o.span), ...nodeStyle(o.node.colour) }}
         >
           <NodeHead node={o.node} />
           {canEdit && <SideAdds node={o.node} />}
@@ -605,6 +601,7 @@ export function MapGrid() {
           collapsedColumn={collapsed}
         />
       ))}
+      <DependencyLines />
     </div>
   )
 }
@@ -1210,6 +1207,7 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
     <div
       ref={refs(drag.ref, drop.ref)}
       {...drag.id}
+      data-step={step.id}
       className={`step-card size-${prefs.size} ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''} ${dimmed ? 'dimmed' : ''}`}
       {...drag.pointer}
     >
@@ -1225,6 +1223,7 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
       >
         <span>{step.title}</span>
         <LabelChips ids={step.labelIds} />
+        <BlockedBadge stepId={step.id} />
         <span className="meta">
           <StatusLabel status={status} />
           {step.commentCount > 0 && (

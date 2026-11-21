@@ -81,10 +81,12 @@ test('backbone cards take a colour, keep it after a reload, and go back to defau
     ]),
   )
 
-  // An objective is one column wide, over its first activity.
-  const buy = page.locator('.map-obj', { hasText: 'Buy' })
-  const first = page.locator('.map-act', { hasText: 'Browse' })
-  expect((await buy.boundingBox())!.width).toBeCloseTo((await first.boundingBox())!.width, 0)
+  // An objective spans its activities, from the first one's left edge to the last one's right.
+  const buy = (await page.locator('.map-obj', { hasText: 'Buy' }).boundingBox())!
+  const first = (await page.locator('.map-act', { hasText: 'Browse' }).boundingBox())!
+  const last = (await page.locator('.map-act', { hasText: 'Receipt' }).boundingBox())!
+  expect(buy.x).toBeCloseTo(first.x, 0)
+  expect(buy.x + buy.width).toBeCloseTo(last.x + last.width, 0)
 
   // A new objective takes the colour of the one to its left; its first activity, the activity to its left.
   await page.locator('.map-obj', { hasText: 'Buy' }).hover()

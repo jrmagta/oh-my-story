@@ -182,10 +182,19 @@ func (s *Store) UpdateStep(ctx context.Context, actor, workspaceID, mapID, stepI
 			stepID, p.Title, p.DescriptionMD, p.StatusID, p.SetAssignee, p.AssigneeID, p.SetEstimate, p.Estimate)); err != nil {
 			return nil, err
 		}
-		if c, ok := updated(mapID, "step", stepID, "update", before, st); ok {
-			return []change{c}, nil
+		c, ok := updated(mapID, "step", stepID, "update", before, st)
+		if !ok {
+			return nil, nil
 		}
-		return nil, nil
+		changes := []change{c}
+		if before.StatusID != st.StatusID {
+			refs, err := linkedElsewhere(ctx, tx, stepID, st)
+			if err != nil {
+				return nil, err
+			}
+			changes = append(changes, refs...)
+		}
+		return changes, nil
 	})
 	return st, err
 }
