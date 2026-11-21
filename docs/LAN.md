@@ -10,6 +10,18 @@
 
 Its database and Keycloak data live in podman volumes and survive restarts. `make lan-down` stops it.
 
+## Day to day: services once, the app as often as you like
+
+`make lan` starts everything, but the supporting services rarely change, and Keycloak alone takes the best part of a minute to start. So they can run on their own:
+
+| Command | What it does | Typical time |
+|---|---|---|
+| `make lan-services LAN_HOST=jr-pc1.jrmagta.home` | Starts Postgres, Keycloak, Mailpit and the HTTPS proxy, and leaves them running. Running it again leaves running services alone | under a minute the first time; seconds after |
+| `make lan-app LAN_HOST=jr-pc1.jrmagta.home` | Rebuilds oh-my-story from this checkout, runs its migrations, and replaces only the app container | about half a minute |
+| `make lan LAN_HOST=jr-pc1.jrmagta.home` | Both | |
+
+While `lan-app` swaps the container, the proxy answers 502 for a few seconds.
+
 ## Certificates
 
 The first `make lan` runs `deploy/lan/pki/make-certs.sh`, which writes a test PKI to `~/.local/share/oh-my-story/lan-pki/` (`LAN_PKI_DIR`), outside git and outside any checkout, so every checkout and worktree runs the stack with the same files:

@@ -126,9 +126,8 @@ services:
     ports:
       - "127.0.0.1:8443:8443"
       - "127.0.0.1:8090:8080"
-    depends_on:
-      app:
-        condition: service_healthy
+    # Not tied to the app: it keeps running while the app is rebuilt (make lan-app),
+    # answering 502 for the few seconds the app is restarting.
     restart: unless-stopped
 
   mailpit:
