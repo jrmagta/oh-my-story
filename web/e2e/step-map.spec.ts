@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page, type WebSocketRoute } from '@playwright/test'
 import { inviteLink } from './mailpit'
 
 // Runs after shell.spec.ts, which creates the owner. Uses its own workspace.
@@ -358,4 +358,21 @@ test('the step history and the map activity say who changed what', async ({ page
   // Entries link to their step.
   await feed.getByRole('listitem').first().getByRole('button', { name: 'Open step' }).click()
   await expect(panel(page)).toBeVisible()
+})
+
+test('a presence message with nobody listed leaves the map working', async ({ page }) => {
+  await signIn(page)
+  // The server leaves users out when nobody is on the map, for instance while a reload swaps sockets.
+  let socket: WebSocketRoute | undefined
+  await page.routeWebSocket(/\/live\?/, (ws) => {
+    ws.connectToServer()
+    socket = ws
+  })
+  await page.goto(mapUrl)
+  await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
+  await expect(page.locator('.presence li')).toHaveCount(1)
+  socket?.send(JSON.stringify({ type: 'presence' }))
+  await expect(page.locator('.presence li')).toHaveCount(0)
+  await expect(page.getByText('Unexpected Application Error')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Onboarding' })).toBeVisible()
 })
