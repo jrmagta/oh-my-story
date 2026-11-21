@@ -436,6 +436,14 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
       className={`node-head ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''} ${canEdit ? 'grab-area' : ''}`}
       {...drag.pointer}
     >
+      {/* First, so it floats at the right of the title's first line and the title wraps around it. */}
+      {(canEdit || node.level === 'activity') && !renaming && (
+        <CardMenu label={label}>
+          {(close) => (
+            <NodeMenu node={node} label={label} close={close} rename={() => setRenaming(true)} addChild={child ? () => add.setOpen(true) : undefined} />
+          )}
+        </CardMenu>
+      )}
       {renaming ? (
         <TextInput
           label={`New name for ${label}`}
@@ -466,13 +474,6 @@ function NodeHead({ node, child, bold }: { node: MapNode; child?: Level; bold?: 
         <span className="node-popup" data-no-drag>
           {add.input}
         </span>
-      )}
-      {(canEdit || node.level === 'activity') && !renaming && (
-        <CardMenu label={label}>
-          {(close) => (
-            <NodeMenu node={node} label={label} close={close} rename={() => setRenaming(true)} addChild={child ? () => add.setOpen(true) : undefined} />
-          )}
-        </CardMenu>
       )}
     </div>
   )

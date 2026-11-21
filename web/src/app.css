@@ -634,16 +634,17 @@
   .node-title { display: block; overflow-wrap: anywhere; }
   .grab, .grab-area { cursor: grab; }
   .grab:focus-visible { outline: 3px solid var(--color-brand-amber); outline-offset: 3px; }
+  /* Floats at the right of a backbone card's first line; the title wraps around it, never under it. */
   .card-menu {
-    position: absolute;
-    top: -4px;
-    right: -6px;
+    position: relative;
+    float: right;
+    margin: -2px -6px 0 6px;
     opacity: 0;
   }
   .node-head:hover .card-menu,
   .node-head:focus-within .card-menu,
   .card-menu.open { opacity: 1; }
-  .band-row .card-menu { position: relative; top: 0; right: 0; opacity: 1; }
+  .band-row .card-menu { float: none; margin: 0; opacity: 1; }
   .menu-btn {
     width: 26px;
     height: 22px;
