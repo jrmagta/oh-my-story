@@ -139,7 +139,9 @@ export interface Step {
   assigneeId: string | null
   /** In the workspace's estimateUnit; null when not estimated. */
   estimate: number | null
-  /** Sorted; names and colours are in MapView.labels. */
+  /** #RRGGBB; null takes the colour of the step's activity. */
+  colour: string | null
+  /** Sorted; names are in MapView.labels. */
   labelIds: string[]
   /** Live comments, replies included. */
   commentCount: number
@@ -166,7 +168,6 @@ export interface Comment {
 export interface Label {
   id: string
   name: string
-  colour: string
 }
 
 export interface Placement {
@@ -377,8 +378,8 @@ export const api = {
   /** A key match first, then steps whose title or description has words starting with every word of q; at most 20. */
   search: (slug: string, q: string) => request<SearchHit[]>('GET', `${ws(slug)}/search?${new URLSearchParams({ q }).toString()}`),
   /** 409 when a label of that name exists, ignoring case. */
-  createLabel: (slug: string, b: { name: string; colour?: string }) => request<Label>('POST', `${ws(slug)}/labels`, b),
-  patchLabel: (slug: string, id: string, b: { name?: string; colour?: string }) =>
+  createLabel: (slug: string, b: { name: string }) => request<Label>('POST', `${ws(slug)}/labels`, b),
+  patchLabel: (slug: string, id: string, b: { name?: string }) =>
     request<Label>('PATCH', `${ws(slug)}/labels/${encodeURIComponent(id)}`, b),
   deleteLabel: (slug: string, id: string) => request<void>('DELETE', `${ws(slug)}/labels/${encodeURIComponent(id)}`),
   personas: (slug: string) => request<Persona[]>('GET', `${ws(slug)}/personas`),
@@ -444,6 +445,8 @@ export const api = {
       statusId?: string
       assigneeId?: string | null
       estimate?: number | null
+      /** null: the activity's colour. */
+      colour?: string | null
       /** Replaces the step's labels. */
       labelIds?: string[]
     },

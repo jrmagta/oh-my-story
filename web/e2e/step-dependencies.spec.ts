@@ -40,7 +40,7 @@ test('steps block other steps, on the same map or another, shown on cards and as
   await page.goto(`/w/${slug}/maps/${plan.id}`)
 
   // Lines only appear once there is something to draw.
-  await expect(page.getByRole('button', { name: 'Lines' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Lines', exact: true })).toHaveCount(0)
 
   // Open "Build it" and add Design as its blocker by finding it.
   const card = page.locator(`[data-step="${make.id}"]`)
@@ -50,16 +50,25 @@ test('steps block other steps, on the same map or another, shown on cards and as
   await page.getByRole('textbox', { name: `Step that blocks ${make.key}` }).fill('Desig')
   await page.getByRole('list', { name: 'Matching steps' }).getByRole('button', { name: new RegExp(design.key) }).click()
   await expect(blockedBy.getByRole('button', { name: `${design.key} Design` })).toBeVisible()
-  await expect(card).toContainText(`Blocked by ${design.key}`)
+  const mark = card.getByRole('button', { name: /^Dependency lines for / })
+  await expect(mark).toHaveAccessibleName(`Dependency lines for ${make.key} (blocked)`)
+  await expect(mark).toHaveAttribute('title', `Blocked by ${design.key}`)
   // The other end lists it under Blocks.
   await blockedBy.getByRole('button', { name: `${design.key} Design` }).click()
   await expect(page.getByRole('group', { name: `Blocks for ${design.key}` })).toContainText(make.key)
 
-  // Lines draw an arrow from Design to Build it; the setting survives a reload.
-  await page.getByRole('button', { name: 'Lines' }).click()
+  // The mark draws this step's lines; pressing it again hides them.
+  await mark.click()
+  await expect(mark).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.dep-lines > path.open')).toHaveCount(1)
+  await mark.click()
+  await expect(page.locator('.dep-lines')).toHaveCount(0)
+
+  // Lines draw every arrow; the setting survives a reload.
+  await page.getByRole('button', { name: 'Lines', exact: true }).click()
   await expect(page.locator('.dep-lines > path.open')).toHaveCount(1)
   await page.reload()
-  await expect(page.getByRole('button', { name: 'Lines' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Lines', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('.dep-lines > path.open')).toHaveCount(1)
 
   // A loop is refused with a message.
@@ -67,7 +76,7 @@ test('steps block other steps, on the same map or another, shown on cards and as
 
   // Finishing the blocker (here, by someone else) clears the badge live and greys the line.
   await page.request.patch(`${plan.api}/steps/${design.id}`, { data: { statusId: done } })
-  await expect(card).not.toContainText('Blocked by')
+  await expect(mark).toHaveAccessibleName(`Dependency lines for ${make.key}`)
   await expect(page.locator('.dep-lines > path.done')).toHaveCount(1)
 
   // A blocker on another map: named with its map, live when it is finished there.
@@ -75,10 +84,10 @@ test('steps block other steps, on the same map or another, shown on cards and as
   await blockedBy.getByRole('button', { name: '+ Add' }).click()
   await page.getByRole('textbox', { name: `Step that blocks ${make.key}` }).fill(contract.key)
   await page.getByRole('list', { name: 'Matching steps' }).getByRole('button', { name: new RegExp(contract.key) }).click()
-  await expect(card).toContainText(`Blocked by ${contract.key}`)
+  await expect(mark).toHaveAccessibleName(`Dependency lines for ${make.key} (blocked)`)
   await expect(blockedBy.getByRole('link', { name: /Contract review · Legal/ })).toBeVisible()
   await page.request.patch(`${legal.api}/steps/${contract.id}`, { data: { statusId: done } })
-  await expect(card).not.toContainText('Blocked by')
+  await expect(mark).toHaveAccessibleName(`Dependency lines for ${make.key}`)
 
   // Removing a link; the history names it.
   await blockedBy.getByRole('button', { name: `Remove link: ${design.key} blocks ${make.key}` }).click()

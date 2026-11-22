@@ -7,7 +7,7 @@ import { HistoryList } from '../map/HistoryList'
 import { Comments } from '../map/Comments'
 import { amount, formatEstimate } from '../map/estimates'
 import { LabelChips, mapKey, StatusLabel, useMap } from './map'
-import { colourFor, TagPicker } from '../map/TagPicker'
+import { TagPicker } from '../map/TagPicker'
 import { DependencySection } from '../map/Dependencies'
 import { LinkedMaps } from '../map/LinkedMaps'
 
@@ -139,7 +139,7 @@ export function StepPanel({ stepId }: { stepId: string }) {
                     }
                     onCreate={(name) =>
                       run(async () => {
-                        const l = await api.createLabel(ws.slug, { name, colour: colourFor(name) })
+                        const l = await api.createLabel(ws.slug, { name })
                         await api.patchStep(ws.slug, view.map.id, step.id, { labelIds: [...step.labelIds, l.id] })
                       })
                     }

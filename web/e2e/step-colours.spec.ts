@@ -126,3 +126,44 @@ test('backbone cards take a colour, keep it after a reload, and go back to defau
   // Nothing to its left, so it starts with the default look.
   await expect(page.locator('.map-obj').first()).not.toHaveClass(/coloured/)
 })
+
+test('steps take the colour of their activity until given their own', async ({ page }) => {
+  await signIn(page)
+  const post = async (path: string, data: object) => {
+    const r = await page.request.post(path, { data })
+    expect(r.status()).toBe(201)
+    return (await r.json()) as { id: string; step: { id: string; key: string } }
+  }
+  const map = await post(`/api/workspaces/${slug}/maps`, { name: 'Steps' })
+  const api = `/api/workspaces/${slug}/maps/${map.id}`
+  const obj = await post(`${api}/nodes`, { level: 'objective', title: 'Buy' })
+  const act = await post(`${api}/nodes`, { level: 'activity', title: 'Browse', parentId: obj.id, colour: '#3B82C4' })
+  const plain = await post(`${api}/nodes`, { level: 'activity', title: 'Pay', parentId: obj.id })
+  const step = (await post(`${api}/steps`, { title: 'Filter by size', activityId: act.id, releaseId: null })).step
+  const other = (await post(`${api}/steps`, { title: 'Card details', activityId: plain.id, releaseId: null })).step
+  await page.goto(`/w/${slug}/maps/${map.id}`)
+
+  const card = page.locator(`[data-step="${step.id}"]`)
+  await expect(card).toHaveCSS('background-color', 'rgb(59, 130, 196)')
+  await expect(card).toHaveCSS('color', 'rgb(255, 255, 255)')
+  // Under an activity with no colour, a step keeps the default look.
+  await expect(page.locator(`[data-step="${other.id}"]`)).not.toHaveClass(/coloured/)
+
+  const label = `${step.key} Filter by size`
+  await card.hover()
+  await page.getByRole('button', { name: `Actions for ${label}` }).click()
+  await page.getByRole('button', { name: 'Colour…' }).click()
+  await page.getByRole('group', { name: `Colours for ${label}` }).getByRole('button', { name: 'Amber' }).click()
+  await expect(card).toHaveCSS('background-color', 'rgb(252, 177, 49)')
+  await expect(card).toHaveCSS('color', 'rgb(0, 0, 0)')
+
+  await page.reload()
+  await expect(card).toHaveCSS('background-color', 'rgb(252, 177, 49)')
+  await card.hover()
+  await page.getByRole('button', { name: `Actions for ${label}` }).click()
+  await page.getByRole('button', { name: 'Colour…' }).click()
+  await page.getByRole('group', { name: `Colours for ${label}` }).getByRole('button', { name: 'Activity colour' }).click()
+  await expect(card).toHaveCSS('background-color', 'rgb(59, 130, 196)')
+  const view = (await (await page.request.get(api)).json()) as { steps: { id: string; colour: string | null }[] }
+  expect(view.steps.find((s) => s.id === step.id)?.colour).toBeNull()
+})

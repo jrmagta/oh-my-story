@@ -51,7 +51,7 @@ test('an admin makes an API token, a script uses it, history names it, and revok
 
   // The map shows the step, and its history names the token.
   await page.goto(`/w/${slug}/maps/${map.id}`)
-  await expect(page.getByRole('button', { name: /Deployed build 42/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^\w+-\d+ Deployed build 42/ })).toBeVisible()
   await page.getByRole('button', { name: /^Actions for map/ }).click()
   await page.getByRole('button', { name: 'Activity', exact: true }).click()
   await expect(page.getByRole('complementary', { name: 'Map activity' })).toContainText('CI bot (token)')

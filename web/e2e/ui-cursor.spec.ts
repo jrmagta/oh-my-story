@@ -40,7 +40,7 @@ test('a big map scrolls inside the window, so its scrollbars are always in view'
   }
   for (let i = 1; i <= 25; i++) await page.request.post(`${api}/steps`, { data: { title: `Step ${i}`, activityId: act, releaseId: null } })
   await page.goto(`/w/deps/maps/${map.id}`)
-  await expect(page.getByRole('button', { name: /Step 25$/ })).toBeAttached()
+  await expect(page.getByRole('button', { name: /^\w+-\d+ Step 25$/ })).toBeAttached()
   const m = await page.evaluate(() => {
     const s = document.querySelector('.map-scroll')!
     const r = s.getBoundingClientRect()

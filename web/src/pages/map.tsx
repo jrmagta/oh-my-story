@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
-import { api, ApiError, atLeast, type Category, type Level, type MapNode, type MapView, type Membership, type Release, type Status } from '../api'
+import { api, ApiError, atLeast, type Category, type Level, type MapNode, type MapView, type Membership, type Release, type Status, type Step } from '../api'
 import { MapDnd, refs, useDrag, useDrop } from '../map/dnd'
 import { HistoryList } from '../map/HistoryList'
 import { liveLabel, useLiveMap, type LiveState, type PresentUser } from '../map/live'
@@ -18,7 +18,7 @@ import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toast
 import { PageBand } from './app'
 import { StepPanel } from './step-panel'
 import { ShareDialog } from './share'
-import { BlockedBadge, DependencyLines } from '../map/Dependencies'
+import { DependencyLines, DependencyMark } from '../map/Dependencies'
 import { MapViewport } from '../map/navigation'
 import { exportName, exportView, type ExportKind } from '../map/exportView'
 import { Roadmap } from './roadmap'
@@ -55,9 +55,25 @@ export interface MapCtx {
   /** The objective or activity being typed in, and where it goes; the grid gives it a column there. */
   adding: Adding | null
   setAdding: (a: Adding | null) => void
+  /** Steps whose dependency lines are drawn, picked with the mark on their card. */
+  depLines: ReadonlySet<string>
+  toggleDepLines: (stepId: string) => void
 }
 
 const Ctx = createContext<MapCtx | null>(null)
+
+/** MapCtx.depLines and its toggle, for this visit only. */
+export function useDepLines(): [ReadonlySet<string>, (stepId: string) => void] {
+  const [shown, setShown] = useState<ReadonlySet<string>>(new Set())
+  const toggle = useCallback((id: string) => {
+    setShown((s) => {
+      const n = new Set(s)
+      if (!n.delete(id)) n.add(id)
+      return n
+    })
+  }, [])
+  return [shown, toggle]
+}
 export const MapProvider = Ctx.Provider
 
 /**
@@ -204,6 +220,7 @@ export function MapPage() {
 
   const [adding, setAdding] = useState<Adding | null>(null)
   const [prefs, setPrefs] = useViewPrefs(mapId)
+  const [depLines, toggleDepLines] = useDepLines()
 
   const ctx = useMemo<MapCtx | null>(() => {
     if (!query.data) return null
@@ -228,8 +245,10 @@ export function MapPage() {
       move,
       adding,
       setAdding,
+      depLines,
+      toggleDepLines,
     }
-  }, [ws, query.data, filter, setFilter, prefs, setPrefs, mode, setMode, run, selectedStep, openStep, move, adding])
+  }, [ws, query.data, filter, setFilter, prefs, setPrefs, mode, setMode, run, selectedStep, openStep, move, adding, depLines, toggleDepLines])
 
   if (query.isPending) return <Loading />
   if (!ctx) {
@@ -723,7 +742,7 @@ function NodeMenu(props: { node: MapNode; label: string; close: () => void; rena
   if (panel === 'colour') {
     return (
       <ColourChooser
-        node={node}
+        colour={node.colour}
         label={label}
         onPick={(colour) => {
           close()
@@ -786,8 +805,9 @@ function NodeMenu(props: { node: MapNode; label: string; close: () => void; rena
   )
 }
 
-/** A backbone card's colour: a swatch, any colour, or the level's default look. */
-function ColourChooser({ node, label, onPick }: { node: MapNode; label: string; onPick: (colour: string | null) => void }) {
+/** A card's colour: a swatch, any colour, or its default look (named by defaultLabel). */
+function ColourChooser(props: { colour: string | null; label: string; defaultLabel?: string; onPick: (colour: string | null) => void }) {
+  const { colour, label, defaultLabel = 'Default', onPick } = props
   return (
     <div className="colour-grid" role="group" aria-label={`Colours for ${label}`}>
       {palette.map((c) => (
@@ -797,7 +817,7 @@ function ColourChooser({ node, label, onPick }: { node: MapNode; label: string; 
           className="swatch"
           style={{ background: c.hex }}
           aria-label={c.name}
-          aria-pressed={node.colour?.toUpperCase() === c.hex}
+          aria-pressed={colour?.toUpperCase() === c.hex}
           title={c.name}
           onClick={() => onPick(c.hex)}
         />
@@ -807,14 +827,14 @@ function ColourChooser({ node, label, onPick }: { node: MapNode; label: string; 
         <input
           type="color"
           aria-label="Any colour"
-          defaultValue={(node.colour ?? '#8A8A93').toLowerCase()}
+          defaultValue={(colour ?? '#8A8A93').toLowerCase()}
           ref={(el) => {
             if (el) el.onchange = () => onPick(el.value.toUpperCase())
           }}
         />
       </label>
-      <button type="button" className="btn btn-xs btn-ol col-span-full" aria-pressed={!node.colour} onClick={() => onPick(null)}>
-        Default
+      <button type="button" className="btn btn-xs btn-ol col-span-full" aria-pressed={!colour} onClick={() => onPick(null)}>
+        {defaultLabel}
       </button>
     </div>
   )
@@ -1205,7 +1225,7 @@ function PersonaBadges({ node }: { node: MapNode }) {
   )
 }
 
-/** A step's labels as small chips, in name order; ids of deleted labels are skipped. */
+/** A step's labels as small grey chips, in name order; ids of deleted labels are skipped. */
 export function LabelChips({ ids, onRemove }: { ids: string[]; onRemove?: (id: string) => void }) {
   const { view } = useMap()
   const chips = view.labels.filter((l) => ids.includes(l.id)).sort((a, b) => a.name.localeCompare(b.name))
@@ -1214,7 +1234,6 @@ export function LabelChips({ ids, onRemove }: { ids: string[]; onRemove?: (id: s
     <span className="chips">
       {chips.map((l) => (
         <span key={l.id} className="tag">
-          <i style={{ background: l.colour }} aria-hidden />
           {l.name}
           {onRemove && (
             <button type="button" className="tag-x" aria-label={`Remove label ${l.name}`} onClick={() => onRemove(l.id)}>
@@ -1227,10 +1246,34 @@ export function LabelChips({ ids, onRemove }: { ids: string[]; onRemove?: (id: s
   )
 }
 
-/** dimmed: a highlight filter is on and this step does not match. */
+/** A step card's ⋯ menu, laid out like a backbone card's. */
+function StepMenu({ step, label, close }: { step: Step; label: string; close: () => void }) {
+  const { ws, view, run } = useMap()
+  const [colouring, setColouring] = useState(false)
+  if (!colouring) return <MenuItem onClick={() => setColouring(true)}>Colour…</MenuItem>
+  return (
+    <ColourChooser
+      colour={step.colour}
+      label={label}
+      defaultLabel="Activity colour"
+      onPick={(colour) => {
+        close()
+        if (colour !== step.colour) void run(() => api.patchStep(ws.slug, view.map.id, step.id, { colour }))
+      }}
+    />
+  )
+}
+
+/**
+ * dimmed: a highlight filter is on and this step does not match. A step takes
+ * its activity's colour unless it has its own. The corner holds the dependency
+ * mark and, for editors, the ⋯ menu; the title wraps around them.
+ */
 function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
   const { ws, view, canEdit, statuses, selectedStep, openStep, prefs } = useMap()
   const { step, placement } = card
+  const colour = step.colour ?? view.nodes.find((n) => n.id === placement.activityId)?.colour ?? null
+  const linked = view.dependencies.some((d) => d.blockerId === step.id || d.blockedId === step.id)
   const elsewhere = view.elsewhere.filter((e) => e.stepId === step.id)
   const status = statuses.get(step.statusId)
   const selected = selectedStep === step.id
@@ -1242,7 +1285,8 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
       ref={refs(drag.ref, drop.ref)}
       {...drag.id}
       data-step={step.id}
-      className={`step-card size-${prefs.size} ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''} ${dimmed ? 'dimmed' : ''}`}
+      className={`step-card size-${prefs.size} ${colour ? 'coloured' : ''} ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''} ${dimmed ? 'dimmed' : ''}`}
+      style={nodeStyle(colour)}
       {...drag.pointer}
     >
       {/* Click or Enter opens the step; Space picks it up to move it. */}
@@ -1255,9 +1299,9 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
         aria-label={label}
         onClick={() => openStep(selected ? null : step.id)}
       >
+        {(linked || canEdit) && <span className="corner-space" style={{ width: (linked ? 24 : 0) + (canEdit ? 26 : 0) }} aria-hidden />}
         <span>{step.title}</span>
         <LabelChips ids={step.labelIds} />
-        <BlockedBadge stepId={step.id} />
         <span className="meta">
           <StatusLabel status={status} />
           {step.commentCount > 0 && (
@@ -1276,7 +1320,7 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
               <span className="sr-only">Also on {elsewhere.map((e) => e.mapName).join(', ')}</span>
             </span>
           )}
-          <span className="text-muted ml-auto text-[11px] font-extrabold">{step.key}</span>
+          <span className="step-key ml-auto text-[11px] font-extrabold">{step.key}</span>
           {step.estimate !== null && (
             <span className={`ring-disc est ${status?.category ?? 'todo'}`} title={amount(step.estimate * 100, ws.estimateUnit)}>
               {formatEstimate(step.estimate)}
@@ -1284,6 +1328,14 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
           )}
         </span>
       </button>
+      {(linked || canEdit) && (
+        <span className="step-corner">
+          {linked && <DependencyMark stepId={step.id} stepKey={step.key} />}
+          {canEdit && (
+            <CardMenu label={label}>{(close) => <StepMenu step={step} label={label} close={close} />}</CardMenu>
+          )}
+        </span>
+      )}
     </div>
   )
 }

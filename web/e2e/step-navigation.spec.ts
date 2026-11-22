@@ -36,7 +36,7 @@ test('a big map zooms, fits, pans, keeps its backbone pinned, and has a minimap'
   for (let i = 1; i <= 14; i++) await post(`${api}/steps`, { title: `Step ${i}`, activityId: acts[0], releaseId: rel.id })
   await post(`${api}/steps`, { title: 'Far step', activityId: acts[2], releaseId: null })
   await page.goto(`/w/${slug}/maps/${map.id}`)
-  await expect(page.getByRole('button', { name: /Step 14$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^\w+-\d+ Step 14$/ })).toBeVisible()
   const zoomLabel = page.getByRole('group', { name: 'Zoom and overview' }).getByRole('button', { name: /^Zoom \d+%/ })
   await expect(zoomLabel).toHaveText('100%')
 
@@ -141,8 +141,8 @@ test('a big map zooms, fits, pans, keeps its backbone pinned, and has a minimap'
   const area = (await page.locator('.map-scroll').boundingBox())!
   const cell = (await page.getByRole('group', { name: 'Steps in Discover 2 / Unscheduled' }).boundingBox())!
   await page.locator('.map-scroll').evaluate((s, dx) => (s.scrollLeft += dx), cell.x + cell.width / 2 - (area.x + area.width / 2))
-  await expect(page.getByRole('button', { name: /Far step$/ })).toBeInViewport()
-  const from = (await page.getByRole('button', { name: /Far step$/ }).boundingBox())!
+  await expect(page.getByRole('button', { name: /^\w+-\d+ Far step$/ })).toBeInViewport()
+  const from = (await page.getByRole('button', { name: /^\w+-\d+ Far step$/ }).boundingBox())!
   // A cell to the left, clear of the zoom controls and minimap in the bottom-right corner.
   const target = (await page.getByRole('group', { name: 'Steps in Discover 2 / Unscheduled' }).boundingBox())!
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
