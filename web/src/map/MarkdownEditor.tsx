@@ -1,6 +1,6 @@
 import { useRef, useState, type ClipboardEvent, type DragEvent, type RefObject } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { api, type Attachment } from '../api'
+import { api, type Attachment, type FileOwner } from '../api'
 import { errorMessage } from '../ui'
 import { mapKey, useMap } from '../pages/map'
 import { imageTypes } from './Attachments'
@@ -97,11 +97,11 @@ export function FileErrors({ errors }: { errors: string[] }) {
 }
 
 /**
- * A Markdown textarea with Save and Cancel, for a step's description. Files
- * pasted or dropped into it become files of the step.
+ * A Markdown textarea with Save and Cancel, for a description. Files pasted
+ * or dropped into it become files of its step or node.
  */
 export function MarkdownEditor({
-  stepId,
+  owner,
   label,
   value,
   setValue,
@@ -109,7 +109,7 @@ export function MarkdownEditor({
   onSave,
   onCancel,
 }: {
-  stepId: string
+  owner: FileOwner
   label: string
   value: string
   setValue: (update: (v: string) => string) => void
@@ -123,8 +123,8 @@ export function MarkdownEditor({
   const { pending, errors, textarea } = useInlineFiles({
     area,
     setValue,
-    upload: (file) => api.uploadAttachment(ws.slug, view.map.id, stepId, file),
-    onUploaded: () => void qc.invalidateQueries({ queryKey: [...mapKey(ws.slug, view.map.id), 'attachments', stepId] }),
+    upload: (file) => api.uploadAttachment(ws.slug, view.map.id, owner, file),
+    onUploaded: () => void qc.invalidateQueries({ queryKey: [...mapKey(ws.slug, view.map.id), 'attachments', owner.id] }),
   })
 
   return (

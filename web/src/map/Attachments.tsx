@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, type Attachment } from '../api'
+import { api, type Attachment, type FileOwner } from '../api'
 import { errorMessage } from '../ui'
 import { mapKey, useMap } from '../pages/map'
 import { ago } from './history'
@@ -29,12 +29,12 @@ interface Upload {
  * section or pick them with Add files; each uploads at once with its own
  * progress bar. Images show a thumbnail that opens full size.
  */
-export function AttachmentSection({ stepId }: { stepId: string }) {
+export function AttachmentSection({ owner }: { owner: FileOwner }) {
   const { ws, view, canEdit, run, files: source } = useMap()
   const qc = useQueryClient()
   const files = useQuery({
-    queryKey: [...mapKey(ws.slug, view.map.id), 'attachments', stepId],
-    queryFn: () => source.list(stepId),
+    queryKey: [...mapKey(ws.slug, view.map.id), 'attachments', owner.id],
+    queryFn: () => source.list(owner),
   })
   const [uploads, setUploads] = useState<Upload[]>([])
   const [over, setOver] = useState(false)
@@ -47,7 +47,7 @@ export function AttachmentSection({ stepId }: { stepId: string }) {
       const id = crypto.randomUUID()
       setUploads((us) => [...us, { id, name: file.name, done: 0 }])
       api
-        .uploadAttachment(ws.slug, view.map.id, stepId, file, (done) => change(id, (u) => ({ ...u, done })))
+        .uploadAttachment(ws.slug, view.map.id, owner, file, (done) => change(id, (u) => ({ ...u, done })))
         .then(async () => {
           // The list and the card's count both come from the map's queries.
           await qc.invalidateQueries({ queryKey: mapKey(ws.slug, view.map.id) })

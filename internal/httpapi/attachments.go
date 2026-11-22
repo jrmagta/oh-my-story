@@ -57,6 +57,16 @@ func (s *Server) uploadStepAttachment(q mapRequest) (int, any, error) {
 	return s.upload(q, s.store.AddStepAttachment)
 }
 
+func (s *Server) listNodeAttachments(q mapRequest) (int, any, error) {
+	as, err := s.store.NodeAttachments(q.r.Context(), q.ws, q.mapID, q.id)
+	return http.StatusOK, as, err
+}
+
+// uploadNodeAttachment stores the request body as a file on objective or activity {id}.
+func (s *Server) uploadNodeAttachment(q mapRequest) (int, any, error) {
+	return s.upload(q, s.store.AddNodeAttachment)
+}
+
 // uploadDraftAttachment stores the request body as a draft for a comment on
 // step {id}: only the uploader sees it until a comment claims it.
 func (s *Server) uploadDraftAttachment(q mapRequest) (int, any, error) {
@@ -114,6 +124,22 @@ func (s *Server) sharedAttachments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	as, err := s.store.SharedStepAttachments(r.Context(), auth.HashToken(r.PathValue("token")), id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, as)
+}
+
+// sharedNodeAttachments lists the files of an objective or activity on a share link's map.
+func (s *Server) sharedNodeAttachments(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	as, err := s.store.SharedNodeAttachments(r.Context(), auth.HashToken(r.PathValue("token")), id)
 	if err != nil {
 		writeError(w, err)
 		return

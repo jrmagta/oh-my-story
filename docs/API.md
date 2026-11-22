@@ -151,7 +151,7 @@ An objective's personas are its `personaIds`, set with `PATCH .../nodes/{id}`; a
 | `POST /maps/{mapId}/dependencies` | `{blockerId, blockedId}` → `201` dependency. Both are live steps of this workspace, at least one on this map. `bad_request` for a step blocking itself or a link that would make a loop; `conflict` when the link exists |
 | `DELETE /maps/{mapId}/dependencies/{id}` | → `204`. The link must touch a step on this map |
 
-Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, title, description, colour, personaIds, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; step `{id, key, title, descriptionMd, statusId, assigneeId, estimate, colour, labelIds, commentCount, attachmentCount, version}` with `estimate` a number or null, `colour` null when the step takes its activity's colour, and `labelIds` sorted; placement `{id, stepId, activityId, releaseId, rank}`; dependency `{id, blockerId, blockedId}`; other step `{id, key, title, done, mapId, mapName}`.
+Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, title, description, colour, personaIds, rank, version, attachmentCount}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; step `{id, key, title, descriptionMd, statusId, assigneeId, estimate, colour, labelIds, commentCount, attachmentCount, version}` with `estimate` a number or null, `colour` null when the step takes its activity's colour, and `labelIds` sorted; placement `{id, stepId, activityId, releaseId, rank}`; dependency `{id, blockerId, blockedId}`; other step `{id, key, title, done, mapId, mapName}`.
 
 A step on several maps is one step: one key, one status, one history. A change to it (edit, delete, restore, comments, being put on or taken off a map) is an event on every map it is on; the copies for maps other than the one written through are echoes, which a step's own history leaves out. Deleting an activity keeps steps that are also on another map: they are hidden on this map until the activity is restored. Deleting a step deletes it from every map.
 
@@ -173,11 +173,13 @@ A comment is `{id, stepId, parentId, authorId, authorName, bodyMd, mentionIds, r
 
 ### Attachments
 
-A file is `{id, stepId, commentId, name, contentType, size, uploadedBy, uploaderName, createdAt}`: a step's (`stepId` set), a comment's (`commentId` set; see Comments) or a draft (neither). The bytes are stored in Postgres and sent only by the download endpoint. `contentType` is worked out from the bytes, never taken from the uploader. Files are map events (entity `attachment`, carrying `stepId`, `name`, `contentType` and `size`), echoed to every map the step is on; steps carry `attachmentCount`. A file is reached only through its step or comment, so it is hidden while the step is deleted and comes back with it. A comment's files make no events of their own: they travel in the comment's. Every 15 minutes each server removes, for good, drafts more than a day old and files deleted (or on comments deleted) more than 30 days ago; sweepers on several servers skip each other's rows.
+A file is `{id, stepId, nodeId, commentId, name, contentType, size, uploadedBy, uploaderName, createdAt}`: a step's (`stepId` set), an objective's or activity's (`nodeId` set), a comment's (`commentId` set; see Comments) or a draft (none set). The bytes are stored in Postgres and sent only by the download endpoint. `contentType` is worked out from the bytes, never taken from the uploader. Files are map events (entity `attachment`, carrying `stepId` or `nodeId`, `name`, `contentType` and `size`); a step's are echoed to every map the step is on. Steps and nodes carry `attachmentCount`. A file is reached only through its step, node or comment, so it is hidden while that is deleted and comes back with it. A comment's files make no events of their own: they travel in the comment's. Every 15 minutes each server removes, for good, drafts more than a day old and files deleted (or on comments deleted) more than 30 days ago; sweepers on several servers skip each other's rows.
 
 | Endpoint | Role | Body → response |
 |---|---|---|
 | `GET /maps/{mapId}/steps/{id}/attachments` | viewer | → `[attachment]`, oldest first |
+| `GET /maps/{mapId}/nodes/{id}/attachments` | viewer | → an objective's or activity's `[attachment]`, oldest first |
+| `POST /maps/{mapId}/nodes/{id}/attachments?name=…` | editor | as for a step → `201` attachment |
 | `POST /maps/{mapId}/steps/{id}/attachments?name=…` | editor | the file's bytes, `Content-Type: application/octet-stream` → `201` attachment. `name` up to 255 characters; any path before it is dropped. `413` above `OMS_ATTACHMENT_MAX_MB` |
 | `DELETE /maps/{mapId}/attachments/{id}` | editor | → `204`. The file's step must be on this map |
 | `POST /maps/{mapId}/attachments/{id}/restore` | editor | → `204` |
@@ -227,6 +229,7 @@ A share link shows a map read-only to anyone who has it, without an account. Its
 | `DELETE /maps/{mapId}/share-links/{id}` | editor | → `204`. Revokes it |
 | `GET /api/shared/{token}` | none | → `{workspaceName, estimateUnit, view}`, `view` being the map payload with every step's `assigneeId` null and `commentCount` 0. `404` when the link is unknown, revoked or expired, or its map deleted. Records when the link was last used; sends `X-Robots-Tag: noindex` |
 | `GET /api/shared/{token}/steps/{id}/attachments` | none | → `[attachment]` of a step on the link's map, with `uploadedBy` null and `uploaderName` empty. `404` for a step not on that map |
+| `GET /api/shared/{token}/nodes/{id}/attachments` | none | → the same for an objective or activity of the link's map |
 | `GET /api/shared/{token}/attachments/{id}` | none | → the bytes of a file of a live step on the link's map, with the workspace download's headers; any other file is `404`. Does not count as a use of the link |
 
 ### Search

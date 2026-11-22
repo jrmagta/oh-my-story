@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Markdown } from '../map/Markdown'
-import { api } from '../api'
+import { api, type FileOwner } from '../api'
 import { ConfirmButton, InlineText } from '../ui'
 import { HistoryList } from '../map/HistoryList'
 import { Comments } from '../map/Comments'
@@ -11,6 +11,7 @@ import { TagPicker } from '../map/TagPicker'
 import { DependencySection } from '../map/Dependencies'
 import { LinkedMaps } from '../map/LinkedMaps'
 import { AttachmentSection } from '../map/Attachments'
+import { nodeStyle } from '../map/colours'
 import { MarkdownEditor } from '../map/MarkdownEditor'
 
 /** The open step, beside the map. Editors change it in place; everyone else reads. */
@@ -157,8 +158,8 @@ export function StepPanel({ stepId }: { stepId: string }) {
               </dd>
             </div>
           </dl>
-          <Description key={step.id} stepId={step.id} text={step.descriptionMd} editable={canEdit} onSave={(descriptionMd) => patch({ descriptionMd })} />
-          <AttachmentSection key={`files:${step.id}`} stepId={step.id} />
+          <Description key={step.id} owner={{ kind: 'step', id: step.id }} text={step.descriptionMd} editable={canEdit} onSave={(descriptionMd) => patch({ descriptionMd })} />
+          <AttachmentSection key={`files:${step.id}`} owner={{ kind: 'step', id: step.id }} />
           <DependencySection key={`deps:${step.id}`} stepId={step.id} stepKey={step.key} />
           <LinkedMaps key={`maps:${step.id}`} step={step} />
           {canEdit && (
@@ -229,7 +230,18 @@ function EstimateInput({ value, unit, onSave }: { value: number | null; unit: st
   )
 }
 
-function Description({ stepId, text, editable, onSave }: { stepId: string; text: string; editable: boolean; onSave: (v: string) => Promise<boolean> }) {
+/** A Markdown description, shown, or edited by those who can. Files pasted into it go to owner. */
+export function Description({
+  owner,
+  text,
+  editable,
+  onSave,
+}: {
+  owner: FileOwner
+  text: string
+  editable: boolean
+  onSave: (v: string) => Promise<boolean>
+}) {
   const [draft, setDraft] = useState<string | null>(null)
   const [preview, setPreview] = useState(false)
   if (draft === null) {
@@ -266,7 +278,7 @@ function Description({ stepId, text, editable, onSave }: { stepId: string; text:
         </button>
       </div>
       <MarkdownEditor
-        stepId={stepId}
+        owner={owner}
         label="Description (Markdown)"
         value={draft}
         setValue={(f) => setDraft((d) => (d === null ? d : f(d)))}
@@ -277,5 +289,35 @@ function Description({ stepId, text, editable, onSave }: { stepId: string; text:
         onCancel={close}
       />
     </section>
+  )
+}
+
+/** An objective's or activity's details: its title, description and files. Opened from its ⋯ menu. */
+export function NodePanel({ nodeId }: { nodeId: string }) {
+  const { ws, view, canEdit, run, openNode } = useMap()
+  const node = view.nodes.find((n) => n.id === nodeId)
+  if (!node) return null
+  const level = node.level === 'objective' ? 'Objective' : 'Activity'
+  const parent = view.nodes.find((n) => n.id === node.parentId)
+  const patch = (b: Parameters<typeof api.patchNode>[3]) => run(() => api.patchNode(ws.slug, view.map.id, node.id, b))
+  const owner = { kind: 'node', id: node.id } as const
+  return (
+    <aside className="step-panel" aria-label={`${level} ${node.title}`}>
+      <div className={`hd node-hd ${node.colour ? 'coloured' : ''}`} style={nodeStyle(node.colour)}>
+        <div className="flex items-center gap-2">
+          <span className="pill">{level}</span>
+          {parent && <span className="pill">{parent.title}</span>}
+          <span className="flex-1" />
+          <button type="button" className="icon-btn" aria-label={`Close ${level.toLowerCase()}`} onClick={() => openNode(null)}>
+            <span>✕</span>
+          </button>
+        </div>
+        <h2 aria-label={node.title}>
+          <InlineText value={node.title} label={level.toLowerCase()} editable={canEdit} onSave={(title) => patch({ title })} />
+        </h2>
+      </div>
+      <Description key={node.id} owner={owner} text={node.description} editable={canEdit} onSave={(description) => patch({ description })} />
+      <AttachmentSection key={`files:${node.id}`} owner={owner} />
+    </aside>
   )
 }
