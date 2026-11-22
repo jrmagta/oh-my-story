@@ -31,17 +31,32 @@ export function links(view: MapView, statuses: Map<string, Status>, stepId: stri
   }
 }
 
-/** "Blocked by CHC-7" on a card while any of its blockers is unfinished. */
-export function BlockedBadge({ stepId }: { stepId: string }) {
-  const { view, statuses } = useMap()
-  const open = links(view, statuses, stepId).blockedBy.filter((l) => !l.done)
-  const [first] = open
-  if (!first) return null
+/**
+ * The mark on a linked step's card, red while an unfinished step blocks it.
+ * Pressing it draws the step's dependency lines; pressing again hides them.
+ */
+export function DependencyMark({ stepId, stepKey }: { stepId: string; stepKey: string }) {
+  const { view, statuses, depLines, toggleDepLines } = useMap()
+  const { blockedBy, blocks } = links(view, statuses, stepId)
+  const blocked = blockedBy.some((l) => !l.done)
+  const names = (ls: Linked[]) => ls.map((l) => `${l.key}${l.done ? ' (done)' : ''}`).join(', ')
+  const summary = [blockedBy.length > 0 && `Blocked by ${names(blockedBy)}`, blocks.length > 0 && `Blocks ${names(blocks)}`].filter(Boolean).join('. ')
   return (
-    <span className="blocked-badge" title={`Blocked by ${open.map((l) => `${l.key} ${l.title}`).join(', ')}`}>
-      Blocked by {first.key}
-      {open.length > 1 && ` +${open.length - 1}`}
-    </span>
+    <button
+      type="button"
+      data-no-drag
+      className={`dep-mark ${blocked ? 'blocked' : ''}`}
+      aria-label={`Dependency lines for ${stepKey}${blocked ? ' (blocked)' : ''}`}
+      aria-pressed={depLines.has(stepId)}
+      title={summary}
+      onClick={() => toggleDepLines(stepId)}
+    >
+      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden>
+        <rect x="1" y="1.5" width="6" height="5" rx="1" fill="currentColor" />
+        <rect x="9" y="9.5" width="6" height="5" rx="1" fill="currentColor" />
+        <path d="M4 6.5V12h3M5.5 10.5 7 12l-1.5 1.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
   )
 }
 
@@ -199,26 +214,28 @@ interface Line {
 
 /**
  * Arrows from each blocker to the step it blocks, for links with both ends
- * shown on the map. Drawn over the grid from the cards' positions, and
- * redrawn when the map or its size changes.
+ * shown on the map: all of them with the Lines setting on, else those of the
+ * steps whose mark is pressed. Drawn over the grid from the cards' positions,
+ * and redrawn when the map or its size changes.
  */
 export function DependencyLines() {
-  const { view, statuses, prefs, match, filter } = useMap()
+  const { view, statuses, prefs, match, filter, depLines } = useMap()
+  const active = prefs.lines || depLines.size > 0
   const ref = useRef<SVGSVGElement>(null)
   const [lines, setLines] = useState<Line[]>([])
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
     const grid = ref.current?.parentElement
-    if (!grid || !prefs.lines) return
+    if (!grid || !active) return
     const ro = new ResizeObserver(() => setTick((t) => t + 1))
     ro.observe(grid)
     return () => ro.disconnect()
-  }, [prefs.lines])
+  }, [active])
 
   useLayoutEffect(() => {
     const grid = ref.current?.parentElement
-    if (!grid || !prefs.lines) return
+    if (!grid || !active) return
     const box = grid.getBoundingClientRect()
     // Card positions come back zoomed; the arrows are drawn in the grid's own (unzoomed) units.
     const k = grid.offsetWidth ? box.width / grid.offsetWidth : 1
@@ -228,6 +245,7 @@ export function DependencyLines() {
     }
     const next: Line[] = []
     for (const d of view.dependencies) {
+      if (!prefs.lines && !depLines.has(d.blockerId) && !depLines.has(d.blockedId)) continue
       const a = at(d.blockerId)
       const b = at(d.blockedId)
       if (!a || !b) continue
@@ -260,9 +278,9 @@ export function DependencyLines() {
       next.push({ id: d.id, d: `M${x1},${y1} C${c1x},${c1y} ${c2x},${c2y} ${x2},${y2}`, open })
     }
     setLines(next)
-  }, [view, statuses, prefs, match, filter, tick])
+  }, [view, statuses, prefs, match, filter, tick, active, depLines])
 
-  if (!prefs.lines) return null
+  if (!active) return null
   return (
     <svg ref={ref} className="dep-lines" aria-hidden>
       <defs>

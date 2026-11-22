@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useOutletContext } from 'react-router'
 import { api, atLeast, type Label, type Membership } from '../api'
-import { colourFor } from '../map/TagPicker'
 import { ConfirmButton, ErrorAlert, Field, InlineText, Loading } from '../ui'
 import { PageBand } from './app'
 
@@ -10,7 +9,7 @@ const labelsKey = (slug: string) => ['ws', slug, 'labels'] as const
 
 /**
  * The workspace's labels. Everyone reads them; editors add them (here or from
- * a step); admins rename, recolour and delete them.
+ * a step); admins rename and delete them.
  */
 export function LabelsPage() {
   const ws = useOutletContext<Membership>()
@@ -32,7 +31,7 @@ export function LabelsPage() {
           </h2>
           <p className="text-muted mb-6 font-medium">
             Labels are shared by every map in this workspace.
-            {!canManage && ' Admins can rename, recolour and delete them.'}
+            {!canManage && ' Admins can rename and delete them.'}
           </p>
           <ErrorAlert error={write.error} />
           {labels.isPending ? (
@@ -59,20 +58,6 @@ function LabelRow(props: { ws: Membership; label: Label; canManage: boolean; bus
   const { ws, label: l, canManage, write } = props
   return (
     <li>
-      {canManage ? (
-        <input
-          type="color"
-          className="h-8 w-8 cursor-pointer"
-          aria-label={`Colour for ${l.name}`}
-          defaultValue={l.colour.toLowerCase()}
-          // The native change event fires once, when the picker closes; React's onChange fires on every move.
-          ref={(el) => {
-            if (el) el.onchange = () => write(() => api.patchLabel(ws.slug, l.id, { colour: el.value.toUpperCase() }))
-          }}
-        />
-      ) : (
-        <span className="h-8 w-8 rounded-full" style={{ background: l.colour }} aria-hidden />
-      )}
       <span className="min-w-0 flex-1 font-extrabold">
         <InlineText
           value={l.name}
@@ -107,7 +92,7 @@ function CreateLabel({ ws, write }: { ws: Membership; write: (w: () => Promise<u
           e.preventDefault()
           const n = name.trim()
           if (!n) return
-          void write(() => api.createLabel(ws.slug, { name: n, colour: colourFor(n) })).then(() => setName(''))
+          void write(() => api.createLabel(ws.slug, { name: n })).then(() => setName(''))
         }}
       >
         <Field label="Label name">

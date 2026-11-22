@@ -13,6 +13,8 @@ func (s *Server) listPersonas(q mapRequest) (int, any, error) {
 	return http.StatusOK, ps, err
 }
 
+const defaultColour = "#8A8A93"
+
 // createPersona answers 409 conflict when a persona of that name exists, ignoring case.
 func (s *Server) createPersona(q mapRequest) (int, any, error) {
 	var in struct {

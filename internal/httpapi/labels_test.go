@@ -21,15 +21,15 @@ func TestLabels(t *testing.T) {
 	commenter, _ := h.join(owner, "co@example.com", "commenter")
 	labels := acme + "/labels"
 
-	// Editors create labels; names are unique ignoring case; colour defaults to grey.
-	auth := str(editor.must(201, "POST", labels, map[string]any{"name": "auth", "colour": "#3B82C4"}).body, "id")
+	// Editors create labels; names are unique ignoring case. Labels have no colour.
+	auth := str(editor.must(201, "POST", labels, map[string]any{"name": "auth"}).body, "id")
 	email := editor.must(201, "POST", labels, map[string]any{"name": " Email "})
-	if str(email.body, "name") != "Email" || str(email.body, "colour") != "#8A8A93" {
+	if _, coloured := email.body["colour"]; str(email.body, "name") != "Email" || coloured {
 		t.Errorf("created label = %v", email.body)
 	}
 	editor.must(409, "POST", labels, map[string]any{"name": "AUTH"})
 	commenter.must(403, "POST", labels, map[string]any{"name": "x"})
-	for _, body := range []map[string]any{{"name": ""}, {"name": "x", "colour": "blue"}, {"name": string(make([]byte, 51))}} {
+	for _, body := range []map[string]any{{"name": ""}, {"name": "x", "colour": "#3B82C4"}, {"name": string(make([]byte, 51))}} {
 		editor.must(400, "POST", labels, body)
 	}
 	if r := commenter.must(200, "GET", labels, nil); len(r.list) != 2 || str(r.list[0], "name") != "auth" {
@@ -59,9 +59,9 @@ func TestLabels(t *testing.T) {
 		t.Errorf("label change is a step update: %+v", es[1])
 	}
 
-	// Admins rename and recolour; editors cannot.
+	// Admins rename; editors cannot.
 	editor.must(403, "PATCH", labels+"/"+auth, map[string]any{"name": "login"})
-	if r := owner.must(200, "PATCH", labels+"/"+auth, map[string]any{"name": "login", "colour": "#BA3636"}); str(r.body, "name") != "login" || str(r.body, "colour") != "#BA3636" {
+	if r := owner.must(200, "PATCH", labels+"/"+auth, map[string]any{"name": "login"}); str(r.body, "name") != "login" {
 		t.Errorf("patched label = %v", r.body)
 	}
 	owner.must(409, "PATCH", labels+"/"+auth, map[string]any{"name": "EMAIL"})

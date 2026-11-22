@@ -492,21 +492,23 @@ func (s *Server) createStep(q mapRequest) (int, any, error) {
 	return http.StatusCreated, stepAndPlacement{st, p}, err
 }
 
-// patchStep unassigns when assigneeId is null and clears the estimate when
-// estimate is null. labelIds replaces the step's labels.
+// patchStep unassigns when assigneeId is null and clears the estimate or
+// colour when they are null. labelIds replaces the step's labels.
 func (s *Server) patchStep(q mapRequest) (int, any, error) {
 	var in struct {
 		Title, DescriptionMD *string
 		StatusID             *uuid.UUID
 		AssigneeID           optional[uuid.UUID]
 		Estimate             optional[float64]
+		Colour               optional[string]
 		LabelIDs             *[]uuid.UUID
 	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
 	}
 	p := store.StepPatch{StatusID: in.StatusID, SetAssignee: in.AssigneeID.Set, AssigneeID: in.AssigneeID.Value,
-		SetEstimate: in.Estimate.Set, Estimate: in.Estimate.Value, LabelIDs: in.LabelIDs}
+		SetEstimate: in.Estimate.Set, Estimate: in.Estimate.Value,
+		SetColour: in.Colour.Set, LabelIDs: in.LabelIDs}
 	if err := idSet("labelIds", in.LabelIDs, maxStepLabels); err != nil {
 		return 0, nil, err
 	}
@@ -515,6 +517,9 @@ func (s *Server) patchStep(q mapRequest) (int, any, error) {
 		if err := parseEstimate(*p.Estimate); err != nil {
 			return 0, nil, err
 		}
+	}
+	if p.Colour, err = parseColour(in.Colour.Value); err != nil {
+		return 0, nil, err
 	}
 	if p.Title, err = textPtr("title", in.Title, maxTitle, false); err != nil {
 		return 0, nil, err

@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { palette } from './colours'
 
-/** Something a picker offers: a label or a persona. */
+/** Something a picker offers: a label, or a persona with its colour. */
 export interface Tag {
   id: string
   name: string
-  colour: string
+  colour?: string
 }
 
-/** A colour for a new label or persona, the same one each time for the same name. */
+/** A colour for a new persona, the same one each time for the same name. */
 export function colourFor(name: string): string {
   let h = 0
   for (const ch of name.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0
@@ -58,7 +58,7 @@ export function TagChooser(props: ChooserProps) {
         {matches.map((l) => (
           <li key={l.id}>
             <button type="button" aria-pressed={props.selected.includes(l.id)} onClick={() => props.onToggle(l.id)}>
-              <i style={{ background: l.colour }} aria-hidden />
+              {l.colour && <i style={{ background: l.colour }} aria-hidden />}
               {l.name}
               {props.selected.includes(l.id) && <span className="ml-auto">✓</span>}
             </button>

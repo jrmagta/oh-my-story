@@ -1269,9 +1269,6 @@ paths:
               properties:
                 name:
                   type: "string"
-                colour:
-                  type: "string"
-                  pattern: "^#[0-9A-Fa-f]{6}$"
               required: ["name"]
               additionalProperties: false
       responses:
@@ -1309,9 +1306,6 @@ paths:
               properties:
                 name:
                   type: "string"
-                colour:
-                  type: "string"
-                  pattern: "^#[0-9A-Fa-f]{6}$"
               additionalProperties: false
       responses:
         "200":
@@ -2038,6 +2032,10 @@ paths:
                   type: ["number", "null"]
                   minimum: 0
                   maximum: 9999.99
+                colour:
+                  type: ["string", "null"]
+                  pattern: "^#[0-9A-Fa-f]{6}$"
+                  description: "Null clears it: the step takes its activity's colour"
                 labelIds:
                   type: "array"
                   items:
@@ -2942,10 +2940,7 @@ components:
           format: "uuid"
         name:
           type: "string"
-        colour:
-          type: "string"
-          pattern: "^#[0-9A-Fa-f]{6}$"
-      required: ["id", "name", "colour"]
+      required: ["id", "name"]
       additionalProperties: false
     Persona:
       type: "object"
@@ -3044,6 +3039,8 @@ components:
           format: "uuid"
         estimate:
           type: ["number", "null"]
+        colour:
+          type: ["string", "null"]
         labelIds:
           type: "array"
           items:
@@ -3053,7 +3050,7 @@ components:
           type: "integer"
         version:
           type: "integer"
-      required: ["id", "key", "title", "descriptionMd", "statusId", "assigneeId", "estimate", "labelIds", "commentCount", "version"]
+      required: ["id", "key", "title", "descriptionMd", "statusId", "assigneeId", "estimate", "colour", "labelIds", "commentCount", "version"]
       additionalProperties: false
     Placement:
       type: "object"

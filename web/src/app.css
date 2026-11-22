@@ -863,19 +863,18 @@
   .node-line > .personas { margin-top: 0; }
   .grab, .grab-area { cursor: grab; }
 
-  /* Dependencies: the card badge, the panel lists and finder, and the arrows over the map. */
-  .blocked-badge {
-    display: block;
-    width: fit-content;
-    margin-top: 4px;
-    padding: 1px 6px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 800;
-    text-transform: uppercase;
-    color: #fff;
-    background: var(--color-brand-red, #BA3636);
+  /* Dependencies: the card mark, the panel lists and finder, and the arrows over the map. */
+  .dep-mark {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    opacity: 0.7;
   }
+  .dep-mark:hover { opacity: 1; }
+  .dep-mark.blocked { opacity: 1; color: #fff; background: var(--color-brand-red, #BA3636); }
+  .dep-mark[aria-pressed="true"] { opacity: 1; box-shadow: 0 0 0 2px var(--color-brand-amber); }
   .dep-row + .dep-row { margin-top: 10px; }
   .linked-mark { display: inline-flex; align-items: center; @apply text-muted; }
   .dep-list { margin-top: 4px; }
@@ -1101,6 +1100,18 @@
   }
   [data-theme="blink-light"] .step-card { border-width: 2px; }
   .step-card { position: relative; padding: 0; }
+  .step-card.coloured { background: var(--node-bg); color: var(--node-fg); border-color: var(--node-bg); }
+  .step-card.coloured .st,
+  .step-card.coloured .comment-count,
+  .step-card.coloured .linked-mark,
+  .step-card.coloured .step-key { color: inherit; opacity: 0.8; }
+  .step-key { color: var(--oms-muted); }
+  /* The dependency mark and ⋯ menu, top right; .corner-space keeps the title out from under them. */
+  .step-corner { position: absolute; top: 5px; right: 5px; z-index: 1; display: flex; align-items: center; gap: 2px; }
+  .step-corner .card-menu { float: none; margin: 0; }
+  .step-card:hover .card-menu,
+  .step-card:focus-within .card-menu { opacity: 1; }
+  .corner-space { float: right; height: 16px; }
   .step-card:has(.card-open[aria-current="true"]) {
     outline: 3px solid var(--color-brand-amber);
     outline-offset: 1px;
@@ -1166,7 +1177,7 @@
   }
   .add-step:hover { color: var(--color-base-content); }
 
-  /* Labels: a chip with a colour dot, on cards and in the step panel. */
+  /* Labels: a grey chip on cards and in the step panel; on a coloured card, a tint of its text colour. */
   .chips {
     display: flex;
     flex-wrap: wrap;
@@ -1177,15 +1188,15 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    border: 1px solid var(--oms-line);
     border-radius: 5px;
-    padding: 0 6px;
+    padding: 0 7px;
     font-size: 11px;
-    font-weight: 700;
-    line-height: 18px;
+    font-weight: 800;
+    line-height: 20px;
     color: var(--color-base-content);
+    background: color-mix(in srgb, var(--color-base-content) 13%, transparent);
   }
-  .tag > i,
+  .step-card.coloured .tag { color: inherit; background: color-mix(in srgb, var(--node-fg) 22%, transparent); }
   .tag-chooser li i {
     display: inline-block;
     width: 8px;

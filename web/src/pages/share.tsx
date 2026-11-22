@@ -7,7 +7,7 @@ import { FilterBar } from '../map/FilterBar'
 import { useViewPrefs } from '../map/viewPrefs'
 import { ago } from '../map/history'
 import { ErrorAlert, Loading, Logo, Stripe, ThemeToggle } from '../ui'
-import { deriveMap, mapKey, MapCanvas, MapHeader, MapProvider, useMap, useMapSearch, type MapCtx } from './map'
+import { deriveMap, mapKey, MapCanvas, MapHeader, MapProvider, useDepLines, useMap, useMapSearch, type MapCtx } from './map'
 import { MapViewport } from '../map/navigation'
 import { StepPanel } from './step-panel'
 
@@ -124,6 +124,7 @@ export function SharedMapPage() {
   const shared = useQuery({ queryKey: ['shared', token], queryFn: () => api.sharedMap(token), retry: false })
   const { selectedStep, openStep, filter, setFilter, mode, setMode } = useMapSearch()
   const [prefs, setPrefs] = useViewPrefs(shared.data?.view.map.id ?? 'shared')
+  const [depLines, toggleDepLines] = useDepLines()
   const ctx = useMemo<MapCtx | null>(() => {
     const d = shared.data
     if (!d) return null
@@ -146,8 +147,10 @@ export function SharedMapPage() {
       move: () => {},
       adding: null,
       setAdding: () => {},
+      depLines,
+      toggleDepLines,
     }
-  }, [shared.data, filter, setFilter, prefs, setPrefs, mode, setMode, selectedStep, openStep])
+  }, [shared.data, filter, setFilter, prefs, setPrefs, mode, setMode, selectedStep, openStep, depLines, toggleDepLines])
 
   return (
     <>

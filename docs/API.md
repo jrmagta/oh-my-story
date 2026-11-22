@@ -99,13 +99,13 @@ A status is `{id, workflowId, name, category, colour, rank}`; `category` is `tod
 
 ### Labels
 
-Labels belong to the workspace and are shared by its maps. A label is `{id, name, colour}`.
+Labels belong to the workspace and are shared by its maps. A label is `{id, name}`.
 
 | Endpoint | Role | Body → response |
 |---|---|---|
 | `GET /labels` | viewer | → `[label]`, by name |
-| `POST /labels` | editor | `{name, colour?}` → `201` label. `name` 1 to 50 characters; `409` when the workspace has a label of that name, ignoring case. `colour` defaults to `#8A8A93` |
-| `PATCH /labels/{id}` | admin | `{name?, colour?}` → label. Same name rule |
+| `POST /labels` | editor | `{name}` → `201` label. `name` 1 to 50 characters; `409` when the workspace has a label of that name, ignoring case |
+| `PATCH /labels/{id}` | admin | `{name?}` → label. Same name rule |
 | `DELETE /labels/{id}` | admin | → `204`. Takes the label off every step; the one `label` delete event says so, with no step events |
 
 A step's labels are its `labelIds`, set with `PATCH .../steps/{id}`. Label events have no map, so every open map in the workspace gets them.
@@ -142,7 +142,7 @@ An objective's personas are its `personaIds`, set with `PATCH .../nodes/{id}`; a
 | `POST /maps/{mapId}/releases/{id}/move` | `{afterId?, beforeId?}` → release |
 | `DELETE /maps/{mapId}/releases/{id}` | → `204`. Its steps go to the end of their activity's Unscheduled cell |
 | `POST /maps/{mapId}/steps` | `{title, activityId, releaseId?, descriptionMd?, afterId?, beforeId?}` → `201 {step, placement}`. Gets the next workspace key (`PREFIX-n`) and the workflow's first status |
-| `PATCH /maps/{mapId}/steps/{id}` | `{title?, descriptionMd?, statusId?, assigneeId?, estimate?, labelIds?}` → step. `assigneeId`: optional null; must be a member. `estimate`: 0 to 9999.99 with at most two decimals, in the workspace's `estimateUnit`; null clears it. `labelIds` replaces the step's labels: labels of this workspace, no repeats, at most 20 |
+| `PATCH /maps/{mapId}/steps/{id}` | `{title?, descriptionMd?, statusId?, assigneeId?, estimate?, colour?, labelIds?}` → step. `assigneeId`: optional null; must be a member. `estimate`: 0 to 9999.99 with at most two decimals, in the workspace's `estimateUnit`; null clears it. `colour`: `#RRGGBB`, or null to take the activity's colour. `labelIds` replaces the step's labels: labels of this workspace, no repeats, at most 20 |
 | `POST /maps/{mapId}/steps/{id}/move` | `{activityId, releaseId, version, afterId?, beforeId?}` → `{placement, stale}`. `releaseId` is required, `null` for Unscheduled. `version` is the step version the client showed; the move applies regardless and `stale` says whether someone changed the step since |
 | `DELETE /maps/{mapId}/steps/{id}` | → `204` (soft delete) |
 | `POST /maps/{mapId}/steps/{id}/restore` | `{}` → step. Its activity must not be deleted |
@@ -151,7 +151,7 @@ An objective's personas are its `personaIds`, set with `PATCH .../nodes/{id}`; a
 | `POST /maps/{mapId}/dependencies` | `{blockerId, blockedId}` → `201` dependency. Both are live steps of this workspace, at least one on this map. `bad_request` for a step blocking itself or a link that would make a loop; `conflict` when the link exists |
 | `DELETE /maps/{mapId}/dependencies/{id}` | → `204`. The link must touch a step on this map |
 
-Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, title, description, colour, personaIds, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; step `{id, key, title, descriptionMd, statusId, assigneeId, estimate, labelIds, commentCount, version}` with `estimate` a number or null and `labelIds` sorted; placement `{id, stepId, activityId, releaseId, rank}`; dependency `{id, blockerId, blockedId}`; other step `{id, key, title, done, mapId, mapName}`.
+Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, title, description, colour, personaIds, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; step `{id, key, title, descriptionMd, statusId, assigneeId, estimate, colour, labelIds, commentCount, version}` with `estimate` a number or null, `colour` null when the step takes its activity's colour, and `labelIds` sorted; placement `{id, stepId, activityId, releaseId, rank}`; dependency `{id, blockerId, blockedId}`; other step `{id, key, title, done, mapId, mapName}`.
 
 A step on several maps is one step: one key, one status, one history. A change to it (edit, delete, restore, comments, being put on or taken off a map) is an event on every map it is on; the copies for maps other than the one written through are echoes, which a step's own history leaves out. Deleting an activity keeps steps that are also on another map: they are hidden on this map until the activity is restored. Deleting a step deletes it from every map.
 

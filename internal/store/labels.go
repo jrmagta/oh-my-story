@@ -9,16 +9,15 @@ import (
 
 // Label tags steps across every map of a workspace.
 type Label struct {
-	ID     uuid.UUID `json:"id"`
-	Name   string    `json:"name"`
-	Colour string    `json:"colour"`
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
 }
 
-const labelCols = `id, name, colour`
+const labelCols = `id, name`
 
 func scanLabel(row pgx.Row) (Label, error) {
 	var l Label
-	err := row.Scan(&l.ID, &l.Name, &l.Colour)
+	err := row.Scan(&l.ID, &l.Name)
 	return l, notFound(err)
 }
 
@@ -30,11 +29,11 @@ func (s *Store) Labels(ctx context.Context, workspaceID uuid.UUID) ([]Label, err
 
 // CreateLabel returns ErrConflict when the workspace has a label of that name,
 // ignoring case.
-func (s *Store) CreateLabel(ctx context.Context, actor, workspaceID uuid.UUID, name, colour string) (Label, error) {
-	l := Label{ID: newID(), Name: name, Colour: colour}
+func (s *Store) CreateLabel(ctx context.Context, actor, workspaceID uuid.UUID, name string) (Label, error) {
+	l := Label{ID: newID(), Name: name}
 	err := s.write(ctx, actor, workspaceID, uuid.Nil, func(tx pgx.Tx) ([]change, error) {
-		if _, err := tx.Exec(ctx, `INSERT INTO labels (id, workspace_id, name, colour) VALUES ($1, $2, $3, $4)`,
-			l.ID, workspaceID, l.Name, l.Colour); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO labels (id, workspace_id, name) VALUES ($1, $2, $3)`,
+			l.ID, workspaceID, l.Name); err != nil {
 			return nil, err
 		}
 		return []change{created(uuid.Nil, "label", l.ID, l)}, nil
@@ -43,7 +42,7 @@ func (s *Store) CreateLabel(ctx context.Context, actor, workspaceID uuid.UUID, n
 }
 
 type LabelPatch struct {
-	Name, Colour *string
+	Name *string
 }
 
 func (s *Store) UpdateLabel(ctx context.Context, actor, workspaceID, labelID uuid.UUID, p LabelPatch) (Label, error) {
@@ -55,8 +54,8 @@ func (s *Store) UpdateLabel(ctx context.Context, actor, workspaceID, labelID uui
 			return nil, err
 		}
 		if l, err = scanLabel(tx.QueryRow(ctx,
-			`UPDATE labels SET name = COALESCE($2, name), colour = COALESCE($3, colour), updated_at = now()
-			 WHERE id = $1 RETURNING `+labelCols, labelID, p.Name, p.Colour)); err != nil {
+			`UPDATE labels SET name = COALESCE($2, name), updated_at = now()
+			 WHERE id = $1 RETURNING `+labelCols, labelID, p.Name)); err != nil {
 			return nil, err
 		}
 		if c, ok := updated(uuid.Nil, "label", labelID, "update", before, l); ok {
