@@ -10,6 +10,7 @@ import { LabelChips, mapKey, StatusLabel, useMap } from './map'
 import { TagPicker } from '../map/TagPicker'
 import { DependencySection } from '../map/Dependencies'
 import { LinkedMaps } from '../map/LinkedMaps'
+import { AttachmentSection } from '../map/Attachments'
 
 /** The open step, beside the map. Editors change it in place; everyone else reads. */
 export function StepPanel({ stepId }: { stepId: string }) {
@@ -156,6 +157,8 @@ export function StepPanel({ stepId }: { stepId: string }) {
             </div>
           </dl>
           <Description key={step.id} text={step.descriptionMd} editable={canEdit} onSave={(descriptionMd) => patch({ descriptionMd })} />
+          {/* A share link cannot reach files yet (M5 phase 3). */}
+          {!shared && <AttachmentSection key={`files:${step.id}`} stepId={step.id} />}
           <DependencySection key={`deps:${step.id}`} stepId={step.id} stepKey={step.key} />
           <LinkedMaps key={`maps:${step.id}`} step={step} />
           {canEdit && (

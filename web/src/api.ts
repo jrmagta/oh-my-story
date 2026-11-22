@@ -150,6 +150,20 @@ export interface Step {
   version: number
 }
 
+/** A file on a step. contentType is worked out from the bytes by the server. */
+export interface Attachment {
+  id: string
+  stepId: string | null
+  name: string
+  contentType: string
+  /** Bytes. */
+  size: number
+  uploadedBy: string | null
+  /** Empty when that account no longer exists. */
+  uploaderName: string
+  createdAt: string
+}
+
 /** A comment on a step: a thread's first comment (parentId null) or a reply. */
 export interface Comment {
   id: string
@@ -324,6 +338,28 @@ async function request<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: str
   return data as T
 }
 
+/**
+ * POSTs a file as the raw body, which the server's CSRF guard accepts as
+ * application/octet-stream. XMLHttpRequest, unlike fetch, reports upload progress.
+ */
+function upload<T>(path: string, file: Blob, onProgress?: (done: number) => void): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', path)
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+    xhr.responseType = 'json'
+    if (onProgress) xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total)
+    xhr.onload = () => {
+      const data = xhr.response as unknown
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(data as T)
+      const e = (data as { error?: { code?: string; message?: string } } | null)?.error
+      reject(new ApiError(xhr.status, e?.code ?? 'internal', e?.message ?? `upload failed (${xhr.status})`))
+    }
+    xhr.onerror = () => reject(new ApiError(0, 'network', 'the upload could not reach the server'))
+    xhr.send(file)
+  })
+}
+
 const ws = (slug: string) => `/api/workspaces/${encodeURIComponent(slug)}`
 const inv = (token: string) => `/api/invites/${encodeURIComponent(token)}`
 const mp = (slug: string, mapId: string) => `${ws(slug)}/maps/${encodeURIComponent(mapId)}`
@@ -454,6 +490,15 @@ export const api = {
     },
   ) => request<Step>('PATCH', `${mp(slug, mapId)}/steps/${id}`, b),
   comments: (slug: string, mapId: string, stepId: string) => request<Comment[]>('GET', `${mp(slug, mapId)}/steps/${stepId}/comments`),
+  attachments: (slug: string, mapId: string, stepId: string) =>
+    request<Attachment[]>('GET', `${mp(slug, mapId)}/steps/${stepId}/attachments`),
+  /** Sends the file's bytes; onProgress gets the share sent so far, 0 to 1. */
+  uploadAttachment: (slug: string, mapId: string, stepId: string, file: File, onProgress?: (done: number) => void) =>
+    upload<Attachment>(`${mp(slug, mapId)}/steps/${stepId}/attachments?${new URLSearchParams({ name: file.name }).toString()}`, file, onProgress),
+  deleteAttachment: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/attachments/${id}`),
+  restoreAttachment: (slug: string, mapId: string, id: string) => request<void>('POST', `${mp(slug, mapId)}/attachments/${id}/restore`),
+  /** Where a file is downloaded (or, for an image, shown) from. */
+  attachmentURL: (slug: string, id: string) => `${ws(slug)}/attachments/${encodeURIComponent(id)}`,
   /** Commenter and up; each newly mentioned member is emailed once. */
   createComment: (slug: string, mapId: string, stepId: string, b: { bodyMd: string; parentId?: string; mentionIds?: string[] }) =>
     request<Comment>('POST', `${mp(slug, mapId)}/steps/${stepId}/comments`, b),

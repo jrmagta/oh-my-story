@@ -1312,6 +1312,21 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
               {step.commentCount}
             </span>
           )}
+          {step.attachmentCount > 0 && (
+            <span className="comment-count" title={`${step.attachmentCount} file${step.attachmentCount === 1 ? '' : 's'}`}>
+              <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden>
+                <path
+                  d="M10.5 5 6 9.5a1.4 1.4 0 0 0 2 2L13 6.5a2.8 2.8 0 0 0-4-4L3.8 7.7a4.2 4.2 0 0 0 6 6L13 10.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                />
+              </svg>
+              {step.attachmentCount}
+              <span className="sr-only"> files</span>
+            </span>
+          )}
           {elsewhere.length > 0 && (
             <span className="linked-mark" title={`Also on ${elsewhere.map((e) => e.mapName).join(', ')}`}>
               <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden>
