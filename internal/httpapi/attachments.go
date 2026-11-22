@@ -52,11 +52,22 @@ func (s *Server) listStepAttachments(q mapRequest) (int, any, error) {
 	return http.StatusOK, as, err
 }
 
-// uploadStepAttachment stores the request body as a file on step {id}. The
-// body is the file's bytes, sent as application/octet-stream (a type no
-// cross-site form can send); ?name= is its file name. The type is sniffed
-// from the bytes.
+// uploadStepAttachment stores the request body as a file on step {id}.
 func (s *Server) uploadStepAttachment(q mapRequest) (int, any, error) {
+	return s.upload(q, s.store.AddStepAttachment)
+}
+
+// uploadDraftAttachment stores the request body as a draft for a comment on
+// step {id}: only the uploader sees it until a comment claims it.
+func (s *Server) uploadDraftAttachment(q mapRequest) (int, any, error) {
+	return s.upload(q, s.store.AddDraftAttachment)
+}
+
+// upload reads a file from the request and stores it with add. The body is
+// the file's bytes, sent as application/octet-stream (a type no cross-site
+// form can send); ?name= is its file name. The type is sniffed from the bytes.
+func (s *Server) upload(q mapRequest,
+	add func(ctx context.Context, actor, workspaceID, mapID, stepID uuid.UUID, f store.FileUpload) (store.Attachment, error)) (int, any, error) {
 	if !strings.HasPrefix(q.r.Header.Get("Content-Type"), "application/octet-stream") {
 		return 0, nil, errBadRequest("send the file's bytes as the body, with Content-Type: application/octet-stream")
 	}
@@ -73,8 +84,7 @@ func (s *Server) uploadStepAttachment(q mapRequest) (int, any, error) {
 	if err != nil {
 		return 0, nil, err
 	}
-	a, err := s.store.AddStepAttachment(q.r.Context(), q.user, q.ws, q.mapID, q.id,
-		store.FileUpload{Name: name, ContentType: http.DetectContentType(data), Data: data})
+	a, err := add(q.r.Context(), q.user, q.ws, q.mapID, q.id, store.FileUpload{Name: name, ContentType: http.DetectContentType(data), Data: data})
 	return http.StatusCreated, a, err
 }
 
@@ -87,11 +97,11 @@ func (s *Server) restoreAttachment(q mapRequest) (int, any, error) {
 }
 
 // downloadAttachment sends a file of the workspace.
-func (s *Server) downloadAttachment(w http.ResponseWriter, r *http.Request, _ store.User, m store.Membership) {
+func (s *Server) downloadAttachment(w http.ResponseWriter, r *http.Request, u store.User, m store.Membership) {
 	s.sendFile(w, r,
-		func(id uuid.UUID) ([]byte, error) { return s.store.AttachmentETag(r.Context(), m.ID, id) },
+		func(id uuid.UUID) ([]byte, error) { return s.store.AttachmentETag(r.Context(), m.ID, u.ID, id) },
 		func(id uuid.UUID) (store.Attachment, []byte, error) {
-			return s.store.AttachmentFile(r.Context(), m.ID, id)
+			return s.store.AttachmentFile(r.Context(), m.ID, u.ID, id)
 		})
 }
 

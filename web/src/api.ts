@@ -153,7 +153,10 @@ export interface Step {
 /** A file on a step. contentType is worked out from the bytes by the server. */
 export interface Attachment {
   id: string
+  /** The step, for a step's file. */
   stepId: string | null
+  /** The comment, for a comment's file; both are null for a draft. */
+  commentId: string | null
   name: string
   contentType: string
   /** Bytes. */
@@ -178,6 +181,8 @@ export interface Comment {
   edited: boolean
   deleted: boolean
   createdAt: string
+  /** The comment's files, oldest first. */
+  attachments: Attachment[]
 }
 
 /** Shared by every map of the workspace. */
@@ -495,15 +500,19 @@ export const api = {
   /** Sends the file's bytes; onProgress gets the share sent so far, 0 to 1. */
   uploadAttachment: (slug: string, mapId: string, stepId: string, file: File, onProgress?: (done: number) => void) =>
     upload<Attachment>(`${mp(slug, mapId)}/steps/${stepId}/attachments?${new URLSearchParams({ name: file.name }).toString()}`, file, onProgress),
+  /** A file for a comment being written: only its uploader sees it until a comment claims it. */
+  uploadDraftAttachment: (slug: string, mapId: string, stepId: string, file: File, onProgress?: (done: number) => void) =>
+    upload<Attachment>(`${mp(slug, mapId)}/steps/${stepId}/draft-attachments?${new URLSearchParams({ name: file.name }).toString()}`, file, onProgress),
   deleteAttachment: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/attachments/${id}`),
   restoreAttachment: (slug: string, mapId: string, id: string) => request<void>('POST', `${mp(slug, mapId)}/attachments/${id}/restore`),
   /** Where a file is downloaded (or, for an image, shown) from. */
   attachmentURL: (slug: string, id: string) => `${ws(slug)}/attachments/${encodeURIComponent(id)}`,
   /** Commenter and up; each newly mentioned member is emailed once. */
-  createComment: (slug: string, mapId: string, stepId: string, b: { bodyMd: string; parentId?: string; mentionIds?: string[] }) =>
+  /** attachmentIds: drafts from uploadDraftAttachment, which become the comment's files. */
+  createComment: (slug: string, mapId: string, stepId: string, b: { bodyMd: string; parentId?: string; mentionIds?: string[]; attachmentIds?: string[] }) =>
     request<Comment>('POST', `${mp(slug, mapId)}/steps/${stepId}/comments`, b),
-  /** Body and mentions: the author. resolved: the thread's author or an editor. */
-  patchComment: (slug: string, mapId: string, id: string, b: { bodyMd?: string; mentionIds?: string[]; resolved?: boolean }) =>
+  /** Body, mentions and files (every file the comment keeps): the author. resolved: the thread's author or an editor. */
+  patchComment: (slug: string, mapId: string, id: string, b: { bodyMd?: string; mentionIds?: string[]; resolved?: boolean; attachmentIds?: string[] }) =>
     request<Comment>('PATCH', `${mp(slug, mapId)}/comments/${id}`, b),
   /** The author, or an admin. */
   deleteComment: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/comments/${id}`),

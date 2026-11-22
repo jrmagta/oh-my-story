@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ClipboardEvent, type DragEvent, type RefObject } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { api } from '../api'
+import { api, type Attachment } from '../api'
 import { errorMessage } from '../ui'
 import { mapKey, useMap } from '../pages/map'
 import { imageTypes } from './Attachments'
@@ -16,9 +16,89 @@ function named(file: File): File {
 }
 
 /**
- * A Markdown textarea with Save and Cancel. A file pasted or dropped into it
- * becomes a file of the step: a placeholder marks the spot while it uploads,
- * then turns into `![name](attachment:id)` (or a link, for anything but an image).
+ * Uploads files pasted or dropped into a Markdown textarea. A placeholder
+ * marks the spot, on a line of its own, while each uploads, then turns into
+ * `![name](attachment:id)` (or a link, for anything but an image).
+ * textarea goes on the textarea; pending counts uploads still going.
+ */
+export function useInlineFiles({
+  area,
+  setValue,
+  upload,
+  onUploaded,
+}: {
+  area: RefObject<HTMLTextAreaElement | null>
+  /** Takes an update, since uploads finish after other typing. */
+  setValue: (update: (v: string) => string) => void
+  upload: (file: File) => Promise<Attachment>
+  onUploaded?: (a: Attachment) => void
+}) {
+  const [pending, setPending] = useState(0)
+  const [errors, setErrors] = useState<string[]>([])
+
+  const attach = (list: FileList) => {
+    const files = Array.from(list).map(named)
+    if (files.length === 0) return false
+    const marks = files.map((f) => ({ file: f, mark: `![Uploading ${f.name.replace(/[[\]\\]/g, '')}…](uploading:${crypto.randomUUID()})` }))
+    const el = area.current
+    setValue((v) => {
+      const at = el?.selectionStart ?? v.length
+      const before = v.slice(0, at)
+      const after = v.slice(el?.selectionEnd ?? at)
+      const open = before && !before.endsWith('\n') ? '\n' : ''
+      const close = after && !after.startsWith('\n') ? '\n' : ''
+      return before + open + marks.map((m) => m.mark).join('\n') + close + after
+    })
+    setPending((n) => n + files.length)
+    setErrors([])
+    for (const { file, mark } of marks) {
+      upload(file)
+        .then((a) => {
+          setValue((v) => v.replace(mark, fileMarkdown(a.name, a.id, imageTypes.has(a.contentType))))
+          onUploaded?.(a)
+        })
+        .catch((e: unknown) => {
+          setValue((v) => v.replace(mark, ''))
+          setErrors((es) => [...es, `${file.name}: ${errorMessage(e)}`])
+        })
+        .finally(() => setPending((n) => n - 1))
+    }
+    return true
+  }
+
+  return {
+    pending,
+    errors,
+    /** Uploads picked files too, at the caret. */
+    attach,
+    textarea: {
+      onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => {
+        if (attach(e.clipboardData.files)) e.preventDefault()
+      },
+      onDragOver: (e: DragEvent<HTMLTextAreaElement>) => {
+        if (e.dataTransfer.types.includes('Files')) e.preventDefault()
+      },
+      onDrop: (e: DragEvent<HTMLTextAreaElement>) => {
+        if (e.dataTransfer.files.length === 0) return
+        e.preventDefault()
+        attach(e.dataTransfer.files)
+      },
+    },
+  }
+}
+
+/** Each message from useInlineFiles, as an alert. */
+export function FileErrors({ errors }: { errors: string[] }) {
+  return errors.map((m) => (
+    <p key={m} className="att-error mt-1 text-sm font-medium" role="alert">
+      {m}
+    </p>
+  ))
+}
+
+/**
+ * A Markdown textarea with Save and Cancel, for a step's description. Files
+ * pasted or dropped into it become files of the step.
  */
 export function MarkdownEditor({
   stepId,
@@ -32,7 +112,6 @@ export function MarkdownEditor({
   stepId: string
   label: string
   value: string
-  /** Takes an update, since uploads finish after other typing. */
   setValue: (update: (v: string) => string) => void
   preview: boolean
   onSave: () => void
@@ -41,40 +120,12 @@ export function MarkdownEditor({
   const { ws, view } = useMap()
   const qc = useQueryClient()
   const area = useRef<HTMLTextAreaElement>(null)
-  const [pending, setPending] = useState(0)
-  const [errors, setErrors] = useState<string[]>([])
-
-  const attach = (list: FileList) => {
-    const files = Array.from(list).map(named)
-    if (files.length === 0) return false
-    const marks = files.map((f) => ({ file: f, mark: `![Uploading ${f.name.replace(/[[\]\\]/g, '')}…](uploading:${crypto.randomUUID()})` }))
-    const at = area.current?.selectionStart ?? value.length
-    const end = area.current?.selectionEnd ?? at
-    // Each file goes on a line of its own.
-    setValue((v) => {
-      const before = v.slice(0, at)
-      const after = v.slice(end)
-      const open = before && !before.endsWith('\n') ? '\n' : ''
-      const close = after && !after.startsWith('\n') ? '\n' : ''
-      return before + open + marks.map((m) => m.mark).join('\n') + close + after
-    })
-    setPending((n) => n + files.length)
-    setErrors([])
-    for (const { file, mark } of marks) {
-      api
-        .uploadAttachment(ws.slug, view.map.id, stepId, file)
-        .then((a) => {
-          setValue((v) => v.replace(mark, fileMarkdown(a.name, a.id, imageTypes.has(a.contentType))))
-          void qc.invalidateQueries({ queryKey: [...mapKey(ws.slug, view.map.id), 'attachments', stepId] })
-        })
-        .catch((e: unknown) => {
-          setValue((v) => v.replace(mark, ''))
-          setErrors((es) => [...es, `${file.name}: ${errorMessage(e)}`])
-        })
-        .finally(() => setPending((n) => n - 1))
-    }
-    return true
-  }
+  const { pending, errors, textarea } = useInlineFiles({
+    area,
+    setValue,
+    upload: (file) => api.uploadAttachment(ws.slug, view.map.id, stepId, file),
+    onUploaded: () => void qc.invalidateQueries({ queryKey: [...mapKey(ws.slug, view.map.id), 'attachments', stepId] }),
+  })
 
   return (
     <>
@@ -94,24 +145,10 @@ export function MarkdownEditor({
             const next = e.target.value
             setValue(() => next)
           }}
-          onPaste={(e) => {
-            if (attach(e.clipboardData.files)) e.preventDefault()
-          }}
-          onDragOver={(e) => {
-            if (e.dataTransfer.types.includes('Files')) e.preventDefault()
-          }}
-          onDrop={(e) => {
-            if (e.dataTransfer.files.length === 0) return
-            e.preventDefault()
-            attach(e.dataTransfer.files)
-          }}
+          {...textarea}
         />
       )}
-      {errors.map((m) => (
-        <p key={m} className="att-error mt-1 text-sm font-medium" role="alert">
-          {m}
-        </p>
-      ))}
+      <FileErrors errors={errors} />
       <div className="mt-3 flex items-center gap-2">
         <button type="button" className="btn btn-sm btn-primary" disabled={pending > 0} onClick={onSave}>
           {pending > 0 ? 'Uploading…' : 'Save'}

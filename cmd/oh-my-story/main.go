@@ -108,6 +108,7 @@ func serve(ctx context.Context, cfg config.Config) error {
 	hub := live.New(pool)
 	hub.Start(ctx)
 	go webhook.New(store.New(pool), cfg.BlockPrivateWebhooks).Run(ctx)
+	go store.New(pool).RunSweeper(ctx, 15*time.Minute)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

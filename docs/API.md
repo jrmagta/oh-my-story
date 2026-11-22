@@ -161,18 +161,19 @@ Limits: names 1 to 100 characters, titles 1 to 500, descriptions up to 50,000; c
 
 ### Comments
 
-A comment is `{id, stepId, parentId, authorId, authorName, bodyMd, mentionIds, resolved, edited, deleted, createdAt}`. A thread is a first comment (`parentId` null) and its replies, one level deep. Comments are map events (entity `comment`, carrying `stepId`), so open maps get them live; steps carry `commentCount`.
+A comment is `{id, stepId, parentId, authorId, authorName, bodyMd, mentionIds, resolved, edited, deleted, createdAt, attachments}`, `attachments` being its files (empty once deleted). A thread is a first comment (`parentId` null) and its replies, one level deep. Comments are map events (entity `comment`, carrying `stepId`), so open maps get them live; steps carry `commentCount`.
 
 | Endpoint | Role | Body → response |
 |---|---|---|
 | `GET /maps/{mapId}/steps/{id}/comments` | viewer | → `[comment]`, oldest first. A deleted comment is listed, blanked, only while it has replies |
-| `POST /maps/{mapId}/steps/{id}/comments` | commenter | `{bodyMd, parentId?, mentionIds?}` → `201` comment. `bodyMd` 1 to 10,000 characters; `parentId` a live first comment of the same step; `mentionIds` workspace members (up to 50). Each member newly mentioned, other than the author, gets one email with a link to the step |
-| `PATCH /maps/{mapId}/comments/{id}` | commenter | `{bodyMd?, mentionIds?, resolved?}` → comment. Body and mentions: the author only (`403` otherwise). `resolved`: a first comment only, by its author or an editor |
+| `POST /maps/{mapId}/steps/{id}/draft-attachments?name=…` | commenter | a file's bytes, as for a step's file → `201` attachment with `stepId` and `commentId` null: a draft for a comment being written. Only its uploader can download it, and it makes no event. Drafts not claimed within a day are deleted |
+| `POST /maps/{mapId}/steps/{id}/comments` | commenter | `{bodyMd, parentId?, mentionIds?, attachmentIds?}` → `201` comment. `attachmentIds` (up to 20) are your drafts on this step, which become the comment's files (`400` for anything else). `bodyMd` 1 to 10,000 characters; `parentId` a live first comment of the same step; `mentionIds` workspace members (up to 50). Each member newly mentioned, other than the author, gets one email with a link to the step |
+| `PATCH /maps/{mapId}/comments/{id}` | commenter | `{bodyMd?, mentionIds?, resolved?, attachmentIds?}` → comment. Body, mentions and files: the author only (`403` otherwise). `attachmentIds` is every file the comment keeps: its files left out are deleted, and your drafts listed are added. `resolved`: a first comment only, by its author or an editor |
 | `DELETE /maps/{mapId}/comments/{id}` | commenter | → `204`. The author, or an admin |
 
 ### Attachments
 
-A file on a step is `{id, stepId, name, contentType, size, uploadedBy, uploaderName, createdAt}`. The bytes are stored in Postgres and sent only by the download endpoint. `contentType` is worked out from the bytes, never taken from the uploader. Files are map events (entity `attachment`, carrying `stepId`, `name`, `contentType` and `size`), echoed to every map the step is on; steps carry `attachmentCount`. A file is reached only through its step, so it is hidden while the step is deleted and comes back with it.
+A file is `{id, stepId, commentId, name, contentType, size, uploadedBy, uploaderName, createdAt}`: a step's (`stepId` set), a comment's (`commentId` set; see Comments) or a draft (neither). The bytes are stored in Postgres and sent only by the download endpoint. `contentType` is worked out from the bytes, never taken from the uploader. Files are map events (entity `attachment`, carrying `stepId`, `name`, `contentType` and `size`), echoed to every map the step is on; steps carry `attachmentCount`. A file is reached only through its step or comment, so it is hidden while the step is deleted and comes back with it. A comment's files make no events of their own: they travel in the comment's. Every 15 minutes each server removes, for good, drafts more than a day old and files deleted (or on comments deleted) more than 30 days ago; sweepers on several servers skip each other's rows.
 
 | Endpoint | Role | Body → response |
 |---|---|---|

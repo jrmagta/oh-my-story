@@ -16,7 +16,10 @@ import (
 	"github.com/jrmagta/oh-my-story/internal/store"
 )
 
-const maxComment = 10_000
+const (
+	maxComment      = 10_000
+	maxCommentFiles = 20
+)
 
 func (s *Server) listComments(q mapRequest) (int, any, error) {
 	cs, err := s.store.Comments(q.r.Context(), q.ws, q.mapID, q.id)
@@ -27,9 +30,10 @@ func (s *Server) listComments(q mapRequest) (int, any, error) {
 // mentionIds are workspace members the body mentions; each is emailed once.
 func (s *Server) createComment(q mapRequest) (int, any, error) {
 	var in struct {
-		BodyMD     string
-		ParentID   *uuid.UUID
-		MentionIDs []uuid.UUID
+		BodyMD        string
+		ParentID      *uuid.UUID
+		MentionIDs    []uuid.UUID
+		AttachmentIDs []uuid.UUID
 	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
@@ -45,7 +49,14 @@ func (s *Server) createComment(q mapRequest) (int, any, error) {
 	if err := idSet("mentionIds", &mentions, 50); err != nil {
 		return 0, nil, err
 	}
-	w, err := s.store.CreateComment(q.r.Context(), q.user, q.ws, q.mapID, q.id, body, in.ParentID, mentions)
+	files := in.AttachmentIDs
+	if files == nil {
+		files = []uuid.UUID{}
+	}
+	if err := idSet("attachmentIds", &files, maxCommentFiles); err != nil {
+		return 0, nil, err
+	}
+	w, err := s.store.CreateComment(q.r.Context(), q.user, q.ws, q.mapID, q.id, body, in.ParentID, mentions, files)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -56,9 +67,10 @@ func (s *Server) createComment(q mapRequest) (int, any, error) {
 // patchComment edits (author only) or resolves (the thread's author, or an editor) a comment.
 func (s *Server) patchComment(q mapRequest) (int, any, error) {
 	var in struct {
-		BodyMD     *string
-		MentionIDs *[]uuid.UUID
-		Resolved   *bool
+		BodyMD        *string
+		MentionIDs    *[]uuid.UUID
+		Resolved      *bool
+		AttachmentIDs *[]uuid.UUID
 	}
 	if err := q.read(&in); err != nil {
 		return 0, nil, err
@@ -71,7 +83,10 @@ func (s *Server) patchComment(q mapRequest) (int, any, error) {
 	if err := idSet("mentionIds", in.MentionIDs, 50); err != nil {
 		return 0, nil, err
 	}
-	p.MentionIDs, p.Resolved = in.MentionIDs, in.Resolved
+	if err := idSet("attachmentIds", in.AttachmentIDs, maxCommentFiles); err != nil {
+		return 0, nil, err
+	}
+	p.MentionIDs, p.Resolved, p.AttachmentIDs = in.MentionIDs, in.Resolved, in.AttachmentIDs
 	w, err := s.store.UpdateComment(q.r.Context(), q.user, q.ws, q.mapID, q.id, p, q.role.Can(role.Edit))
 	if err != nil {
 		return 0, nil, err
