@@ -6,7 +6,7 @@ import { mapKey, useMap } from '../pages/map'
 import { ago } from './history'
 
 /** The types the server sends for the browser to show; the rest download. */
-const imageTypes = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
+export const imageTypes = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
 
 /** "512 B", "48 KB", "2.4 MB", "12 MB". */
 export function fileSize(bytes: number): string {
@@ -30,11 +30,11 @@ interface Upload {
  * progress bar. Images show a thumbnail that opens full size.
  */
 export function AttachmentSection({ stepId }: { stepId: string }) {
-  const { ws, view, canEdit, run } = useMap()
+  const { ws, view, canEdit, run, shared, files: source } = useMap()
   const qc = useQueryClient()
   const files = useQuery({
     queryKey: [...mapKey(ws.slug, view.map.id), 'attachments', stepId],
-    queryFn: () => api.attachments(ws.slug, view.map.id, stepId),
+    queryFn: () => source.list(stepId),
   })
   const [uploads, setUploads] = useState<Upload[]>([])
   const [over, setOver] = useState(false)
@@ -103,7 +103,7 @@ export function AttachmentSection({ stepId }: { stepId: string }) {
       {list.length > 0 && (
         <ul className="att-list" aria-label="Files">
           {list.map((a) => {
-            const url = api.attachmentURL(ws.slug, a.id)
+            const url = source.url(a.id)
             const image = imageTypes.has(a.contentType)
             return (
               <li key={a.id}>
@@ -121,7 +121,7 @@ export function AttachmentSection({ stepId }: { stepId: string }) {
                     {a.name}
                   </a>
                   <span className="att-meta">
-                    {[fileSize(a.size), a.uploaderName || 'Removed user', ago(a.createdAt)].join(' · ')}
+                    {[fileSize(a.size), ...(shared ? [] : [a.uploaderName || 'Removed user']), ago(a.createdAt)].join(' · ')}
                   </span>
                 </span>
                 {canEdit && (
@@ -170,7 +170,7 @@ export function AttachmentSection({ stepId }: { stepId: string }) {
       {files.isSuccess && list.length === 0 && uploads.length === 0 && (
         <p className="text-muted font-medium">{canEdit ? 'Drop files here, or use Add files.' : 'No files.'}</p>
       )}
-      {viewing && <ImageViewer file={viewing} url={api.attachmentURL(ws.slug, viewing.id)} onClose={() => setViewing(null)} />}
+      {viewing && <ImageViewer file={viewing} url={source.url(viewing.id)} onClose={() => setViewing(null)} />}
     </section>
   )
 }

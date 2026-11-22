@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
-import { api, ApiError, atLeast, type Category, type Level, type MapNode, type MapView, type Membership, type Release, type Status, type Step } from '../api'
+import { api, ApiError, atLeast, type Category, type Level, type MapNode, type MapView, type Membership, type Release, type Status, type Step, type Attachment } from '../api'
 import { MapDnd, refs, useDrag, useDrop } from '../map/dnd'
 import { HistoryList } from '../map/HistoryList'
 import { liveLabel, useLiveMap, type LiveState, type PresentUser } from '../map/live'
@@ -58,6 +58,13 @@ export interface MapCtx {
   /** Steps whose dependency lines are drawn, picked with the mark on their card. */
   depLines: ReadonlySet<string>
   toggleDepLines: (stepId: string) => void
+  /** A step's files and a file's URL: through the workspace, or through the share link. */
+  files: Files
+}
+
+export interface Files {
+  list: (stepId: string) => Promise<Attachment[]>
+  url: (id: string) => string
 }
 
 const Ctx = createContext<MapCtx | null>(null)
@@ -247,6 +254,10 @@ export function MapPage() {
       setAdding,
       depLines,
       toggleDepLines,
+      files: {
+        list: (stepId) => api.attachments(ws.slug, query.data.map.id, stepId),
+        url: (id) => api.attachmentURL(ws.slug, id),
+      },
     }
   }, [ws, query.data, filter, setFilter, prefs, setPrefs, mode, setMode, run, selectedStep, openStep, move, adding, depLines, toggleDepLines])
 

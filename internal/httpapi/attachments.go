@@ -13,6 +13,8 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/google/uuid"
+	"github.com/jrmagta/oh-my-story/internal/auth"
 	"github.com/jrmagta/oh-my-story/internal/config"
 	"github.com/jrmagta/oh-my-story/internal/store"
 )
@@ -84,16 +86,53 @@ func (s *Server) restoreAttachment(q mapRequest) (int, any, error) {
 	return 0, nil, s.store.RestoreAttachment(q.r.Context(), q.user, q.ws, q.mapID, q.id)
 }
 
-// downloadAttachment sends a file's bytes. Files never change, so a cached
-// copy stays good and If-None-Match is answered without reading the bytes.
+// downloadAttachment sends a file of the workspace.
 func (s *Server) downloadAttachment(w http.ResponseWriter, r *http.Request, _ store.User, m store.Membership) {
+	s.sendFile(w, r,
+		func(id uuid.UUID) ([]byte, error) { return s.store.AttachmentETag(r.Context(), m.ID, id) },
+		func(id uuid.UUID) (store.Attachment, []byte, error) {
+			return s.store.AttachmentFile(r.Context(), m.ID, id)
+		})
+}
+
+// sharedAttachments lists the files of a step on a share link's map. No session needed.
+func (s *Server) sharedAttachments(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	as, err := s.store.SharedStepAttachments(r.Context(), auth.HashToken(r.PathValue("token")), id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, as)
+}
+
+// sharedAttachment sends a file of a step on a share link's map.
+func (s *Server) sharedAttachment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	hash := auth.HashToken(r.PathValue("token"))
+	s.sendFile(w, r,
+		func(id uuid.UUID) ([]byte, error) { return s.store.SharedAttachmentETag(r.Context(), hash, id) },
+		func(id uuid.UUID) (store.Attachment, []byte, error) {
+			return s.store.SharedAttachmentFile(r.Context(), hash, id)
+		})
+}
+
+// sendFile sends file {id}'s bytes. Files never change, so a cached copy
+// stays good and If-None-Match is answered without reading the bytes.
+func (s *Server) sendFile(w http.ResponseWriter, r *http.Request,
+	etagOf func(uuid.UUID) ([]byte, error), file func(uuid.UUID) (store.Attachment, []byte, error)) {
 	id, err := pathUUID(r, "id")
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	if inm := r.Header.Get("If-None-Match"); inm != "" {
-		if sum, err := s.store.AttachmentETag(r.Context(), m.ID, id); err == nil && inm == etag(sum) {
+		if sum, err := etagOf(id); err == nil && inm == etag(sum) {
 			cacheForever(w, sum)
 			w.WriteHeader(http.StatusNotModified)
 			return
@@ -105,7 +144,7 @@ func (s *Server) downloadAttachment(w http.ResponseWriter, r *http.Request, _ st
 		return
 	}
 	defer release()
-	a, data, err := s.store.AttachmentFile(r.Context(), m.ID, id)
+	a, data, err := file(id)
 	if err != nil {
 		writeError(w, err)
 		return

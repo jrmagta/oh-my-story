@@ -341,6 +341,53 @@ paths:
                 $ref: "#/components/schemas/SharedMap"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/shared/{token}/steps/{id}/attachments:
+    get:
+      tags: ["Share links"]
+      summary: "The files of a step on a share link's map"
+      operationId: getSharedTokenStepsIdAttachments
+      description: >-
+        No sign-in needed. The step must be on the link's map. Oldest first;
+        uploadedBy is null and uploaderName empty, since share links show no people.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/token"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Attachment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/shared/{token}/attachments/{id}:
+    get:
+      tags: ["Share links"]
+      summary: "Download a file of a step on a share link's map"
+      operationId: getSharedTokenAttachmentsId
+      description: >-
+        No sign-in needed. Only files of live steps on the link's map; any
+        other id is 404. Headers and caching as for the workspace download.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/token"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: "The file's bytes, with its sniffed content type"
+          content:
+            application/octet-stream:
+              schema:
+                type: "string"
+                format: "binary"
+        "304":
+          description: "Not modified"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/workspaces:
     get:
       tags: ["Workspaces"]
