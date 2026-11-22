@@ -71,6 +71,7 @@ func (s *Server) register(mux *http.ServeMux, ui http.Handler) {
 	s.handle(mux, "GET /api/shared/{token}", s.sharedMap)
 	s.handle(mux, "GET /api/shared/{token}/steps/{id}/attachments", s.sharedAttachments)
 	s.handle(mux, "GET /api/shared/{token}/attachments/{id}", s.sharedAttachment)
+	s.handle(mux, "GET /api/shared/{token}/nodes/{id}/attachments", s.sharedNodeAttachments)
 	s.handle(mux, "GET /api/workspaces/{slug}", s.inWorkspace(role.View, s.getWorkspace))
 	s.handle(mux, "PATCH /api/workspaces/{slug}", s.inWorkspace(role.ManageSettings, s.patchWorkspace))
 	s.handle(mux, "DELETE /api/workspaces/{slug}", s.inWorkspace(role.DeleteWorkspace, s.deleteWorkspace))

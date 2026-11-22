@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
-import { api, ApiError, atLeast, type Category, type Level, type MapNode, type MapView, type Membership, type Release, type Status, type Step, type Attachment } from '../api'
+import { api, ApiError, atLeast, type Category, type Level, type MapNode, type MapView, type Membership, type Release, type Status, type Step, type Attachment, type FileOwner } from '../api'
 import { MapDnd, refs, useDrag, useDrop } from '../map/dnd'
 import { HistoryList } from '../map/HistoryList'
 import { liveLabel, useLiveMap, type LiveState, type PresentUser } from '../map/live'
@@ -16,7 +16,7 @@ import { toggled, UNSCHEDULED_BAND, useViewPrefs, type ViewPrefs } from '../map/
 import { applyMove, type Move } from '../map/moves'
 import { Avatar, ErrorAlert, errorMessage, InlineText, Loading, TextInput, Toasts, type ToastMessage } from '../ui'
 import { PageBand } from './app'
-import { StepPanel } from './step-panel'
+import { NodePanel, StepPanel } from './step-panel'
 import { ShareDialog } from './share'
 import { DependencyLines, DependencyMark } from '../map/Dependencies'
 import { MapViewport } from '../map/navigation'
@@ -50,6 +50,9 @@ export interface MapCtx {
   run: (write: () => Promise<unknown>, opts?: { done?: string; undo?: () => Promise<unknown> }) => Promise<boolean>
   selectedStep: string | null
   openStep: (id: string | null) => void
+  /** The objective or activity whose details are open. */
+  selectedNode: string | null
+  openNode: (id: string | null) => void
   /** Shows a move at once, saves it, and puts things back if saving fails. */
   move: (m: Move) => void
   /** The objective or activity being typed in, and where it goes; the grid gives it a column there. */
@@ -63,7 +66,7 @@ export interface MapCtx {
 }
 
 export interface Files {
-  list: (stepId: string) => Promise<Attachment[]>
+  list: (owner: FileOwner) => Promise<Attachment[]>
   url: (id: string) => string
 }
 
@@ -92,19 +95,27 @@ export const MapProvider = Ctx.Provider
 export function useMapSearch() {
   const [search, setSearch] = useSearchParams()
   const selectedStep = search.get('step')
-  const openStep = useCallback(
-    (id: string | null) =>
+  const selectedNode = search.get('node')
+  // One details panel at a time: opening a step or node closes the other (and the activity feed).
+  const open = useCallback(
+    (key: 'step' | 'node', id: string | null) =>
       setSearch(
         (s) => {
           const n = new URLSearchParams(s)
-          if (id) n.set('step', id)
-          else n.delete('step')
+          n.delete('step')
+          n.delete('node')
+          if (id) {
+            n.set(key, id)
+            n.delete('activity')
+          }
           return n
         },
         { replace: true },
       ),
     [setSearch],
   )
+  const openStep = useCallback((id: string | null) => open('step', id), [open])
+  const openNode = useCallback((id: string | null) => open('node', id), [open])
   const [filter, setFilterState] = useState(() => readFilter(search))
   const setFilter = useCallback(
     (f: Filter) => {
@@ -125,7 +136,7 @@ export function useMapSearch() {
       }),
     [setSearch],
   )
-  return { search, setSearch, selectedStep, openStep, filter, setFilter, mode, setMode }
+  return { search, setSearch, selectedStep, openStep, selectedNode, openNode, filter, setFilter, mode, setMode }
 }
 
 /** What the map shows that follows from the payload and the filter. */
@@ -145,7 +156,7 @@ export function MapPage() {
   const ws = useOutletContext<Membership>()
   const { mapId = '' } = useParams()
   const qc = useQueryClient()
-  const { search, setSearch, selectedStep, openStep, filter, setFilter, mode, setMode } = useMapSearch()
+  const { search, setSearch, selectedStep, openStep, selectedNode, openNode, filter, setFilter, mode, setMode } = useMapSearch()
   const key = useMemo(() => mapKey(ws.slug, mapId), [ws.slug, mapId])
   const query = useQuery({ queryKey: key, queryFn: () => api.map(ws.slug, mapId), retry: false })
   const live = useLiveMap(ws.slug, mapId, key)
@@ -249,17 +260,19 @@ export function MapPage() {
       run,
       selectedStep,
       openStep,
+      selectedNode,
+      openNode,
       move,
       adding,
       setAdding,
       depLines,
       toggleDepLines,
       files: {
-        list: (stepId) => api.attachments(ws.slug, query.data.map.id, stepId),
+        list: (owner) => api.attachments(ws.slug, query.data.map.id, owner),
         url: (id) => api.attachmentURL(ws.slug, id),
       },
     }
-  }, [ws, query.data, filter, setFilter, prefs, setPrefs, mode, setMode, run, selectedStep, openStep, move, adding, depLines, toggleDepLines])
+  }, [ws, query.data, filter, setFilter, prefs, setPrefs, mode, setMode, run, selectedStep, openStep, selectedNode, openNode, move, adding, depLines, toggleDepLines])
 
   if (query.isPending) return <Loading />
   if (!ctx) {
@@ -276,10 +289,11 @@ export function MapPage() {
       </>
     )
   }
-  // One side panel at a time: the open step, else the activity feed.
+  // One side panel at a time: the open step or node, else the activity feed.
   const stepOpen = !!selectedStep && ctx.view.steps.some((s) => s.id === selectedStep)
-  const activityOpen = !stepOpen && search.has('activity')
-  const panelOpen = stepOpen || activityOpen
+  const nodeOpen = !stepOpen && !!selectedNode && ctx.view.nodes.some((n) => n.id === selectedNode)
+  const activityOpen = !stepOpen && !nodeOpen && search.has('activity')
+  const panelOpen = stepOpen || nodeOpen || activityOpen
   const toggleActivity = () =>
     setSearch(
       (s) => {
@@ -288,6 +302,7 @@ export function MapPage() {
         else {
           n.set('activity', '')
           n.delete('step')
+          n.delete('node')
         }
         return n
       },
@@ -305,6 +320,7 @@ export function MapPage() {
         </MapViewport>
       </div>
       {stepOpen && <StepPanel stepId={selectedStep} />}
+      {nodeOpen && <NodePanel nodeId={selectedNode} />}
       {activityOpen && <ActivityPanel onClose={toggleActivity} />}
       <Toasts items={toasts} dismiss={dismiss} />
     </Ctx.Provider>
@@ -669,11 +685,12 @@ export function MapGrid() {
 
 /**
  * A backbone card's content. The whole card drags (with the pointer, or Space
- * once focused); its ⋯ menu renames, recolours, links personas (objectives),
- * collapses (activities) and deletes.
+ * once focused); its ⋯ menu opens its details, renames, recolours, links
+ * personas (objectives), collapses (activities) and deletes. A paperclip
+ * counts its files and opens its details.
  */
 function NodeHead({ node, bold }: { node: MapNode; bold?: boolean }) {
-  const { ws, view, canEdit, totals, run } = useMap()
+  const { ws, view, canEdit, totals, run, openNode } = useMap()
   const label = `${node.level} ${node.title}`
   const total = totals.nodes.get(node.id)
   const sum = total && estimated(total, ws.estimateUnit)
@@ -690,7 +707,7 @@ function NodeHead({ node, bold }: { node: MapNode; bold?: boolean }) {
       {...drag.pointer}
     >
       {/* First, so it floats at the right of the title's first line and the title wraps around it. */}
-      {(canEdit || node.level === 'activity') && !renaming && (
+      {!renaming && (
         <CardMenu label={label}>
           {(close) => (
             <NodeMenu node={node} label={label} close={close} rename={() => setRenaming(true)} />
@@ -726,6 +743,19 @@ function NodeHead({ node, bold }: { node: MapNode; bold?: boolean }) {
           {sum}
         </span>
       )}
+      {node.attachmentCount > 0 && (
+        <button
+          type="button"
+          className="node-files"
+          title={`${node.attachmentCount} file${node.attachmentCount === 1 ? '' : 's'}`}
+          aria-label={`${node.attachmentCount} file${node.attachmentCount === 1 ? '' : 's'} on ${label}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => openNode(node.id)}
+        >
+          <Paperclip />
+          {node.attachmentCount}
+        </button>
+      )}
     </div>
   )
 }
@@ -748,7 +778,7 @@ function CollapsedActivity({ node }: { node: MapNode }) {
 
 function NodeMenu(props: { node: MapNode; label: string; close: () => void; rename: () => void }) {
   const { node, label, close } = props
-  const { ws, view, run, canEdit, prefs, setPrefs } = useMap()
+  const { ws, view, run, canEdit, prefs, setPrefs, openNode } = useMap()
   const [panel, setPanel] = useState<'main' | 'colour' | 'personas'>('main')
   if (panel === 'colour') {
     return (
@@ -794,9 +824,18 @@ function NodeMenu(props: { node: MapNode; label: string; close: () => void; rena
       Collapse
     </MenuItem>
   )
-  if (!canEdit) return collapse
+  // Everyone can read the details; editors change them there.
+  const details = <MenuItem onClick={then(() => openNode(node.id))}>Details</MenuItem>
+  if (!canEdit)
+    return (
+      <>
+        {details}
+        {collapse}
+      </>
+    )
   return (
     <>
+      {details}
       {collapse}
       <MenuItem onClick={then(props.rename)}>Rename</MenuItem>
       {node.level === 'objective' && <MenuItem onClick={() => setPanel('personas')}>Personas…</MenuItem>}
@@ -1325,15 +1364,7 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
           )}
           {step.attachmentCount > 0 && (
             <span className="comment-count" title={`${step.attachmentCount} file${step.attachmentCount === 1 ? '' : 's'}`}>
-              <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden>
-                <path
-                  d="M10.5 5 6 9.5a1.4 1.4 0 0 0 2 2L13 6.5a2.8 2.8 0 0 0-4-4L3.8 7.7a4.2 4.2 0 0 0 6 6L13 10.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                />
-              </svg>
+              <Paperclip />
               {step.attachmentCount}
               <span className="sr-only"> files</span>
             </span>
@@ -1388,5 +1419,19 @@ function ActivityPanel({ onClose }: { onClose: () => void }) {
         onStep={openStep}
       />
     </aside>
+  )
+}
+
+function Paperclip() {
+  return (
+    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden>
+      <path
+        d="M10.5 5 6 9.5a1.4 1.4 0 0 0 2 2L13 6.5a2.8 2.8 0 0 0-4-4L3.8 7.7a4.2 4.2 0 0 0 6 6L13 10.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
   )
 }

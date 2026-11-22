@@ -85,6 +85,8 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 		{"PATCH " + m + "/comments/{id}", role.Comment, s.patchComment},
 		{"DELETE " + m + "/comments/{id}", role.Comment, s.deleteComment},
 
+		{"GET " + m + "/nodes/{id}/attachments", role.View, s.listNodeAttachments},
+		{"POST " + m + "/nodes/{id}/attachments", role.Edit, s.uploadNodeAttachment},
 		{"GET " + m + "/steps/{id}/attachments", role.View, s.listStepAttachments},
 		{"POST " + m + "/steps/{id}/attachments", role.Edit, s.uploadStepAttachment},
 		{"DELETE " + m + "/attachments/{id}", role.Edit, s.deleteAttachment},

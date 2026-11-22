@@ -364,6 +364,27 @@ paths:
                   $ref: "#/components/schemas/Attachment"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/shared/{token}/nodes/{id}/attachments:
+    get:
+      tags: ["Share links"]
+      summary: "The files of an objective or activity on a share link's map"
+      operationId: getSharedTokenNodesIdAttachments
+      description: "No sign-in needed. As for a step's files on a share link."
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/token"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Attachment"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/shared/{token}/attachments/{id}:
     get:
       tags: ["Share links"]
@@ -2536,6 +2557,76 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/nodes/{id}/attachments:
+    get:
+      tags: ["Attachments"]
+      summary: "An objective's or activity's files, oldest first"
+      operationId: getWorkspacesSlugMapsMapidNodesIdAttachments
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Attachment"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["Attachments"]
+      summary: "Attach a file to an objective or activity"
+      operationId: postWorkspacesSlugMapsMapidNodesIdAttachments
+      description: >-
+        Editor or above, or a write token. Uploads as for a step's file
+        (application/octet-stream body, ?name=). Delete and restore use the
+        map's attachments endpoints.
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+        - name: name
+          in: query
+          required: true
+          description: "The file name to show and download as; any path before it is dropped."
+          schema:
+            type: "string"
+            maxLength: 255
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: "string"
+              format: "binary"
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attachment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          description: "The file is larger than the server's limit."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/workspaces/{slug}/maps/{mapId}/steps/{id}/attachments:
     get:
       tags: ["Attachments"]
@@ -3250,7 +3341,10 @@ components:
           type: "string"
         version:
           type: "integer"
-      required: ["id", "parentId", "level", "title", "description", "colour", "personaIds", "rank", "version"]
+        attachmentCount:
+          type: "integer"
+          description: "How many live files the node has"
+      required: ["id", "parentId", "level", "title", "description", "colour", "personaIds", "rank", "version", "attachmentCount"]
       additionalProperties: false
     Release:
       type: "object"
@@ -3446,10 +3540,14 @@ components:
           type: ["string", "null"]
           format: "uuid"
           description: "The step, for a step's file"
+        nodeId:
+          type: ["string", "null"]
+          format: "uuid"
+          description: "The objective or activity, for a node's file"
         commentId:
           type: ["string", "null"]
           format: "uuid"
-          description: "The comment, for a comment's file; both are null for a draft"
+          description: "The comment, for a comment's file; stepId, nodeId and commentId are all null for a draft"
         name:
           type: "string"
         contentType:
@@ -3467,7 +3565,7 @@ components:
         createdAt:
           type: "string"
           format: "date-time"
-      required: ["id", "stepId", "commentId", "name", "contentType", "size", "uploadedBy", "uploaderName", "createdAt"]
+      required: ["id", "stepId", "nodeId", "commentId", "name", "contentType", "size", "uploadedBy", "uploaderName", "createdAt"]
       additionalProperties: false
     Comment:
       type: "object"

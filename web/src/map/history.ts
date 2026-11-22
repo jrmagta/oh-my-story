@@ -31,6 +31,15 @@ function stepName(n: Names, id: string, fields?: Record<string, unknown> | null)
   return typeof key === 'string' ? key : 'a step'
 }
 
+/** What a file event is on: a step's key, or an objective's or activity's title. */
+function fileOwner(n: Names, fields: Record<string, unknown>): string {
+  if (typeof fields.nodeId === 'string') {
+    const node = n.view.nodes.find((x) => x.id === fields.nodeId)
+    return node ? q(node.title) : 'a deleted card'
+  }
+  return stepName(n, typeof fields.stepId === 'string' ? fields.stepId : '')
+}
+
 function status(n: Names, id: unknown): string {
   return n.view.workflow.statuses.find((s) => s.id === id)?.name ?? 'a removed status'
 }
@@ -109,11 +118,11 @@ export function describe(e: HistoryEntry, n: Names): string | null {
     case 'comment:delete':
       return `deleted a comment on ${stepName(n, typeof b.stepId === 'string' ? b.stepId : '')}`
     case 'attachment:create':
-      return `attached ${q(a.name)} to ${stepName(n, typeof a.stepId === 'string' ? a.stepId : '')}`
+      return `attached ${q(a.name)} to ${fileOwner(n, a)}`
     case 'attachment:delete':
-      return `removed ${q(b.name)} from ${stepName(n, typeof b.stepId === 'string' ? b.stepId : '')}`
+      return `removed ${q(b.name)} from ${fileOwner(n, b)}`
     case 'attachment:restore':
-      return `restored ${q(a.name)} on ${stepName(n, typeof a.stepId === 'string' ? a.stepId : '')}`
+      return `restored ${q(a.name)} on ${fileOwner(n, a)}`
     case 'step:delete':
       return `deleted ${stepName(n, e.entityId, b)} ${b.title !== undefined ? q(b.title) : ''}`.trim()
     case 'step:restore':

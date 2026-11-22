@@ -9,7 +9,7 @@ import { ago } from '../map/history'
 import { ErrorAlert, Loading, Logo, Stripe, ThemeToggle } from '../ui'
 import { deriveMap, mapKey, MapCanvas, MapHeader, MapProvider, useDepLines, useMap, useMapSearch, type MapCtx } from './map'
 import { MapViewport } from '../map/navigation'
-import { StepPanel } from './step-panel'
+import { NodePanel, StepPanel } from './step-panel'
 
 const expiries: [number | null, string][] = [
   [7, '7 days'],
@@ -122,7 +122,7 @@ export function ShareDialog({ close }: { close: () => void }) {
 export function SharedMapPage() {
   const { token = '' } = useParams()
   const shared = useQuery({ queryKey: ['shared', token], queryFn: () => api.sharedMap(token), retry: false })
-  const { selectedStep, openStep, filter, setFilter, mode, setMode } = useMapSearch()
+  const { selectedStep, openStep, selectedNode, openNode, filter, setFilter, mode, setMode } = useMapSearch()
   const [prefs, setPrefs] = useViewPrefs(shared.data?.view.map.id ?? 'shared')
   const [depLines, toggleDepLines] = useDepLines()
   const ctx = useMemo<MapCtx | null>(() => {
@@ -144,18 +144,23 @@ export function SharedMapPage() {
       run: () => Promise.resolve(false),
       selectedStep,
       openStep,
+      selectedNode,
+      openNode,
       move: () => {},
       adding: null,
       setAdding: () => {},
       depLines,
       toggleDepLines,
       files: {
-        list: (stepId) => api.sharedAttachments(token, stepId),
+        list: (owner) => api.sharedAttachments(token, owner),
         url: (id) => api.sharedAttachmentURL(token, id),
       },
     }
-  }, [token, shared.data, filter, setFilter, prefs, setPrefs, mode, setMode, selectedStep, openStep, depLines, toggleDepLines])
+  }, [token, shared.data, filter, setFilter, prefs, setPrefs, mode, setMode, selectedStep, openStep, selectedNode, openNode, depLines, toggleDepLines])
 
+  const stepOpen = !!ctx?.selectedStep && ctx.view.steps.some((s) => s.id === ctx.selectedStep)
+  const nodeOpen = !stepOpen && !!ctx?.selectedNode && ctx.view.nodes.some((n) => n.id === ctx.selectedNode)
+  const panelOpen = stepOpen || nodeOpen
   return (
     <>
       <header className="topnav">
@@ -180,15 +185,16 @@ export function SharedMapPage() {
       ) : (
         <MapProvider value={ctx}>
           <div className="map-page">
-            <MapHeader panelOpen={!!ctx.selectedStep} onRefresh={() => void shared.refetch()} />
-            <FilterBar panelOpen={!!ctx.selectedStep} />
-            <MapViewport panelOpen={!!ctx.selectedStep}>
+            <MapHeader panelOpen={panelOpen} onRefresh={() => void shared.refetch()} />
+            <FilterBar panelOpen={panelOpen} />
+            <MapViewport panelOpen={panelOpen}>
               <MapDnd view={ctx.view} onMove={() => {}}>
                 <MapCanvas />
               </MapDnd>
             </MapViewport>
           </div>
-          {ctx.selectedStep && ctx.view.steps.some((s) => s.id === ctx.selectedStep) && <StepPanel stepId={ctx.selectedStep} />}
+          {stepOpen && <StepPanel stepId={ctx.selectedStep!} />}
+          {nodeOpen && <NodePanel nodeId={ctx.selectedNode!} />}
         </MapProvider>
       )}
     </>

@@ -93,11 +93,14 @@ export function applyEvent(view: MapView, ev: LiveEvent): MapView | null {
     case 'attachment:create':
     case 'attachment:delete':
     case 'attachment:restore': {
-      // Only the step's count lives in the map; open file lists reload (see apply).
+      // Only the step's or node's count lives in the map; open file lists reload (see apply).
       const fields = ev.action === 'delete' ? (ev.before ?? {}) : after
       const stepId = typeof fields.stepId === 'string' ? fields.stepId : null
+      const nodeId = typeof fields.nodeId === 'string' ? fields.nodeId : null
       const by = ev.action === 'delete' ? -1 : 1
-      return { ...view, steps: view.steps.map((s) => (s.id === stepId ? { ...s, attachmentCount: Math.max(0, s.attachmentCount + by) } : s)) }
+      const count = <T extends { id: string; attachmentCount: number }>(x: T, id: string | null) =>
+        x.id === id ? { ...x, attachmentCount: Math.max(0, x.attachmentCount + by) } : x
+      return { ...view, steps: view.steps.map((s) => count(s, stepId)), nodes: view.nodes.map((n) => count(n, nodeId)) }
     }
     case 'step:delete':
       return { ...view, steps: view.steps.filter((s) => s.id !== ev.entityId) }

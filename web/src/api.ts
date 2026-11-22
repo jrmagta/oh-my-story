@@ -112,6 +112,8 @@ export interface MapNode {
   personaIds: string[]
   rank: string
   version: number
+  /** How many live files it has. */
+  attachmentCount: number
 }
 
 /** Someone a map serves; shared by the workspace's maps and linked to objectives. */
@@ -151,10 +153,18 @@ export interface Step {
 }
 
 /** A file on a step. contentType is worked out from the bytes by the server. */
+/** What a file is on: a step, or an objective or activity. */
+export interface FileOwner {
+  kind: 'step' | 'node'
+  id: string
+}
+
 export interface Attachment {
   id: string
   /** The step, for a step's file. */
   stepId: string | null
+  /** The objective or activity, for a node's file. */
+  nodeId: string | null
   /** The comment, for a comment's file; both are null for a draft. */
   commentId: string | null
   name: string
@@ -495,11 +505,11 @@ export const api = {
     },
   ) => request<Step>('PATCH', `${mp(slug, mapId)}/steps/${id}`, b),
   comments: (slug: string, mapId: string, stepId: string) => request<Comment[]>('GET', `${mp(slug, mapId)}/steps/${stepId}/comments`),
-  attachments: (slug: string, mapId: string, stepId: string) =>
-    request<Attachment[]>('GET', `${mp(slug, mapId)}/steps/${stepId}/attachments`),
+  attachments: (slug: string, mapId: string, owner: FileOwner) =>
+    request<Attachment[]>('GET', `${mp(slug, mapId)}/${owner.kind}s/${owner.id}/attachments`),
   /** Sends the file's bytes; onProgress gets the share sent so far, 0 to 1. */
-  uploadAttachment: (slug: string, mapId: string, stepId: string, file: File, onProgress?: (done: number) => void) =>
-    upload<Attachment>(`${mp(slug, mapId)}/steps/${stepId}/attachments?${new URLSearchParams({ name: file.name }).toString()}`, file, onProgress),
+  uploadAttachment: (slug: string, mapId: string, owner: FileOwner, file: File, onProgress?: (done: number) => void) =>
+    upload<Attachment>(`${mp(slug, mapId)}/${owner.kind}s/${owner.id}/attachments?${new URLSearchParams({ name: file.name }).toString()}`, file, onProgress),
   /** A file for a comment being written: only its uploader sees it until a comment claims it. */
   uploadDraftAttachment: (slug: string, mapId: string, stepId: string, file: File, onProgress?: (done: number) => void) =>
     upload<Attachment>(`${mp(slug, mapId)}/steps/${stepId}/draft-attachments?${new URLSearchParams({ name: file.name }).toString()}`, file, onProgress),
@@ -536,8 +546,8 @@ export const api = {
   revokeShareLink: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/share-links/${id}`),
   /** No session: the map behind a share link. 404 when it is revoked, expired or its map deleted. */
   sharedMap: (token: string) => request<SharedMap>('GET', `/api/shared/${encodeURIComponent(token)}`),
-  sharedAttachments: (token: string, stepId: string) =>
-    request<Attachment[]>('GET', `/api/shared/${encodeURIComponent(token)}/steps/${encodeURIComponent(stepId)}/attachments`),
+  sharedAttachments: (token: string, owner: FileOwner) =>
+    request<Attachment[]>('GET', `/api/shared/${encodeURIComponent(token)}/${owner.kind}s/${encodeURIComponent(owner.id)}/attachments`),
   sharedAttachmentURL: (token: string, id: string) => `/api/shared/${encodeURIComponent(token)}/attachments/${encodeURIComponent(id)}`,
   views: (slug: string, mapId: string) => request<SavedView[]>('GET', `${mp(slug, mapId)}/views`),
   /** shared: true needs editor. */

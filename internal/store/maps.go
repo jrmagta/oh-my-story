@@ -26,6 +26,8 @@ type Node struct {
 	PersonaIDs  []uuid.UUID `json:"personaIds"` // objectives only; sorted, never null
 	Rank        string      `json:"rank"`
 	Version     int         `json:"version"`
+	// AttachmentCount is how many live files the node has.
+	AttachmentCount int `json:"attachmentCount"`
 }
 
 type Release struct {
@@ -120,11 +122,12 @@ func (s *Store) DeleteMap(ctx context.Context, actor, workspaceID, mapID uuid.UU
 // before that statement, so change personas first.
 const nodeCols = `id, parent_id, level, title, description, colour,
 	coalesce((SELECT array_agg(pn.persona_id ORDER BY pn.persona_id) FROM persona_nodes pn WHERE pn.node_id = nodes.id), '{}'),
-	rank, version`
+	rank, version,
+	(SELECT count(*) FROM attachments a WHERE a.node_id = nodes.id AND a.deleted_at IS NULL)`
 
 func scanNode(row pgx.Row) (Node, error) {
 	var n Node
-	err := row.Scan(&n.ID, &n.ParentID, &n.Level, &n.Title, &n.Description, &n.Colour, &n.PersonaIDs, &n.Rank, &n.Version)
+	err := row.Scan(&n.ID, &n.ParentID, &n.Level, &n.Title, &n.Description, &n.Colour, &n.PersonaIDs, &n.Rank, &n.Version, &n.AttachmentCount)
 	return n, notFound(err)
 }
 

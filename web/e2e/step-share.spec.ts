@@ -54,10 +54,14 @@ test('a read-only link shows the map to someone without an account, until it is 
   await expect(panel).not.toContainText('Assignee')
   await expect(anon.getByText('Internal: budget is tight')).toHaveCount(0)
   await expect(anon.getByText('Olive Owner')).toHaveCount(0)
-  await expect(anon.getByRole('button', { name: /^Add |^Share$|^Activity$|^Views$|^Actions for objective/ })).toHaveCount(0)
-  // An activity's menu only collapses it: a view setting, not an edit.
+  await expect(anon.getByRole('button', { name: /^Add |^Share$|^Activity$|^Views$/ })).toHaveCount(0)
+  // Backbone menus only open details and collapse activities: reading and a view setting, not edits.
   await anon.getByRole('button', { name: 'Actions for activity Announce' }).click()
-  await expect(anon.getByRole('group', { name: 'Actions for activity Announce' }).getByRole('button')).toHaveText(['Collapse'])
+  await expect(anon.getByRole('group', { name: 'Actions for activity Announce' }).getByRole('button')).toHaveText(['Details', 'Collapse'])
+  await anon.keyboard.press('Escape')
+  const objMenu = anon.getByRole('button', { name: /^Actions for objective/ }).first()
+  await objMenu.click()
+  await expect(anon.getByRole('group', { name: /^Actions for objective/ }).getByRole('button')).toHaveText(['Details'])
   await anon.keyboard.press('Escape')
   await expect(panel.getByRole('button', { name: 'Edit' })).toHaveCount(0)
   // Filtering works on the shared page.

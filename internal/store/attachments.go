@@ -15,7 +15,8 @@ import (
 type Attachment struct {
 	ID           uuid.UUID  `json:"id"`
 	StepID       *uuid.UUID `json:"stepId"`    // a step's file
-	CommentID    *uuid.UUID `json:"commentId"` // a comment's file; both are null for a draft
+	NodeID       *uuid.UUID `json:"nodeId"`    // an objective's or activity's file
+	CommentID    *uuid.UUID `json:"commentId"` // a comment's file; all three are null for a draft
 	Name         string     `json:"name"`
 	ContentType  string     `json:"contentType"`
 	Size         int64      `json:"size"`
@@ -25,7 +26,7 @@ type Attachment struct {
 	SHA256       []byte     `json:"-"`
 }
 
-const attachmentCols = `a.id, a.step_id, a.comment_id, a.name, a.content_type, a.size_bytes, a.uploaded_by, coalesce(u.display_name, ''), a.created_at, a.sha256`
+const attachmentCols = `a.id, a.step_id, a.node_id, a.comment_id, a.name, a.content_type, a.size_bytes, a.uploaded_by, coalesce(u.display_name, ''), a.created_at, a.sha256`
 
 const attachmentFrom = `FROM attachments a LEFT JOIN users u ON u.id = a.uploaded_by`
 
@@ -34,14 +35,20 @@ func scanAttachment(row pgx.Row) (Attachment, error) { return scanAttachmentAnd(
 // scanAttachmentAnd scans attachmentCols and then more columns into more.
 func scanAttachmentAnd(row pgx.Row, more ...any) (Attachment, error) {
 	var a Attachment
-	err := row.Scan(append([]any{&a.ID, &a.StepID, &a.CommentID, &a.Name, &a.ContentType, &a.Size, &a.UploadedBy, &a.UploaderName, &a.CreatedAt, &a.SHA256}, more...)...)
+	err := row.Scan(append([]any{&a.ID, &a.StepID, &a.NodeID, &a.CommentID, &a.Name, &a.ContentType, &a.Size, &a.UploadedBy, &a.UploaderName, &a.CreatedAt, &a.SHA256}, more...)...)
 	return a, notFound(err)
 }
 
 // attachmentEvent is what history, live clients and webhooks get: the
 // metadata, never the bytes.
 func attachmentEvent(a Attachment) map[string]any {
-	return map[string]any{"stepId": a.StepID, "name": a.Name, "contentType": a.ContentType, "size": a.Size}
+	ev := map[string]any{"name": a.Name, "contentType": a.ContentType, "size": a.Size}
+	if a.NodeID != nil {
+		ev["nodeId"] = a.NodeID
+	} else {
+		ev["stepId"] = a.StepID
+	}
+	return ev
 }
 
 // FileUpload is a file as the handler read it; ContentType is already sniffed.
@@ -85,6 +92,40 @@ func (s *Store) AddDraftAttachment(ctx context.Context, actor, workspaceID, mapI
 	return a, err
 }
 
+// AddNodeAttachment stores a file on an objective or activity of the map.
+func (s *Store) AddNodeAttachment(ctx context.Context, actor, workspaceID, mapID, nodeID uuid.UUID, f FileUpload) (Attachment, error) {
+	var a Attachment
+	err := s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
+		if _, err := liveNode(ctx, tx, mapID, nodeID); err != nil {
+			return nil, err
+		}
+		var err error
+		if a, err = insertAttachment(ctx, tx, actor, workspaceID, "node_id", nodeID, f); err != nil {
+			return nil, err
+		}
+		return []change{{mapID: mapID, entity: "attachment", id: a.ID, action: "create", after: attachmentEvent(a)}}, nil
+	})
+	return a, err
+}
+
+// NodeAttachments lists the live files of an objective or activity of the map, oldest first.
+func (s *Store) NodeAttachments(ctx context.Context, workspaceID, mapID, nodeID uuid.UUID) ([]Attachment, error) {
+	var out []Attachment
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := s.CheckMap(ctx, workspaceID, mapID); err != nil {
+			return err
+		}
+		if _, err := liveNode(ctx, tx, mapID, nodeID); err != nil {
+			return err
+		}
+		var err error
+		out, err = collect(ctx, tx, scanAttachment,
+			`SELECT `+attachmentCols+` `+attachmentFrom+` WHERE a.node_id = $1 AND a.deleted_at IS NULL ORDER BY a.created_at, a.id`, nodeID)
+		return err
+	})
+	return out, err
+}
+
 // insertAttachment stores a file and its bytes, owned through ownerCol.
 func insertAttachment(ctx context.Context, tx pgx.Tx, actor, workspaceID uuid.UUID, ownerCol string, owner uuid.UUID, f FileUpload) (Attachment, error) {
 	id := newID()
@@ -120,15 +161,17 @@ func (s *Store) StepAttachments(ctx context.Context, workspaceID, mapID, stepID 
 }
 
 // liveAttachment is a file of workspace $1 that user $3 can see: a draft of
-// their own, or a file whose owner is live (a step on a live map, or a live
-// comment on one). Files of deleted steps and comments are hidden with them.
+// their own, or a file whose owner is live (a step on a live map, a live
+// comment on one, or a live node of a live map). Files of deleted steps and comments are hidden with them.
 const liveAttachment = `a.deleted_at IS NULL AND a.workspace_id = $1 AND (
 	(a.draft_step_id IS NOT NULL AND a.uploaded_by = $3) OR EXISTS (
 	SELECT 1 FROM steps s JOIN placements p ON p.step_id = s.id
 	JOIN maps m ON m.id = p.map_id AND m.deleted_at IS NULL
 	JOIN nodes n ON n.id = p.activity_id AND n.deleted_at IS NULL
 	WHERE s.deleted_at IS NULL AND s.id = coalesce(a.step_id,
-		(SELECT c.step_id FROM comments c WHERE c.id = a.comment_id AND c.deleted_at IS NULL))))`
+		(SELECT c.step_id FROM comments c WHERE c.id = a.comment_id AND c.deleted_at IS NULL)))
+	OR EXISTS (SELECT 1 FROM nodes n JOIN maps m ON m.id = n.map_id AND m.deleted_at IS NULL
+		WHERE n.id = a.node_id AND n.deleted_at IS NULL))`
 
 // AttachmentFile returns a file of the workspace, with its bytes, that viewer can see.
 func (s *Store) AttachmentFile(ctx context.Context, workspaceID, viewer, id uuid.UUID) (Attachment, []byte, error) {
@@ -167,17 +210,26 @@ func (s *Store) setAttachmentDeleted(ctx context.Context, actor, workspaceID, ma
 		if err != nil {
 			return nil, err
 		}
-		if a.StepID == nil {
-			return nil, ErrNotFound
+		switch {
+		case a.StepID != nil:
+			_, _, err = mapStep(ctx, tx, mapID, *a.StepID)
+		case a.NodeID != nil:
+			_, err = liveNode(ctx, tx, mapID, *a.NodeID)
+		default:
+			err = ErrNotFound // a comment's file goes with the comment's edit
 		}
-		if _, _, err := mapStep(ctx, tx, mapID, *a.StepID); err != nil {
+		if err != nil {
 			return nil, err
 		}
 		if _, err := tx.Exec(ctx,
 			`UPDATE attachments SET deleted_at = CASE WHEN $2 THEN NULL ELSE now() END WHERE id = $1`, id, deleted); err != nil {
 			return nil, err
 		}
-		return echoes(ctx, tx, *a.StepID, gone(mapID, "attachment", id, action, attachmentEvent(a)))
+		c := gone(mapID, "attachment", id, action, attachmentEvent(a))
+		if a.NodeID != nil {
+			return []change{c}, nil
+		}
+		return echoes(ctx, tx, *a.StepID, c)
 	})
 }
 
@@ -192,12 +244,13 @@ func sharedMapOf(ctx context.Context, q pgx.Tx, tokenHash []byte) (uuid.UUID, er
 	return mapID, notFound(err)
 }
 
-// onSharedMap is a live file of a live step placed on map $1, so a share link
-// reaches only the files of its own map.
-const onSharedMap = `a.deleted_at IS NULL AND EXISTS (
+// onSharedMap is a live file of a live step placed on map $1, or of a live
+// node of it, so a share link reaches only the files of its own map.
+const onSharedMap = `a.deleted_at IS NULL AND (EXISTS (
 	SELECT 1 FROM steps s JOIN placements p ON p.step_id = s.id AND p.map_id = $1
 	JOIN nodes n ON n.id = p.activity_id AND n.deleted_at IS NULL
-	WHERE s.id = a.step_id AND s.deleted_at IS NULL)`
+	WHERE s.id = a.step_id AND s.deleted_at IS NULL)
+	OR EXISTS (SELECT 1 FROM nodes n WHERE n.id = a.node_id AND n.map_id = $1 AND n.deleted_at IS NULL))`
 
 // forShare leaves out who uploaded a file; share links show no people.
 func forShare(a Attachment) Attachment {
@@ -218,6 +271,27 @@ func (s *Store) SharedStepAttachments(ctx context.Context, tokenHash []byte, ste
 		}
 		out, err = collect(ctx, tx, scanAttachment,
 			`SELECT `+attachmentCols+` `+attachmentFrom+` WHERE a.step_id = $2 AND `+onSharedMap+` ORDER BY a.created_at, a.id`, mapID, stepID)
+		for i := range out {
+			out[i] = forShare(out[i])
+		}
+		return err
+	})
+	return out, err
+}
+
+// SharedNodeAttachments lists the files of an objective or activity of a share link's map.
+func (s *Store) SharedNodeAttachments(ctx context.Context, tokenHash []byte, nodeID uuid.UUID) ([]Attachment, error) {
+	var out []Attachment
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		mapID, err := sharedMapOf(ctx, tx, tokenHash)
+		if err != nil {
+			return err
+		}
+		if _, err := liveNode(ctx, tx, mapID, nodeID); err != nil {
+			return err
+		}
+		out, err = collect(ctx, tx, scanAttachment,
+			`SELECT `+attachmentCols+` `+attachmentFrom+` WHERE a.node_id = $2 AND `+onSharedMap+` ORDER BY a.created_at, a.id`, mapID, nodeID)
 		for i := range out {
 			out[i] = forShare(out[i])
 		}

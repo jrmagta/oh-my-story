@@ -317,3 +317,72 @@ func TestCommentAttachments(t *testing.T) {
 		t.Error("a deleted comment's file must be hidden")
 	}
 }
+
+func TestNodeAttachments(t *testing.T) {
+	h := newHarness(t, harnessOpts{})
+	owner := h.bootstrap()
+	a := buildMap(owner)
+	b := buildMap(owner)
+	viewer, _ := h.join(owner, "vi@example.com", "viewer")
+	act := a.path + "/nodes/" + a.act1
+	get := func(c *client, path string) int { return c.send("GET", path, "", nil, nil).status }
+
+	// Editors attach to an activity; viewers read. The node counts its files.
+	f := owner.upload(201, act, "flow.png", pngBytes)
+	if str(f, "nodeId") != a.act1 || f["stepId"] != nil {
+		t.Errorf("node file = %v", f)
+	}
+	viewer.upload(403, act, "x.txt", []byte("x"))
+	if r := viewer.must(200, "GET", act+"/attachments", nil); len(r.list) != 1 {
+		t.Errorf("list = %s", r.raw)
+	}
+	countOf := func() float64 {
+		for _, n := range owner.must(200, "GET", a.path, nil).body["nodes"].([]any) {
+			if str(n, "id") == a.act1 {
+				return n.(map[string]any)["attachmentCount"].(float64)
+			}
+		}
+		return -1
+	}
+	if c := countOf(); c != 1 {
+		t.Errorf("attachmentCount = %v", c)
+	}
+	es, _ := entries(owner.must(200, "GET", a.path+"/history?limit=1", nil))
+	if len(es) != 1 || es[0].entity != "attachment" || es[0].after["nodeId"] != a.act1 {
+		t.Errorf("history: %+v", es)
+	}
+
+	// Another map cannot reach the node or its file.
+	owner.must(404, "GET", b.path+"/nodes/"+a.act1+"/attachments", nil)
+	owner.upload(404, b.path+"/nodes/"+a.act1, "x.txt", []byte("x"))
+	owner.must(404, "DELETE", b.path+"/attachments/"+str(f, "id"), nil)
+
+	// Delete and restore the file; then the node, which takes the file with it.
+	file := acme + "/attachments/" + str(f, "id")
+	owner.must(204, "DELETE", a.path+"/attachments/"+str(f, "id"), nil)
+	if get(owner, file) != 404 || countOf() != 0 {
+		t.Error("a deleted node file must be gone")
+	}
+	owner.must(204, "POST", a.path+"/attachments/"+str(f, "id")+"/restore", nil)
+	owner.must(204, "DELETE", act, nil)
+	if get(owner, file) != 404 {
+		t.Error("a deleted node's file must be hidden")
+	}
+	owner.must(200, "POST", act+"/restore", nil)
+	if get(viewer, file) != 200 {
+		t.Error("a restored node's file must be back")
+	}
+
+	// Share links reach node files of their own map only.
+	other := owner.upload(201, b.path+"/nodes/"+b.act1, "other.png", pngBytes)
+	link := str(owner.must(201, "POST", a.path+"/share-links", map[string]any{}).body, "url")
+	shared := "/api/shared/" + link[strings.LastIndex(link, "/s/")+3:]
+	anon := h.client()
+	if r := anon.must(200, "GET", shared+"/nodes/"+a.act1+"/attachments", nil); len(r.list) != 1 || strings.Contains(r.raw, "owner@example.com") {
+		t.Errorf("shared node files = %s", r.raw)
+	}
+	anon.must(404, "GET", shared+"/nodes/"+b.act1+"/attachments", nil)
+	if get(anon, shared+"/attachments/"+str(f, "id")) != 200 || get(anon, shared+"/attachments/"+str(other, "id")) != 404 {
+		t.Error("a share link must reach its own map's node files only")
+	}
+}
