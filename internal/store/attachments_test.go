@@ -28,9 +28,9 @@ func TestSweepAttachments(t *testing.T) {
 	if err := f.s.DeleteAttachment(ctx, f.user, f.ws, m.ID, deleted.ID); err != nil {
 		t.Fatal(err)
 	}
-	draft := must[store.Attachment](t)(f.s.AddDraftAttachment(ctx, f.user, f.ws, m.ID, st.ID, file))
-	posted := must[store.Attachment](t)(f.s.AddDraftAttachment(ctx, f.user, f.ws, m.ID, st.ID, file))
-	c := must[store.CommentWrite](t)(f.s.CreateComment(ctx, f.user, f.ws, m.ID, st.ID, "see", nil, nil, []uuid.UUID{posted.ID}))
+	draft := must[store.Attachment](t)(f.s.AddDraftAttachment(ctx, f.user, f.ws, m.ID, store.StepOwner(st.ID), file))
+	posted := must[store.Attachment](t)(f.s.AddDraftAttachment(ctx, f.user, f.ws, m.ID, store.StepOwner(st.ID), file))
+	c := must[store.CommentWrite](t)(f.s.CreateComment(ctx, f.user, f.ws, m.ID, store.StepOwner(st.ID), "see", nil, nil, []uuid.UUID{posted.ID}))
 	if len(c.Comment.Attachments) != 1 || c.Comment.Attachments[0].ID != posted.ID {
 		t.Fatalf("comment files = %+v", c.Comment.Attachments)
 	}

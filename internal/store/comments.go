@@ -9,12 +9,51 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Comment is one comment on a step: a thread's first comment (ParentID nil)
+// Owner is what a comment, or a draft file for one, is on: a step, or a node
+// (an objective or activity).
+type Owner struct {
+	Node bool
+	ID   uuid.UUID
+}
+
+func StepOwner(id uuid.UUID) Owner { return Owner{ID: id} }
+func NodeOwner(id uuid.UUID) Owner { return Owner{Node: true, ID: id} }
+
+// col is the owner's column on comments; draftCol on attachments.
+func (o Owner) col() string {
+	if o.Node {
+		return "node_id"
+	}
+	return "step_id"
+}
+
+func (o Owner) draftCol() string { return "draft_" + o.col() }
+
+// check fails unless the owner is live on the map.
+func (o Owner) check(ctx context.Context, tx pgx.Tx, mapID uuid.UUID) error {
+	if o.Node {
+		_, err := liveNode(ctx, tx, mapID, o.ID)
+		return err
+	}
+	_, _, err := mapStep(ctx, tx, mapID, o.ID)
+	return err
+}
+
+// changes sends c where the owner is seen: every map a step is on, or a node's one map.
+func (o Owner) changes(ctx context.Context, tx pgx.Tx, c change) ([]change, error) {
+	if o.Node {
+		return []change{c}, nil
+	}
+	return echoes(ctx, tx, o.ID, c)
+}
+
+// Comment is one comment on a step or node: a thread's first comment (ParentID nil)
 // or a reply to one. A deleted comment keeps its place, with no body, while
 // it has replies; otherwise it is left out.
 type Comment struct {
 	ID         uuid.UUID   `json:"id"`
-	StepID     uuid.UUID   `json:"stepId"`
+	StepID     *uuid.UUID  `json:"stepId"` // one of these two is set
+	NodeID     *uuid.UUID  `json:"nodeId"`
 	ParentID   *uuid.UUID  `json:"parentId"`
 	AuthorID   *uuid.UUID  `json:"authorId"`
 	AuthorName string      `json:"authorName"`
@@ -28,45 +67,62 @@ type Comment struct {
 	Attachments []Attachment `json:"attachments"`
 }
 
-const commentCols = `c.id, c.step_id, c.parent_id, c.author_id, coalesce(u.display_name, ''),
+const commentCols = `c.id, c.step_id, c.node_id, c.parent_id, c.author_id, coalesce(u.display_name, ''),
 	CASE WHEN c.deleted_at IS NULL THEN c.body_md ELSE '' END,
 	coalesce((SELECT array_agg(mn.user_id ORDER BY mn.user_id) FROM mentions mn WHERE mn.comment_id = c.id), '{}'),
 	c.resolved_at IS NOT NULL, c.edited_at IS NOT NULL, c.deleted_at IS NOT NULL, c.created_at`
 
 func scanComment(row pgx.Row) (Comment, error) {
 	var c Comment
-	err := row.Scan(&c.ID, &c.StepID, &c.ParentID, &c.AuthorID, &c.AuthorName, &c.BodyMD, &c.MentionIDs,
+	err := row.Scan(&c.ID, &c.StepID, &c.NodeID, &c.ParentID, &c.AuthorID, &c.AuthorName, &c.BodyMD, &c.MentionIDs,
 		&c.Resolved, &c.Edited, &c.Deleted, &c.CreatedAt)
 	return c, notFound(err)
 }
 
-// A comment of a live step placed on a live map of the workspace.
-const commentFrom = `FROM comments c
-	JOIN steps s ON s.id = c.step_id AND s.deleted_at IS NULL
-	JOIN placements p ON p.step_id = s.id
-	JOIN maps m ON m.id = p.map_id AND m.deleted_at IS NULL
-	LEFT JOIN users u ON u.id = c.author_id
-	WHERE m.workspace_id = $1 AND m.id = $2`
+func (c Comment) owner() Owner {
+	if c.NodeID != nil {
+		return NodeOwner(*c.NodeID)
+	}
+	return StepOwner(*c.StepID)
+}
 
-// Comments lists a step's comments, oldest first. Deleted comments are left
-// out unless they still have replies.
-func (s *Store) Comments(ctx context.Context, workspaceID, mapID, stepID uuid.UUID) ([]Comment, error) {
-	var ok bool
-	err := s.pool.QueryRow(ctx,
-		`SELECT true FROM steps s JOIN placements p ON p.step_id = s.id JOIN maps m ON m.id = p.map_id
-		 WHERE s.id = $3 AND m.id = $2 AND m.workspace_id = $1 AND s.deleted_at IS NULL AND m.deleted_at IS NULL`,
-		workspaceID, mapID, stepID).Scan(&ok)
-	if err != nil {
-		return nil, notFound(err)
-	}
-	cs, err := collect(ctx, s.pool, scanComment, `SELECT `+commentCols+` `+commentFrom+`
-		 AND c.step_id = $3
-		 AND (c.deleted_at IS NULL OR EXISTS (SELECT 1 FROM comments r WHERE r.parent_id = c.id AND r.deleted_at IS NULL))
-		 ORDER BY c.created_at, c.id`, workspaceID, mapID, stepID)
-	if err != nil {
-		return nil, err
-	}
-	return cs, commentFiles(ctx, s.pool, cs)
+// ownerFields names a comment's owner in its events.
+func (c Comment) ownerFields(m map[string]any) map[string]any {
+	m["stepId"], m["nodeId"] = c.StepID, c.NodeID
+	return m
+}
+
+// A comment of a live step placed on map $2, or of a live node of it; the map
+// is live and in workspace $1.
+const commentFrom = `FROM comments c
+	LEFT JOIN users u ON u.id = c.author_id
+	WHERE EXISTS (SELECT 1 FROM maps m WHERE m.id = $2 AND m.workspace_id = $1 AND m.deleted_at IS NULL)
+	  AND (EXISTS (SELECT 1 FROM steps s JOIN placements p ON p.step_id = s.id
+	         WHERE s.id = c.step_id AND s.deleted_at IS NULL AND p.map_id = $2)
+	    OR EXISTS (SELECT 1 FROM nodes n WHERE n.id = c.node_id AND n.deleted_at IS NULL AND n.map_id = $2))`
+
+// Comments lists a step's or node's comments, oldest first. Deleted comments
+// are left out unless they still have replies.
+func (s *Store) Comments(ctx context.Context, workspaceID, mapID uuid.UUID, o Owner) ([]Comment, error) {
+	var cs []Comment
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := s.CheckMap(ctx, workspaceID, mapID); err != nil {
+			return err
+		}
+		if err := o.check(ctx, tx, mapID); err != nil {
+			return err
+		}
+		var err error
+		cs, err = collect(ctx, tx, scanComment, `SELECT `+commentCols+` `+commentFrom+`
+			 AND c.`+o.col()+` = $3
+			 AND (c.deleted_at IS NULL OR EXISTS (SELECT 1 FROM comments r WHERE r.parent_id = c.id AND r.deleted_at IS NULL))
+			 ORDER BY c.created_at, c.id`, workspaceID, mapID, o.ID)
+		if err != nil {
+			return err
+		}
+		return commentFiles(ctx, tx, cs)
+	})
+	return cs, err
 }
 
 // loadComment reads one comment, with its files, as the map shows it.
@@ -81,18 +137,29 @@ func loadComment(ctx context.Context, tx pgx.Tx, workspaceID, mapID, id uuid.UUI
 }
 
 // CommentWrite is a saved comment and who to tell about it: the people newly
-// mentioned (never the author), with the step's key and title for the email.
+// mentioned (never the author), with what the comment is on for the email:
+// Where in full ("CHC-12 Card form", "activity “Pay”") and WhereShort ("CHC-12", "“Pay”").
 type CommentWrite struct {
-	Comment   Comment
-	Notify    []User
-	StepKey   string
-	StepTitle string
+	Comment           Comment
+	Notify            []User
+	Where, WhereShort string
 }
 
-// commentNotice loads the step's key and title and the users in ids.
+// commentNotice names the comment's owner and loads the users in ids.
 func commentNotice(ctx context.Context, tx pgx.Tx, w *CommentWrite, ids []uuid.UUID) error {
-	if err := tx.QueryRow(ctx, `SELECT key, title FROM steps WHERE id = $1`, w.Comment.StepID).Scan(&w.StepKey, &w.StepTitle); err != nil {
-		return err
+	if o := w.Comment.owner(); o.Node {
+		var level, title string
+		if err := tx.QueryRow(ctx, `SELECT level, title FROM nodes WHERE id = $1`, o.ID).Scan(&level, &title); err != nil {
+			return err
+		}
+		w.WhereShort = "“" + title + "”"
+		w.Where = level + " " + w.WhereShort
+	} else {
+		var key, title string
+		if err := tx.QueryRow(ctx, `SELECT key, title FROM steps WHERE id = $1`, o.ID).Scan(&key, &title); err != nil {
+			return err
+		}
+		w.WhereShort, w.Where = key, key+" "+title
 	}
 	var err error
 	w.Notify, err = collect(ctx, tx, func(r pgx.Row) (User, error) {
@@ -132,33 +199,34 @@ func without(ids []uuid.UUID, drop uuid.UUID) []uuid.UUID {
 	return out
 }
 
-// CreateComment adds a comment, or a reply when parentID is set. A reply's
-// parent must be a live first comment of the same step. attachmentIDs are
-// the author's drafts on the step, which become the comment's files.
-func (s *Store) CreateComment(ctx context.Context, actor, workspaceID, mapID, stepID uuid.UUID, body string, parentID *uuid.UUID, mentionIDs, attachmentIDs []uuid.UUID) (CommentWrite, error) {
+// CreateComment adds a comment to a step or node, or a reply when parentID is
+// set. A reply's parent must be a live first comment on the same owner.
+// attachmentIDs are the author's drafts on the owner, which become the
+// comment's files.
+func (s *Store) CreateComment(ctx context.Context, actor, workspaceID, mapID uuid.UUID, o Owner, body string, parentID *uuid.UUID, mentionIDs, attachmentIDs []uuid.UUID) (CommentWrite, error) {
 	var w CommentWrite
 	id := newID()
 	err := s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
-		if _, _, err := mapStep(ctx, tx, mapID, stepID); err != nil {
+		if err := o.check(ctx, tx, mapID); err != nil {
 			return nil, err
 		}
 		if parentID != nil {
 			var ok bool
-			err := tx.QueryRow(ctx, `SELECT true FROM comments WHERE id = $1 AND step_id = $2 AND parent_id IS NULL AND deleted_at IS NULL`,
-				*parentID, stepID).Scan(&ok)
+			err := tx.QueryRow(ctx, `SELECT true FROM comments WHERE id = $1 AND `+o.col()+` = $2 AND parent_id IS NULL AND deleted_at IS NULL`,
+				*parentID, o.ID).Scan(&ok)
 			if err != nil {
-				return nil, fmt.Errorf("%w: replies go to a comment on the same step that is not a reply", ErrInvalid)
+				return nil, fmt.Errorf("%w: replies go to a comment on the same card that is not a reply", ErrInvalid)
 			}
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO comments (id, step_id, parent_id, author_id, body_md) VALUES ($1, $2, $3, $4, $5)`,
-			id, stepID, parentID, actor, body); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO comments (id, `+o.col()+`, parent_id, author_id, body_md) VALUES ($1, $2, $3, $4, $5)`,
+			id, o.ID, parentID, actor, body); err != nil {
 			return nil, err
 		}
 		added, err := addMentions(ctx, tx, workspaceID, id, actor, mentionIDs)
 		if err != nil {
 			return nil, err
 		}
-		if err := claimDrafts(ctx, tx, actor, stepID, id, attachmentIDs); err != nil {
+		if err := claimDrafts(ctx, tx, actor, o, id, attachmentIDs); err != nil {
 			return nil, err
 		}
 		if w.Comment, err = loadComment(ctx, tx, workspaceID, mapID, id); err != nil {
@@ -167,7 +235,7 @@ func (s *Store) CreateComment(ctx context.Context, actor, workspaceID, mapID, st
 		if err := commentNotice(ctx, tx, &w, without(added, actor)); err != nil {
 			return nil, err
 		}
-		return echoes(ctx, tx, w.Comment.StepID, created(mapID, "comment", id, w.Comment))
+		return o.changes(ctx, tx, created(mapID, "comment", id, w.Comment))
 	})
 	return w, err
 }
@@ -235,8 +303,9 @@ func (s *Store) UpdateComment(ctx context.Context, actor, workspaceID, mapID, co
 			return nil, err
 		}
 		if c, ok := updated(mapID, "comment", commentID, "update", before, w.Comment); ok {
-			c.before["stepId"], c.after["stepId"] = before.StepID, before.StepID
-			return echoes(ctx, tx, before.StepID, c)
+			before.ownerFields(c.before)
+			before.ownerFields(c.after)
+			return before.owner().changes(ctx, tx, c)
 		}
 		return nil, nil
 	})
@@ -258,12 +327,12 @@ func (s *Store) DeleteComment(ctx context.Context, actor, workspaceID, mapID, co
 		if _, err := tx.Exec(ctx, `UPDATE comments SET deleted_at = now() WHERE id = $1`, commentID); err != nil {
 			return nil, err
 		}
-		return echoes(ctx, tx, c.StepID, gone(mapID, "comment", commentID, "delete", map[string]any{"stepId": c.StepID, "parentId": c.ParentID}))
+		return c.owner().changes(ctx, tx, gone(mapID, "comment", commentID, "delete", c.ownerFields(map[string]any{"parentId": c.ParentID})))
 	})
 }
 
 // keepFiles makes c's files exactly ids: the ones left out are deleted, and
-// the rest that are not c's yet must be actor's drafts on c's step.
+// the rest that are not c's yet must be actor's drafts on c's step or node.
 func keepFiles(ctx context.Context, tx pgx.Tx, actor uuid.UUID, c Comment, ids []uuid.UUID) error {
 	keep := map[uuid.UUID]bool{}
 	for _, id := range ids {
@@ -287,5 +356,5 @@ func keepFiles(ctx context.Context, tx pgx.Tx, actor uuid.UUID, c Comment, ids [
 			return err
 		}
 	}
-	return claimDrafts(ctx, tx, actor, c.StepID, c.ID, fresh)
+	return claimDrafts(ctx, tx, actor, c.owner(), c.ID, fresh)
 }

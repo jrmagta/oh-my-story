@@ -91,6 +91,9 @@ func (s *Store) SharedMapByToken(ctx context.Context, tokenHash []byte) (SharedM
 		out.View.Steps[i].AssigneeID = nil
 		out.View.Steps[i].CommentCount = 0
 	}
+	for i := range out.View.Nodes {
+		out.View.Nodes[i].CommentCount = 0
+	}
 	// Only this map: links to steps on other maps, and those steps, stay out.
 	here := map[uuid.UUID]bool{}
 	for _, st := range out.View.Steps {

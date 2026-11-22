@@ -73,20 +73,20 @@ func (s *Store) AddStepAttachment(ctx context.Context, actor, workspaceID, mapID
 	return a, err
 }
 
-// AddDraftAttachment stores a file for a comment being written on a step
-// shown on the map. Only its uploader sees it until a comment claims it, and
-// it makes no event: nobody else can tell it exists.
-func (s *Store) AddDraftAttachment(ctx context.Context, actor, workspaceID, mapID, stepID uuid.UUID, f FileUpload) (Attachment, error) {
+// AddDraftAttachment stores a file for a comment being written on a step or
+// node shown on the map. Only its uploader sees it until a comment claims it,
+// and it makes no event: nobody else can tell it exists.
+func (s *Store) AddDraftAttachment(ctx context.Context, actor, workspaceID, mapID uuid.UUID, o Owner, f FileUpload) (Attachment, error) {
 	var a Attachment
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := s.CheckMap(ctx, workspaceID, mapID); err != nil {
 			return err
 		}
-		if _, _, err := mapStep(ctx, tx, mapID, stepID); err != nil {
+		if err := o.check(ctx, tx, mapID); err != nil {
 			return err
 		}
 		var err error
-		a, err = insertAttachment(ctx, tx, actor, workspaceID, "draft_step_id", stepID, f)
+		a, err = insertAttachment(ctx, tx, actor, workspaceID, o.draftCol(), o.ID, f)
 		return err
 	})
 	return a, err
@@ -164,14 +164,15 @@ func (s *Store) StepAttachments(ctx context.Context, workspaceID, mapID, stepID 
 // their own, or a file whose owner is live (a step on a live map, a live
 // comment on one, or a live node of a live map). Files of deleted steps and comments are hidden with them.
 const liveAttachment = `a.deleted_at IS NULL AND a.workspace_id = $1 AND (
-	(a.draft_step_id IS NOT NULL AND a.uploaded_by = $3) OR EXISTS (
+	((a.draft_step_id IS NOT NULL OR a.draft_node_id IS NOT NULL) AND a.uploaded_by = $3) OR EXISTS (
 	SELECT 1 FROM steps s JOIN placements p ON p.step_id = s.id
 	JOIN maps m ON m.id = p.map_id AND m.deleted_at IS NULL
 	JOIN nodes n ON n.id = p.activity_id AND n.deleted_at IS NULL
 	WHERE s.deleted_at IS NULL AND s.id = coalesce(a.step_id,
 		(SELECT c.step_id FROM comments c WHERE c.id = a.comment_id AND c.deleted_at IS NULL)))
 	OR EXISTS (SELECT 1 FROM nodes n JOIN maps m ON m.id = n.map_id AND m.deleted_at IS NULL
-		WHERE n.id = a.node_id AND n.deleted_at IS NULL))`
+		WHERE n.deleted_at IS NULL AND n.id = coalesce(a.node_id,
+			(SELECT c.node_id FROM comments c WHERE c.id = a.comment_id AND c.deleted_at IS NULL))))`
 
 // AttachmentFile returns a file of the workspace, with its bytes, that viewer can see.
 func (s *Store) AttachmentFile(ctx context.Context, workspaceID, viewer, id uuid.UUID) (Attachment, []byte, error) {
@@ -331,21 +332,21 @@ func (s *Store) SharedAttachmentETag(ctx context.Context, tokenHash []byte, id u
 	return sum, err
 }
 
-// claimDrafts makes actor's drafts on stepID, listed in ids, files of
-// commentID. Each id must be such a draft.
-func claimDrafts(ctx context.Context, tx pgx.Tx, actor, stepID, commentID uuid.UUID, ids []uuid.UUID) error {
+// claimDrafts makes actor's drafts on o, listed in ids, files of commentID.
+// Each id must be such a draft.
+func claimDrafts(ctx context.Context, tx pgx.Tx, actor uuid.UUID, o Owner, commentID uuid.UUID, ids []uuid.UUID) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	tag, err := tx.Exec(ctx,
-		`UPDATE attachments SET comment_id = $1, draft_step_id = NULL
-		 WHERE id = ANY($2) AND draft_step_id = $3 AND uploaded_by = $4 AND deleted_at IS NULL`,
-		commentID, ids, stepID, actor)
+		`UPDATE attachments SET comment_id = $1, `+o.draftCol()+` = NULL
+		 WHERE id = ANY($2) AND `+o.draftCol()+` = $3 AND uploaded_by = $4 AND deleted_at IS NULL`,
+		commentID, ids, o.ID, actor)
 	if err != nil {
 		return err
 	}
 	if int(tag.RowsAffected()) != len(ids) {
-		return fmt.Errorf("%w: attachmentIds must be files you added for a comment on this step", ErrInvalid)
+		return fmt.Errorf("%w: attachmentIds must be files you added for a comment on this card", ErrInvalid)
 	}
 	return nil
 }
@@ -387,7 +388,7 @@ func (s *Store) SweepAttachments(ctx context.Context, now time.Time) (int, error
 		tag, err := s.pool.Exec(ctx,
 			`DELETE FROM attachments WHERE id IN (
 			   SELECT a.id FROM attachments a
-			   WHERE (a.draft_step_id IS NOT NULL AND a.created_at < $1)
+			   WHERE ((a.draft_step_id IS NOT NULL OR a.draft_node_id IS NOT NULL) AND a.created_at < $1)
 			      OR a.deleted_at < $2
 			      OR a.comment_id IN (SELECT c.id FROM comments c WHERE c.deleted_at < $2)
 			   LIMIT $3 FOR UPDATE SKIP LOCKED)`,

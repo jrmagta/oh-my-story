@@ -31,8 +31,8 @@ function stepName(n: Names, id: string, fields?: Record<string, unknown> | null)
   return typeof key === 'string' ? key : 'a step'
 }
 
-/** What a file event is on: a step's key, or an objective's or activity's title. */
-function fileOwner(n: Names, fields: Record<string, unknown>): string {
+/** What a file or comment event is on: a step's key, or an objective's or activity's title. */
+function ownerName(n: Names, fields: Record<string, unknown>): string {
   if (typeof fields.nodeId === 'string') {
     const node = n.view.nodes.find((x) => x.id === fields.nodeId)
     return node ? q(node.title) : 'a deleted card'
@@ -107,22 +107,22 @@ export function describe(e: HistoryEntry, n: Names): string | null {
       return parts.length ? parts.join(', ') : null
     }
     case 'comment:create': {
-      const key = stepName(n, typeof a.stepId === 'string' ? a.stepId : '')
+      const key = ownerName(n, a)
       return a.parentId ? `replied to a comment on ${key}` : `commented on ${key}`
     }
     case 'comment:update': {
-      const key = stepName(n, typeof a.stepId === 'string' ? a.stepId : '')
+      const key = ownerName(n, a)
       if (changed('resolved')) return a.resolved ? `resolved a comment on ${key}` : `reopened a comment on ${key}`
       return changed('bodyMd') ? `edited a comment on ${key}` : null
     }
     case 'comment:delete':
-      return `deleted a comment on ${stepName(n, typeof b.stepId === 'string' ? b.stepId : '')}`
+      return `deleted a comment on ${ownerName(n, b)}`
     case 'attachment:create':
-      return `attached ${q(a.name)} to ${fileOwner(n, a)}`
+      return `attached ${q(a.name)} to ${ownerName(n, a)}`
     case 'attachment:delete':
-      return `removed ${q(b.name)} from ${fileOwner(n, b)}`
+      return `removed ${q(b.name)} from ${ownerName(n, b)}`
     case 'attachment:restore':
-      return `restored ${q(a.name)} on ${fileOwner(n, a)}`
+      return `restored ${q(a.name)} on ${ownerName(n, a)}`
     case 'step:delete':
       return `deleted ${stepName(n, e.entityId, b)} ${b.title !== undefined ? q(b.title) : ''}`.trim()
     case 'step:restore':

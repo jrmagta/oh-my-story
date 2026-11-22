@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // mentionMails waits briefly for mention emails (sent after the reply) and
@@ -116,4 +118,87 @@ func TestComments(t *testing.T) {
 	o := buildMapIn(owner, "/api/workspaces/other")
 	owner.must(404, "GET", acme+"/maps/"+strings.TrimPrefix(o.path, "/api/workspaces/other/maps/")+"/steps/"+step+"/comments", nil)
 	owner.must(404, "GET", o.path+"/steps/"+step+"/comments", nil)
+}
+
+func TestNodeComments(t *testing.T) {
+	h := newHarness(t, harnessOpts{})
+	owner := h.bootstrap()
+	b := buildMap(owner)
+	editor, editorID := h.join(owner, "ed@example.com", "editor")
+	commenter, _ := h.join(owner, "co@example.com", "commenter")
+	viewer, _ := h.join(owner, "vi@example.com", "viewer")
+	act := b.path + "/nodes/" + b.act1
+	step := str(owner.must(201, "POST", b.path+"/steps", map[string]any{"title": "Email login", "activityId": b.act1}).body, "step", "id")
+	stepComment := str(owner.must(201, "POST", b.path+"/steps/"+step+"/comments", map[string]any{"bodyMd": "on the step"}).body, "id")
+	owner.must(200, "PATCH", act, map[string]any{"title": "Enter your email"})
+
+	// Commenters comment on an activity, mentioning someone; viewers cannot.
+	draft := commenter.uploadTo(201, act+"/draft-attachments", "flow.png", pngBytes)
+	first := commenter.must(201, "POST", act+"/comments", map[string]any{
+		"bodyMd": "@ed@example.com is this right?", "mentionIds": []string{editorID}, "attachmentIds": []string{str(draft, "id")},
+	})
+	if str(first.body, "nodeId") != b.act1 || first.body["stepId"] != nil || len(first.body["attachments"].([]any)) != 1 {
+		t.Errorf("node comment = %s", first.raw)
+	}
+	viewer.must(403, "POST", act+"/comments", map[string]any{"bodyMd": "x"})
+	got := h.mail.mentionMails("ed@example.com")
+	if len(got) != 1 || !strings.Contains(got[0], "mentioned you on “Enter your email”") ||
+		!strings.Contains(got[0], "on activity “Enter your email”") || !strings.Contains(got[0], "?node="+b.act1) {
+		t.Errorf("mention emails = %q", got)
+	}
+
+	// Replies stay on their card: a step's comment is not a parent here, nor a step's draft a file.
+	editor.must(201, "POST", act+"/comments", map[string]any{"bodyMd": "yes", "parentId": str(first.body, "id")})
+	editor.must(400, "POST", act+"/comments", map[string]any{"bodyMd": "no", "parentId": stepComment})
+	stepDraft := commenter.uploadTo(201, b.path+"/steps/"+step+"/draft-attachments", "x.txt", []byte("x"))
+	commenter.must(400, "POST", act+"/comments", map[string]any{"bodyMd": "no", "attachmentIds": []string{str(stepDraft, "id")}})
+
+	// The card counts its own comments, not its steps'; the step's list is its own.
+	if r := viewer.must(200, "GET", act+"/comments", nil); len(r.list) != 2 {
+		t.Errorf("node comments = %s", r.raw)
+	}
+	if r := viewer.must(200, "GET", b.path+"/steps/"+step+"/comments", nil); len(r.list) != 1 {
+		t.Errorf("step comments = %s", r.raw)
+	}
+	view := owner.must(200, "GET", b.path, nil).body
+	for _, n := range view["nodes"].([]any) {
+		if str(n, "id") == b.act1 && n.(map[string]any)["commentCount"] != 2.0 {
+			t.Errorf("activity commentCount = %v", n.(map[string]any)["commentCount"])
+		}
+	}
+	for _, st := range view["steps"].([]any) {
+		if st.(map[string]any)["commentCount"] != 1.0 {
+			t.Errorf("step commentCount = %v", st.(map[string]any)["commentCount"])
+		}
+	}
+
+	// The card's history is its own: the rename, the comments and nothing of its step.
+	es, _ := entries(viewer.must(200, "GET", act+"/history", nil))
+	var kinds []string
+	for _, e := range es {
+		kinds = append(kinds, e.entity+":"+e.action)
+	}
+	if strings.Join(kinds, " ") != "comment:create comment:create node:update node:create" {
+		t.Errorf("node history = %v", kinds)
+	}
+	owner.must(404, "GET", b.path+"/nodes/"+uuid.NewString()+"/history", nil)
+
+	// Share links show no comments, so no count either.
+	link := str(owner.must(201, "POST", b.path+"/share-links", map[string]any{}).body, "url")
+	shared := h.client().must(200, "GET", "/api/shared/"+link[strings.LastIndex(link, "/s/")+3:], nil)
+	if strings.Contains(shared.raw, "is this right") || strings.Contains(shared.raw, `"commentCount":2`) {
+		t.Errorf("shared map shows node comments: %s", shared.raw)
+	}
+
+	// Deleting the activity hides its comments and their files.
+	file := acme + "/attachments/" + str(draft, "id")
+	owner.must(204, "DELETE", act, nil)
+	viewer.must(404, "GET", act+"/comments", nil)
+	if r := viewer.send("GET", file, "", nil, nil); r.status != 404 {
+		t.Errorf("a deleted card's comment file: %d", r.status)
+	}
+	owner.must(200, "POST", act+"/restore", map[string]any{})
+	if r := viewer.send("GET", file, "", nil, nil); r.status != 200 {
+		t.Errorf("a restored card's comment file: %d", r.status)
+	}
 }

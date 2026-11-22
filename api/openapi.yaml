@@ -2438,11 +2438,135 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/nodes/{id}/comments:
+    get:
+      tags: ["Comments"]
+      summary: "An objective's or activity's comments, oldest first"
+      operationId: getWorkspacesSlugMapsMapidNodesIdComments
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Comment"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["Comments"]
+      summary: "Comment on an objective or activity, or reply"
+      operationId: postWorkspacesSlugMapsMapidNodesIdComments
+      description: "Commenter or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                bodyMd:
+                  type: "string"
+                  maxLength: 10000
+                parentId:
+                  type: ["string", "null"]
+                  format: "uuid"
+                mentionIds:
+                  type: "array"
+                  items:
+                    type: "string"
+                    format: "uuid"
+                attachmentIds:
+                  type: "array"
+                  maxItems: 20
+                  description: "Your drafts on this step (from draft-attachments), which become the comment's files"
+                  items:
+                    type: "string"
+                    format: "uuid"
+              required: ["bodyMd"]
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/workspaces/{slug}/maps/{mapId}/steps/{id}/draft-attachments:
     post:
       tags: ["Comments"]
       summary: "Add a file to a comment being written"
       operationId: postWorkspacesSlugMapsMapidStepsIdDraftAttachments
+      description: >-
+        Commenter or above, or a write token. Uploads like a step's file
+        (application/octet-stream body, ?name=), but the file is a draft: only
+        you can download it, and it makes no event. Posting or editing a comment
+        with its id in attachmentIds makes it the comment's file. Drafts not
+        claimed within a day are deleted.
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+        - name: name
+          in: query
+          required: true
+          description: "The file name to show and download as; any path before it is dropped."
+          schema:
+            type: "string"
+            maxLength: 255
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: "string"
+              format: "binary"
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attachment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          description: "The file is larger than the server's limit."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/workspaces/{slug}/maps/{mapId}/nodes/{id}/draft-attachments:
+    post:
+      tags: ["Comments"]
+      summary: "Add a file to a comment being written"
+      operationId: postWorkspacesSlugMapsMapidNodesIdDraftAttachments
       description: >-
         Commenter or above, or a write token. Uploads like a step's file
         (application/octet-stream body, ?name=), but the file is a draft: only
@@ -3003,6 +3127,31 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/nodes/{id}/history:
+    get:
+      tags: ["History"]
+      summary: "An objective's or activity's events, newest first"
+      operationId: getWorkspacesSlugMapsMapidNodesIdHistory
+      description: >-
+        Viewer or above, or any API token. The node's own changes, files and
+        comments; its steps' changes are in their own history.
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/before"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/History"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/workspaces/{slug}/maps/{mapId}/live:
     get:
       tags: ["Live"]
@@ -3344,7 +3493,10 @@ components:
         attachmentCount:
           type: "integer"
           description: "How many live files the node has"
-      required: ["id", "parentId", "level", "title", "description", "colour", "personaIds", "rank", "version", "attachmentCount"]
+        commentCount:
+          type: "integer"
+          description: "Its live comments, replies included; not its steps'. 0 on share links"
+      required: ["id", "parentId", "level", "title", "description", "colour", "personaIds", "rank", "version", "attachmentCount", "commentCount"]
       additionalProperties: false
     Release:
       type: "object"
@@ -3574,8 +3726,13 @@ components:
           type: "string"
           format: "uuid"
         stepId:
-          type: "string"
+          type: ["string", "null"]
           format: "uuid"
+          description: "The step, for a comment on a step"
+        nodeId:
+          type: ["string", "null"]
+          format: "uuid"
+          description: "The objective or activity, for a comment on one"
         parentId:
           type: ["string", "null"]
           format: "uuid"
@@ -3605,7 +3762,7 @@ components:
           description: "The comment's files, oldest first; empty once it is deleted"
           items:
             $ref: "#/components/schemas/Attachment"
-      required: ["id", "stepId", "parentId", "authorId", "authorName", "bodyMd", "mentionIds", "resolved", "edited", "deleted", "createdAt", "attachments"]
+      required: ["id", "stepId", "nodeId", "parentId", "authorId", "authorName", "bodyMd", "mentionIds", "resolved", "edited", "deleted", "createdAt", "attachments"]
       additionalProperties: false
     ShareLink:
       type: "object"

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Markdown } from './Markdown'
-import { api, atLeast, type Attachment, type Comment, type Member } from '../api'
+import { api, atLeast, type Attachment, type Comment, type FileOwner, type Member } from '../api'
 import { mapKey, useMap } from '../pages/map'
 import { useSession } from '../session'
 import { ago } from './history'
@@ -9,24 +9,24 @@ import { FileList } from './Attachments'
 import { FileErrors, useInlineFiles } from './MarkdownEditor'
 
 /**
- * A step's comments: threads (a first comment and its replies), oldest
+ * A step's or node's comments: threads (a first comment and its replies), oldest
  * first. Commenters and up write; authors edit and delete their own; admins
  * delete any; a thread's author or an editor resolves it.
  */
-export function Comments({ stepId }: { stepId: string }) {
+export function Comments({ owner }: { owner: FileOwner }) {
   const { ws, view, run } = useMap()
   const { user } = useSession()
   const members = useQuery({ queryKey: ['ws', ws.slug, 'members'], queryFn: () => api.members(ws.slug) })
   const comments = useQuery({
-    queryKey: [...mapKey(ws.slug, view.map.id), 'comments', stepId],
-    queryFn: () => api.comments(ws.slug, view.map.id, stepId),
+    queryKey: [...mapKey(ws.slug, view.map.id), 'comments', owner.id],
+    queryFn: () => api.comments(ws.slug, view.map.id, owner),
   })
   const canComment = atLeast(ws.role, 'commenter')
   const all = comments.data ?? []
   const threads = all.filter((c) => !c.parentId)
   const repliesTo = (id: string) => all.filter((c) => c.parentId === id)
   const post = (bodyMd: string, mentionIds: string[], attachmentIds: string[], parentId?: string) =>
-    run(() => api.createComment(ws.slug, view.map.id, stepId, { bodyMd, mentionIds, attachmentIds, ...(parentId ? { parentId } : {}) }))
+    run(() => api.createComment(ws.slug, view.map.id, owner, { bodyMd, mentionIds, attachmentIds, ...(parentId ? { parentId } : {}) }))
 
   return (
     <section className="comments" aria-label="Comments">
@@ -47,7 +47,7 @@ export function Comments({ stepId }: { stepId: string }) {
             )}
             {canComment && !t.deleted && (
               <Composer
-                stepId={stepId}
+                owner={owner}
                 members={members.data ?? []}
                 label={`Reply to ${t.authorName}`}
                 action="Reply"
@@ -58,7 +58,7 @@ export function Comments({ stepId }: { stepId: string }) {
           </li>
         ))}
       </ol>
-      {canComment && <Composer stepId={stepId} members={members.data ?? []} label="New comment" action="Comment" onPost={(b, m, f) => post(b, m, f)} />}
+      {canComment && <Composer owner={owner} members={members.data ?? []} label="New comment" action="Comment" onPost={(b, m, f) => post(b, m, f)} />}
     </section>
   )
 }
@@ -81,7 +81,7 @@ function CommentView({ c, me, members }: { c: Comment; me: string; members: Memb
       </header>
       {editing ? (
         <Composer
-          stepId={c.stepId}
+          owner={c.nodeId ? { kind: 'node', id: c.nodeId } : { kind: 'step', id: c.stepId ?? '' }}
           members={members}
           label="Edit comment"
           action="Save"
@@ -138,7 +138,7 @@ function mentionAt(text: string, caret: number): { start: number; query: string 
  * text are sent as mentionIds.
  */
 function Composer(props: {
-  stepId: string
+  owner: FileOwner
   members: Member[]
   label: string
   action: string
@@ -160,7 +160,7 @@ function Composer(props: {
   const inline = useInlineFiles({
     area,
     setValue: setText,
-    upload: (file) => api.uploadDraftAttachment(ws.slug, view.map.id, props.stepId, file),
+    upload: (file) => api.uploadDraftAttachment(ws.slug, view.map.id, props.owner, file),
     onUploaded: (a) => setFiles((fs) => [...fs, a]),
   })
   // Taking a file off also takes it out of the text.

@@ -79,9 +79,12 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 		{"POST " + m + "/dependencies", role.Edit, s.createDependency},
 		{"DELETE " + m + "/dependencies/{id}", role.Edit, s.deleteDependency},
 
-		{"GET " + m + "/steps/{id}/comments", role.View, s.listComments},
-		{"POST " + m + "/steps/{id}/comments", role.Comment, s.createComment},
-		{"POST " + m + "/steps/{id}/draft-attachments", role.Comment, s.uploadDraftAttachment},
+		{"GET " + m + "/steps/{id}/comments", role.View, s.listComments(store.StepOwner)},
+		{"POST " + m + "/steps/{id}/comments", role.Comment, s.createComment(store.StepOwner)},
+		{"GET " + m + "/nodes/{id}/comments", role.View, s.listComments(store.NodeOwner)},
+		{"POST " + m + "/nodes/{id}/comments", role.Comment, s.createComment(store.NodeOwner)},
+		{"POST " + m + "/steps/{id}/draft-attachments", role.Comment, s.uploadDraft(store.StepOwner)},
+		{"POST " + m + "/nodes/{id}/draft-attachments", role.Comment, s.uploadDraft(store.NodeOwner)},
 		{"PATCH " + m + "/comments/{id}", role.Comment, s.patchComment},
 		{"DELETE " + m + "/comments/{id}", role.Comment, s.deleteComment},
 
@@ -108,6 +111,7 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 	s.handle(mux, "GET "+m+"/live", s.inWorkspace(role.View, s.liveMap))
 	s.handle(mux, "GET "+m+"/history", s.inWorkspace(role.View, mapEndpoint(s.mapHistory)))
 	s.handle(mux, "GET "+m+"/steps/{id}/history", s.inWorkspace(role.View, mapEndpoint(s.stepHistory)))
+	s.handle(mux, "GET "+m+"/nodes/{id}/history", s.inWorkspace(role.View, mapEndpoint(s.nodeHistory)))
 }
 
 // mapRequest is what every map handler needs: the caller, the workspace and
@@ -654,4 +658,13 @@ func (s *Server) search(q mapRequest) (int, any, error) {
 	}
 	hits, err := s.store.Search(q.r.Context(), q.ws, text)
 	return http.StatusOK, hits, err
+}
+
+func (s *Server) nodeHistory(q mapRequest) (int, any, error) {
+	before, limit, err := historyPage(q.r)
+	if err != nil {
+		return 0, nil, err
+	}
+	h, err := s.store.NodeHistory(q.r.Context(), q.ws, q.mapID, q.id, before, limit)
+	return http.StatusOK, h, err
 }

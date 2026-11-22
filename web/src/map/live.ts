@@ -82,11 +82,14 @@ export function applyEvent(view: MapView, ev: LiveEvent): MapView | null {
       return { ...view, steps: patch(view.steps, ev.entityId, after) }
     case 'comment:create':
     case 'comment:delete': {
-      // A comment changes its step's count; open comment lists reload (see apply).
+      // A comment changes its step's or node's count; open comment lists reload (see apply).
       const fields = ev.action === 'create' ? after : (ev.before ?? {})
       const stepId = typeof fields.stepId === 'string' ? fields.stepId : null
+      const nodeId = typeof fields.nodeId === 'string' ? fields.nodeId : null
       const by = ev.action === 'create' ? 1 : -1
-      return { ...view, steps: view.steps.map((s) => (s.id === stepId ? { ...s, commentCount: Math.max(0, s.commentCount + by) } : s)) }
+      const count = <T extends { id: string; commentCount: number }>(x: T, id: string | null) =>
+        x.id === id ? { ...x, commentCount: Math.max(0, x.commentCount + by) } : x
+      return { ...view, steps: view.steps.map((s) => count(s, stepId)), nodes: view.nodes.map((n) => count(n, nodeId)) }
     }
     case 'comment:update':
       return view
