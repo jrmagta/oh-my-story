@@ -100,7 +100,7 @@ Objectives and activities are one ordered tree of nodes with a `level`. Steps ar
 | Custom status workflows | in |
 | Comment-only viewer role | in |
 | Saved, shareable filtered views | in |
-| Attachments (steps, objectives, activities, comments; inline images) | in (M5) |
+| Attachments (steps, objectives, activities, comments; inline images) | done (M5) |
 | Figma embeds, link attachments | later |
 | Activity / audit history | in |
 

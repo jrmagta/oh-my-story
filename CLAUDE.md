@@ -8,7 +8,7 @@ Self-hosted user story mapping tool. The nav logo reads "Oh My Story". Features 
 
 ## Status
 
-M0 to M4 done (see `docs/M0.md` to `docs/M4.md`; API contract in `docs/API.md` and `api/openapi.yaml`), except M4's Mattermost phase, which is on hold while the user decides whether they need it (its plan is in `docs/M4.md`; do not start it unasked). Along the way: map navigation (zoom, pan, minimap), Keycloak users (names from Keycloak, Add from Keycloak in Members; `docs/SSO.md`), and a LAN stack with HTTPS, its own Keycloak and certificate sign-in (`docs/LAN.md`). Next: whatever the user picks; after M4, `docs/PLAN.md` has only a "Later" row (Jira Data Center sync, attachments and Figma, other integrations).
+M0 to M5 done (see `docs/M0.md` to `docs/M5.md`; M5 is attachments, stored in Postgres; API contract in `docs/API.md` and `api/openapi.yaml`), except M4's Mattermost phase, which is on hold while the user decides whether they need it (its plan is in `docs/M4.md`; do not start it unasked). Along the way: map navigation (zoom, pan, minimap), Keycloak users (names from Keycloak, Add from Keycloak in Members; `docs/SSO.md`), and a LAN stack with HTTPS, its own Keycloak and certificate sign-in (`docs/LAN.md`). Next: whatever the user picks; after M5, `docs/PLAN.md` has only a "Later" row (Jira Data Center sync, Figma and link attachments, other integrations).
 
 The map model is objectives › activities › steps. Objectives and activities are backbone `nodes`; steps are cards (key, title, description, status, assignee, estimate) placed in an (activity, release) cell. M0/M1 docs predate this and call steps "stories" (see the remodel note in `docs/M2.md`).
 

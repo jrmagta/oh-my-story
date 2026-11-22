@@ -22,6 +22,10 @@ Its database and Keycloak data live in podman volumes and survive restarts. `mak
 
 While `lan-app` swaps the container, the proxy answers 502 for a few seconds.
 
+## Files
+
+Attachments are stored in the LAN Postgres. The app takes files up to 10 MB (`OMS_ATTACHMENT_MAX_MB`); the Caddy proxy allows request bodies up to 20 MB (`request_body` in `deploy/lan/Caddyfile`), so the app answers a file that is too large with its own message. Raise both together. After changing the Caddyfile, restart the proxy: `podman restart oh-my-story-lan-proxy-1`.
+
 ## Certificates
 
 The first `make lan` runs `deploy/lan/pki/make-certs.sh`, which writes a test PKI to `~/.local/share/oh-my-story/lan-pki/` (`LAN_PKI_DIR`), outside git and outside any checkout, so every checkout and worktree runs the stack with the same files:

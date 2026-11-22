@@ -49,6 +49,8 @@ smtp-password: {{ .Values.smtp.password | b64enc }}
 {{- define "oms.env" -}}
 - name: OMS_HTTP_ADDR
   value: ":8080"
+- name: OMS_ATTACHMENT_MAX_MB
+  value: {{ include "oms.attachmentMaxMB" . | quote }}
 - name: OMS_BASE_URL
   value: {{ required "baseURL is required" .Values.baseURL | quote }}
 - name: OMS_DATABASE_URL
@@ -125,3 +127,12 @@ readOnlyRootFilesystem: true
 capabilities:
   drop: [ALL]
 {{- end -}}
+
+{{/* attachments.maxMB, checked: a whole number of MB from 1 to 1024. */}}
+{{- define "oms.attachmentMaxMB" -}}
+{{- $mb := .Values.attachments.maxMB | int -}}
+{{- if or (lt $mb 1) (gt $mb 1024) (ne (toString $mb) (toString .Values.attachments.maxMB)) -}}
+{{- fail "attachments.maxMB must be a whole number from 1 to 1024" -}}
+{{- end -}}
+{{- $mb -}}
+{{- end }}

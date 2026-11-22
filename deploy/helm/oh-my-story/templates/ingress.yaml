@@ -6,10 +6,9 @@ metadata:
   name: {{ include "oms.fullname" . }}
   labels:
     {{- include "oms.labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
+  {{- $body := dict "nginx.ingress.kubernetes.io/proxy-body-size" (printf "%dm" (mul (include "oms.attachmentMaxMB" . | int) 2)) }}
   annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- toYaml (merge (deepCopy (.Values.ingress.annotations | default dict)) $body) | nindent 4 }}
 spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . }}
