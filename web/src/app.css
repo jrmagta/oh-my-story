@@ -366,6 +366,7 @@
     color: var(--oms-muted);
   }
   .map-obj .node-total { color: inherit; opacity: 0.7; }
+  .node-counts { display: flex; gap: 8px; }
   .node-files {
     display: inline-flex;
     align-items: center;

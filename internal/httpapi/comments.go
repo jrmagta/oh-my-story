@@ -21,14 +21,22 @@ const (
 	maxCommentFiles = 20
 )
 
-func (s *Server) listComments(q mapRequest) (int, any, error) {
-	cs, err := s.store.Comments(q.r.Context(), q.ws, q.mapID, q.id)
-	return http.StatusOK, cs, err
+// listComments lists the comments on step or node {id}; owner says which.
+func (s *Server) listComments(owner func(uuid.UUID) store.Owner) func(mapRequest) (int, any, error) {
+	return func(q mapRequest) (int, any, error) {
+		cs, err := s.store.Comments(q.r.Context(), q.ws, q.mapID, owner(q.id))
+		return http.StatusOK, cs, err
+	}
 }
 
-// createComment adds a comment to step {id}, or a reply with parentId.
-// mentionIds are workspace members the body mentions; each is emailed once.
-func (s *Server) createComment(q mapRequest) (int, any, error) {
+// createComment adds a comment to step or node {id}, or a reply with
+// parentId. mentionIds are workspace members the body mentions; each is
+// emailed once.
+func (s *Server) createComment(owner func(uuid.UUID) store.Owner) func(mapRequest) (int, any, error) {
+	return func(q mapRequest) (int, any, error) { return s.addComment(q, owner(q.id)) }
+}
+
+func (s *Server) addComment(q mapRequest, o store.Owner) (int, any, error) {
 	var in struct {
 		BodyMD        string
 		ParentID      *uuid.UUID
@@ -56,7 +64,7 @@ func (s *Server) createComment(q mapRequest) (int, any, error) {
 	if err := idSet("attachmentIds", &files, maxCommentFiles); err != nil {
 		return 0, nil, err
 	}
-	w, err := s.store.CreateComment(q.r.Context(), q.user, q.ws, q.mapID, q.id, body, in.ParentID, mentions, files)
+	w, err := s.store.CreateComment(q.r.Context(), q.user, q.ws, q.mapID, o, body, in.ParentID, mentions, files)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -105,7 +113,11 @@ func (s *Server) notifyMentions(q mapRequest, w store.CommentWrite) {
 	if len(w.Notify) == 0 {
 		return
 	}
-	link := fmt.Sprintf("%s/w/%s/maps/%s?step=%s", s.cfg.BaseURL, q.r.PathValue("slug"), q.mapID, w.Comment.StepID)
+	open := "step=" + uuidString(w.Comment.StepID)
+	if w.Comment.NodeID != nil {
+		open = "node=" + w.Comment.NodeID.String()
+	}
+	link := fmt.Sprintf("%s/w/%s/maps/%s?%s", s.cfg.BaseURL, q.r.PathValue("slug"), q.mapID, open)
 	excerpt := w.Comment.BodyMD
 	if utf8.RuneCountInString(excerpt) > 500 {
 		excerpt = string([]rune(excerpt)[:500]) + "…"
@@ -116,9 +128,9 @@ func (s *Server) notifyMentions(q mapRequest, w store.CommentWrite) {
 		for _, u := range w.Notify {
 			msg := mail.Message{
 				To:      u.Email,
-				Subject: fmt.Sprintf("%s mentioned you on %s", w.Comment.AuthorName, w.StepKey),
-				Body: fmt.Sprintf("%s mentioned you in a comment on %s %s:\n\n%s\n\nOpen it:\n%s\n",
-					w.Comment.AuthorName, w.StepKey, w.StepTitle, indent(excerpt), link),
+				Subject: fmt.Sprintf("%s mentioned you on %s", w.Comment.AuthorName, w.WhereShort),
+				Body: fmt.Sprintf("%s mentioned you in a comment on %s:\n\n%s\n\nOpen it:\n%s\n",
+					w.Comment.AuthorName, w.Where, indent(excerpt), link),
 			}
 			if err := s.mail.Send(ctx, msg); err != nil {
 				slog.Error("send mention email", "to", u.Email, "err", err)
@@ -129,4 +141,11 @@ func (s *Server) notifyMentions(q mapRequest, w store.CommentWrite) {
 
 func indent(s string) string {
 	return "    " + strings.ReplaceAll(s, "\n", "\n    ")
+}
+
+func uuidString(id *uuid.UUID) string {
+	if id == nil {
+		return ""
+	}
+	return id.String()
 }

@@ -67,10 +67,14 @@ func (s *Server) uploadNodeAttachment(q mapRequest) (int, any, error) {
 	return s.upload(q, s.store.AddNodeAttachment)
 }
 
-// uploadDraftAttachment stores the request body as a draft for a comment on
-// step {id}: only the uploader sees it until a comment claims it.
-func (s *Server) uploadDraftAttachment(q mapRequest) (int, any, error) {
-	return s.upload(q, s.store.AddDraftAttachment)
+// uploadDraft stores the request body as a draft for a comment on step or
+// node {id}: only the uploader sees it until a comment claims it.
+func (s *Server) uploadDraft(owner func(uuid.UUID) store.Owner) func(mapRequest) (int, any, error) {
+	return func(q mapRequest) (int, any, error) {
+		return s.upload(q, func(ctx context.Context, actor, workspaceID, mapID, id uuid.UUID, f store.FileUpload) (store.Attachment, error) {
+			return s.store.AddDraftAttachment(ctx, actor, workspaceID, mapID, owner(id), f)
+		})
+	}
 }
 
 // upload reads a file from the request and stores it with add. The body is

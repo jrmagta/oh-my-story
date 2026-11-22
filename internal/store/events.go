@@ -118,8 +118,25 @@ func (s *Store) MapHistory(ctx context.Context, workspaceID, mapID uuid.UUID, be
 	return s.history(ctx, `e.workspace_id = $1 AND e.map_id = $2`, before, limit, workspaceID, mapID)
 }
 
-// StepHistory is one step's events, its placements' (moves), its links and
-// its files, newest first. Deleted steps keep their history.
+// NodeHistory is an objective's or activity's own history: its changes, its
+// files and its comments. Its steps' changes are in theirs.
+func (s *Store) NodeHistory(ctx context.Context, workspaceID, mapID, nodeID uuid.UUID, before int64, limit int) (History, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT true FROM nodes n JOIN maps m ON m.id = n.map_id
+		 WHERE n.id = $1 AND n.map_id = $2 AND m.workspace_id = $3 AND m.deleted_at IS NULL`,
+		nodeID, mapID, workspaceID).Scan(&ok)
+	if err != nil {
+		return History{}, notFound(err)
+	}
+	return s.history(ctx,
+		`e.workspace_id = $1 AND ((e.entity_type = 'node' AND e.entity_id = $2)
+		   OR (e.entity_type IN ('attachment', 'comment') AND coalesce(e.after, e.before)->>'nodeId' = $2::text))`,
+		before, limit, workspaceID, nodeID)
+}
+
+// StepHistory is one step's events, its placements' (moves), its links, its
+// files and its comments, newest first. Deleted steps keep their history.
 func (s *Store) StepHistory(ctx context.Context, workspaceID, mapID, stepID uuid.UUID, before int64, limit int) (History, error) {
 	var ok bool
 	err := s.pool.QueryRow(ctx,
@@ -132,7 +149,7 @@ func (s *Store) StepHistory(ctx context.Context, workspaceID, mapID, stepID uuid
 	return s.history(ctx,
 		`e.workspace_id = $1 AND ((e.entity_type = 'step' AND e.entity_id = $2 AND NOT e.echo)
 		   OR (e.entity_type = 'placement' AND e.entity_id IN (SELECT id FROM placements WHERE step_id = $2))
-		   OR (e.entity_type = 'attachment' AND NOT e.echo AND coalesce(e.after, e.before)->>'stepId' = $2::text)
+		   OR (e.entity_type IN ('attachment', 'comment') AND NOT e.echo AND coalesce(e.after, e.before)->>'stepId' = $2::text)
 		   OR (e.entity_type = 'dependency' AND e.map_id = $3
 		       AND $2::text IN (coalesce(e.after, e.before)->>'blockerId', coalesce(e.after, e.before)->>'blockedId')))`,
 		before, limit, workspaceID, stepID, mapID)

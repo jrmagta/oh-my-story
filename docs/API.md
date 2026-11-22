@@ -161,7 +161,9 @@ Limits: names 1 to 100 characters, titles 1 to 500, descriptions up to 50,000; c
 
 ### Comments
 
-A comment is `{id, stepId, parentId, authorId, authorName, bodyMd, mentionIds, resolved, edited, deleted, createdAt, attachments}`, `attachments` being its files (empty once deleted). A thread is a first comment (`parentId` null) and its replies, one level deep. Comments are map events (entity `comment`, carrying `stepId`), so open maps get them live; steps carry `commentCount`.
+Steps, objectives and activities take comments. A comment is `{id, stepId, nodeId, parentId, authorId, authorName, bodyMd, mentionIds, resolved, edited, deleted, createdAt, attachments}`: one of `stepId` and `nodeId` is set, and `attachments` are its files (empty once deleted). A thread is a first comment (`parentId` null) and its replies, one level deep. Comments are map events (entity `comment`, carrying `stepId` or `nodeId`), so open maps get them live; steps and nodes carry `commentCount`, their own comments only (an activity's does not include its steps'). Webhook consumers: a `comment.*` event for an objective or activity has `nodeId` set and `stepId` null.
+
+The endpoints below under `/steps/{id}/` also exist under `/nodes/{id}/` for an objective or activity, with the same roles and rules; a mention email then links to the card's details.
 
 | Endpoint | Role | Body → response |
 |---|---|---|
@@ -254,7 +256,8 @@ A saved view is a named map filter: `{id, name, filter, shared, createdBy, creat
 | Method and path | Response |
 |---|---|
 | `GET /maps/{mapId}/history?before=&limit=` | the map's events, newest first |
-| `GET /maps/{mapId}/steps/{id}/history?before=&limit=` | the step's events, its placement moves, its links and its files, newest first; kept after the step is deleted |
+| `GET /maps/{mapId}/steps/{id}/history?before=&limit=` | the step's events, its placement moves, its links, its files and its comments, newest first; kept after the step is deleted |
+| `GET /maps/{mapId}/nodes/{id}/history?before=&limit=` | an objective's or activity's own events, its files and its comments, newest first. Its steps' changes are in their own history |
 
 Both need viewer and return `{entries: [event + actorName], next}`. `actorName` is `""` when the account no longer exists. `limit` is 1 to 200 (default 50); pass `next` as `before` for the following page; `next` is null on the last one.
 

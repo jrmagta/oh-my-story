@@ -37,6 +37,7 @@ erDiagram
   workspaces ||--o{ labels : has
   steps }o--o{ labels : "step_labels"
   steps ||--o{ comments : has
+  nodes ||--o{ comments : has
   steps ||--o{ dependencies : "from / to"
   maps ||--o{ saved_views : has
   maps ||--o{ share_links : has
@@ -190,7 +191,8 @@ labels ( id uuid pk, workspace_id fk, name citext not null, colour text not null
 step_labels ( step_id fk, label_id fk, primary key (step_id, label_id) )
 
 comments (
-  id uuid pk, step_id fk on delete cascade, author_id fk users on delete set null,
+  id uuid pk, step_id fk on delete cascade, node_id fk on delete cascade,  -- exactly one
+  author_id fk users on delete set null,
   body_md text not null, parent_id fk comments,  -- one level of threading
   resolved_at, resolved_by fk users, edited_at, deleted_at, created_at
 )

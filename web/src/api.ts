@@ -112,8 +112,9 @@ export interface MapNode {
   personaIds: string[]
   rank: string
   version: number
-  /** How many live files it has. */
+  /** How many live files it has, and comments (replies included; not its steps'). */
   attachmentCount: number
+  commentCount: number
 }
 
 /** Someone a map serves; shared by the workspace's maps and linked to objectives. */
@@ -180,7 +181,9 @@ export interface Attachment {
 /** A comment on a step: a thread's first comment (parentId null) or a reply. */
 export interface Comment {
   id: string
-  stepId: string
+  /** What it is on: a step, or an objective or activity. One is set. */
+  stepId: string | null
+  nodeId: string | null
   parentId: string | null
   authorId: string | null
   authorName: string
@@ -468,6 +471,9 @@ export const api = {
     request<HistoryPage>('GET', `${mp(slug, mapId)}/history${before ? `?before=${before}` : ''}`),
   stepHistory: (slug: string, mapId: string, id: string, before?: number) =>
     request<HistoryPage>('GET', `${mp(slug, mapId)}/steps/${id}/history${before ? `?before=${before}` : ''}`),
+  /** An objective's or activity's own changes, files and comments. */
+  nodeHistory: (slug: string, mapId: string, id: string, before?: number) =>
+    request<HistoryPage>('GET', `${mp(slug, mapId)}/nodes/${id}/history${before ? `?before=${before}` : ''}`),
 
   createNode: (slug: string, mapId: string, b: { level: Level; title: string; parentId?: string; colour?: string } & Position) =>
     request<MapNode>('POST', `${mp(slug, mapId)}/nodes`, b),
@@ -506,23 +512,23 @@ export const api = {
       labelIds?: string[]
     },
   ) => request<Step>('PATCH', `${mp(slug, mapId)}/steps/${id}`, b),
-  comments: (slug: string, mapId: string, stepId: string) => request<Comment[]>('GET', `${mp(slug, mapId)}/steps/${stepId}/comments`),
+  comments: (slug: string, mapId: string, owner: FileOwner) => request<Comment[]>('GET', `${mp(slug, mapId)}/${owner.kind}s/${owner.id}/comments`),
   attachments: (slug: string, mapId: string, owner: FileOwner) =>
     request<Attachment[]>('GET', `${mp(slug, mapId)}/${owner.kind}s/${owner.id}/attachments`),
   /** Sends the file's bytes; onProgress gets the share sent so far, 0 to 1. */
   uploadAttachment: (slug: string, mapId: string, owner: FileOwner, file: File, onProgress?: (done: number) => void) =>
     upload<Attachment>(`${mp(slug, mapId)}/${owner.kind}s/${owner.id}/attachments?${new URLSearchParams({ name: file.name }).toString()}`, file, onProgress),
   /** A file for a comment being written: only its uploader sees it until a comment claims it. */
-  uploadDraftAttachment: (slug: string, mapId: string, stepId: string, file: File, onProgress?: (done: number) => void) =>
-    upload<Attachment>(`${mp(slug, mapId)}/steps/${stepId}/draft-attachments?${new URLSearchParams({ name: file.name }).toString()}`, file, onProgress),
+  uploadDraftAttachment: (slug: string, mapId: string, owner: FileOwner, file: File, onProgress?: (done: number) => void) =>
+    upload<Attachment>(`${mp(slug, mapId)}/${owner.kind}s/${owner.id}/draft-attachments?${new URLSearchParams({ name: file.name }).toString()}`, file, onProgress),
   deleteAttachment: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/attachments/${id}`),
   restoreAttachment: (slug: string, mapId: string, id: string) => request<void>('POST', `${mp(slug, mapId)}/attachments/${id}/restore`),
   /** Where a file is downloaded (or, for an image, shown) from. */
   attachmentURL: (slug: string, id: string) => `${ws(slug)}/attachments/${encodeURIComponent(id)}`,
   /** Commenter and up; each newly mentioned member is emailed once. */
   /** attachmentIds: drafts from uploadDraftAttachment, which become the comment's files. */
-  createComment: (slug: string, mapId: string, stepId: string, b: { bodyMd: string; parentId?: string; mentionIds?: string[]; attachmentIds?: string[] }) =>
-    request<Comment>('POST', `${mp(slug, mapId)}/steps/${stepId}/comments`, b),
+  createComment: (slug: string, mapId: string, owner: FileOwner, b: { bodyMd: string; parentId?: string; mentionIds?: string[]; attachmentIds?: string[] }) =>
+    request<Comment>('POST', `${mp(slug, mapId)}/${owner.kind}s/${owner.id}/comments`, b),
   /** Body, mentions and files (every file the comment keeps): the author. resolved: the thread's author or an editor. */
   patchComment: (slug: string, mapId: string, id: string, b: { bodyMd?: string; mentionIds?: string[]; resolved?: boolean; attachmentIds?: string[] }) =>
     request<Comment>('PATCH', `${mp(slug, mapId)}/comments/${id}`, b),

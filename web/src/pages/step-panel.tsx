@@ -182,7 +182,7 @@ export function StepPanel({ stepId }: { stepId: string }) {
         </div>
       ) : tab === 'comments' ? (
         <div role="tabpanel" id="step-pane-comments" aria-labelledby="step-tab-comments">
-          <Comments key={step.id} stepId={step.id} />
+          <Comments key={step.id} owner={{ kind: 'step', id: step.id }} />
         </div>
       ) : (
         <div role="tabpanel" id="step-pane-history" aria-labelledby="step-tab-history">
@@ -292,9 +292,10 @@ export function Description({
   )
 }
 
-/** An objective's or activity's details: its title, description and files. Opened from its ⋯ menu. */
+/** An objective's or activity's details, comments and history, like a step's. Opened by clicking its card. */
 export function NodePanel({ nodeId }: { nodeId: string }) {
-  const { ws, view, canEdit, run, openNode } = useMap()
+  const { ws, view, canEdit, run, openNode, shared } = useMap()
+  const [tab, setTab] = useState<'details' | 'comments' | 'history'>('details')
   const node = view.nodes.find((n) => n.id === nodeId)
   if (!node) return null
   const level = node.level === 'objective' ? 'Objective' : 'Activity'
@@ -316,8 +317,41 @@ export function NodePanel({ nodeId }: { nodeId: string }) {
           <InlineText value={node.title} label={level.toLowerCase()} editable={canEdit} onSave={(title) => patch({ title })} />
         </h2>
       </div>
-      <Description key={node.id} owner={owner} text={node.description} editable={canEdit} onSave={(description) => patch({ description })} />
-      <AttachmentSection key={`files:${node.id}`} owner={owner} />
+      <div role="tablist" aria-label={level} className="step-tabs">
+        {(shared ? (['details'] as const) : (['details', 'comments', 'history'] as const)).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            id={`node-tab-${t}`}
+            aria-selected={tab === t}
+            aria-controls={`node-pane-${t}`}
+            onClick={() => setTab(t)}
+          >
+            {t === 'details' ? 'Details' : t === 'comments' ? `Comments${node.commentCount ? ` (${node.commentCount})` : ''}` : 'History'}
+          </button>
+        ))}
+      </div>
+      {tab === 'details' ? (
+        <div role="tabpanel" id="node-pane-details" aria-labelledby="node-tab-details">
+          <Description key={node.id} owner={owner} text={node.description} editable={canEdit} onSave={(description) => patch({ description })} />
+          <AttachmentSection key={`files:${node.id}`} owner={owner} />
+        </div>
+      ) : tab === 'comments' ? (
+        <div role="tabpanel" id="node-pane-comments" aria-labelledby="node-tab-comments">
+          <Comments key={node.id} owner={owner} />
+        </div>
+      ) : (
+        <div role="tabpanel" id="node-pane-history" aria-labelledby="node-tab-history">
+          <HistoryList
+            slug={ws.slug}
+            view={view}
+            queryKey={[...mapKey(ws.slug, view.map.id), 'history', node.id]}
+            page={(before) => api.nodeHistory(ws.slug, view.map.id, node.id, before)}
+            label={`History of ${node.title}`}
+          />
+        </div>
+      )}
     </aside>
   )
 }

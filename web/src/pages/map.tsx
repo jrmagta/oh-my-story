@@ -687,8 +687,8 @@ export function MapGrid() {
  * A backbone card's content. A click (or Enter on its title) opens its
  * details. The whole card drags (with the pointer, or Space once the title is
  * focused); its ⋯ menu opens its details, renames, recolours, links
- * personas (objectives), collapses (activities) and deletes. A paperclip
- * counts its files and opens its details.
+ * personas (objectives), collapses (activities) and deletes. Counts of its
+ * comments and files open its details too.
  */
 function NodeHead({ node, bold }: { node: MapNode; bold?: boolean }) {
   const { ws, view, canEdit, totals, run, openNode, selectedNode } = useMap()
@@ -755,18 +755,35 @@ function NodeHead({ node, bold }: { node: MapNode; bold?: boolean }) {
           {sum}
         </span>
       )}
-      {node.attachmentCount > 0 && (
-        <button
-          type="button"
-          className="node-files"
-          title={`${node.attachmentCount} file${node.attachmentCount === 1 ? '' : 's'}`}
-          aria-label={`${node.attachmentCount} file${node.attachmentCount === 1 ? '' : 's'} on ${label}`}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => openNode(node.id)}
-        >
-          <Paperclip />
-          {node.attachmentCount}
-        </button>
+      {(node.commentCount > 0 || node.attachmentCount > 0) && (
+        <span className="node-counts">
+          {node.commentCount > 0 && (
+            <button
+              type="button"
+              className="node-files"
+              title={`${node.commentCount} comment${node.commentCount === 1 ? '' : 's'}`}
+              aria-label={`${node.commentCount} comment${node.commentCount === 1 ? '' : 's'} on ${label}`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => openNode(node.id)}
+            >
+              <SpeechBubble />
+              {node.commentCount}
+            </button>
+          )}
+          {node.attachmentCount > 0 && (
+            <button
+              type="button"
+              className="node-files"
+              title={`${node.attachmentCount} file${node.attachmentCount === 1 ? '' : 's'}`}
+              aria-label={`${node.attachmentCount} file${node.attachmentCount === 1 ? '' : 's'} on ${label}`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => openNode(node.id)}
+            >
+              <Paperclip />
+              {node.attachmentCount}
+            </button>
+          )}
+        </span>
       )}
     </div>
   )
@@ -1368,9 +1385,7 @@ function StepCard({ card, dimmed }: { card: Card; dimmed: boolean }) {
           <StatusLabel status={status} />
           {step.commentCount > 0 && (
             <span className="comment-count" title={`${step.commentCount} comment${step.commentCount === 1 ? '' : 's'}`}>
-              <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden>
-                <path d="M2 3h12v8H7l-3 3v-3H2z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-              </svg>
+              <SpeechBubble />
               {step.commentCount}
             </span>
           )}
@@ -1431,6 +1446,14 @@ function ActivityPanel({ onClose }: { onClose: () => void }) {
         onStep={openStep}
       />
     </aside>
+  )
+}
+
+function SpeechBubble() {
+  return (
+    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden>
+      <path d="M2 3h12v8H7l-3 3v-3H2z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
   )
 }
 
