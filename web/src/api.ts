@@ -145,6 +145,8 @@ export interface Step {
   labelIds: string[]
   /** Live comments, replies included. */
   commentCount: number
+  /** Live files on the step itself. */
+  attachmentCount: number
   version: number
 }
 

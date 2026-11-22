@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -20,7 +21,13 @@ type Config struct {
 	// BlockPrivateWebhooks also stops webhooks posting to loopback and private
 	// addresses (link-local and cloud metadata addresses are always refused).
 	BlockPrivateWebhooks bool
+
+	// AttachmentMaxBytes is the largest file an upload may carry.
+	AttachmentMaxBytes int64
 }
+
+// DefaultAttachmentMaxBytes is 10 MB, Jira Data Center's default.
+const DefaultAttachmentMaxBytes = 10 << 20
 
 type SMTP struct {
 	Addr     string // empty: emails are logged, not sent
@@ -75,6 +82,14 @@ func FromEnv(getenv func(string) string) (Config, error) {
 	}
 	c.BaseURL = base
 
+	c.AttachmentMaxBytes = DefaultAttachmentMaxBytes
+	if v := getenv("OMS_ATTACHMENT_MAX_MB"); v != "" {
+		mb, err := strconv.Atoi(v)
+		if err != nil || mb < 1 || mb > 1024 {
+			return Config{}, errors.New("OMS_ATTACHMENT_MAX_MB must be a whole number of megabytes from 1 to 1024")
+		}
+		c.AttachmentMaxBytes = int64(mb) << 20
+	}
 	if issuer := getenv("OMS_OIDC_ISSUER"); issuer != "" {
 		o := &OIDC{
 			Issuer:       issuer,

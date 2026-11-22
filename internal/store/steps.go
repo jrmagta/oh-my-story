@@ -9,17 +9,18 @@ import (
 )
 
 type Step struct {
-	ID            uuid.UUID   `json:"id"`
-	Key           string      `json:"key"`
-	Title         string      `json:"title"`
-	DescriptionMD string      `json:"descriptionMd"`
-	StatusID      uuid.UUID   `json:"statusId"`
-	AssigneeID    *uuid.UUID  `json:"assigneeId"`
-	Estimate      *float64    `json:"estimate"`
-	Colour        *string     `json:"colour"` // nil: the activity's colour
-	LabelIDs      []uuid.UUID `json:"labelIds"`     // sorted, never null
-	CommentCount  int         `json:"commentCount"` // live comments, replies included
-	Version       int         `json:"version"`
+	ID              uuid.UUID   `json:"id"`
+	Key             string      `json:"key"`
+	Title           string      `json:"title"`
+	DescriptionMD   string      `json:"descriptionMd"`
+	StatusID        uuid.UUID   `json:"statusId"`
+	AssigneeID      *uuid.UUID  `json:"assigneeId"`
+	Estimate        *float64    `json:"estimate"`
+	Colour          *string     `json:"colour"`          // nil: the activity's colour
+	LabelIDs        []uuid.UUID `json:"labelIds"`        // sorted, never null
+	CommentCount    int         `json:"commentCount"`    // live comments, replies included
+	AttachmentCount int         `json:"attachmentCount"` // live files on the step itself
+	Version         int         `json:"version"`
 }
 
 // Placement is where a step sits on a map: an activity, a release (nil for
@@ -38,11 +39,12 @@ type Placement struct {
 const stepCols = `s.id, s.key, s.title, s.description_md, s.status_id, s.assignee_id, s.estimate, s.colour,
 	coalesce((SELECT array_agg(sl.label_id ORDER BY sl.label_id) FROM step_labels sl WHERE sl.step_id = s.id), '{}'),
 	(SELECT count(*) FROM comments cm WHERE cm.step_id = s.id AND cm.deleted_at IS NULL),
+	(SELECT count(*) FROM attachments at WHERE at.step_id = s.id AND at.deleted_at IS NULL),
 	s.version`
 
 func scanStep(row pgx.Row) (Step, error) {
 	var st Step
-	err := row.Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.Colour, &st.LabelIDs, &st.CommentCount, &st.Version)
+	err := row.Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.Colour, &st.LabelIDs, &st.CommentCount, &st.AttachmentCount, &st.Version)
 	return st, notFound(err)
 }
 
@@ -82,7 +84,7 @@ func mapStep(ctx context.Context, tx pgx.Tx, mapID, stepID uuid.UUID) (Step, Pla
 		`SELECT `+stepCols+`, p.id, p.step_id, p.activity_id, p.release_id, p.rank
 		 FROM steps s JOIN placements p ON p.step_id = s.id JOIN nodes n ON n.id = p.activity_id AND n.deleted_at IS NULL
 		 WHERE s.id = $1 AND p.map_id = $2 AND s.deleted_at IS NULL FOR UPDATE OF s`, stepID, mapID).
-		Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.Colour, &st.LabelIDs, &st.CommentCount, &st.Version,
+		Scan(&st.ID, &st.Key, &st.Title, &st.DescriptionMD, &st.StatusID, &st.AssigneeID, &st.Estimate, &st.Colour, &st.LabelIDs, &st.CommentCount, &st.AttachmentCount, &st.Version,
 			&p.ID, &p.StepID, &p.ActivityID, &p.ReleaseID, &p.Rank)
 	return st, p, notFound(err)
 }

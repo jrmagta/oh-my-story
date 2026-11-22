@@ -76,6 +76,7 @@ type harnessOpts struct {
 	base     string
 	oidc     *config.OIDC
 	database string // share another harness's database, like a second app replica
+	maxFile  int64  // attachment size limit; 0 for the default
 }
 
 func newHarness(t *testing.T, opts harnessOpts) *harness {
@@ -105,7 +106,7 @@ func newHarness(t *testing.T, opts harnessOpts) *harness {
 	if base == "" {
 		base = "http://" + srv.Listener.Addr().String()
 	}
-	cfg := config.Config{BaseURL: base}
+	cfg := config.Config{BaseURL: base, AttachmentMaxBytes: opts.maxFile}
 
 	var sso *httpapi.OIDC
 	if opts.oidc != nil {

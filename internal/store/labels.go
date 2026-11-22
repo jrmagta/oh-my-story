@@ -9,8 +9,8 @@ import (
 
 // Label tags steps across every map of a workspace.
 type Label struct {
-	ID     uuid.UUID `json:"id"`
-	Name   string    `json:"name"`
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
 }
 
 const labelCols = `id, name`

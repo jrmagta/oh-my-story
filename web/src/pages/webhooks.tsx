@@ -8,6 +8,7 @@ import { ago } from '../map/history'
 const groups: [string, string[]][] = [
   ['Steps', ['step.create', 'step.update', 'step.delete', 'step.restore', 'placement.move', 'step.place', 'step.unplace']],
   ['Comments', ['comment.create', 'comment.update', 'comment.delete']],
+  ['Attachments', ['attachment.create', 'attachment.delete', 'attachment.restore']],
   ['Dependencies', ['dependency.create', 'dependency.delete']],
   ['Backbone', ['node.create', 'node.update', 'node.move', 'node.delete', 'node.restore']],
   ['Releases', ['release.create', 'release.update', 'release.move', 'release.delete']],
