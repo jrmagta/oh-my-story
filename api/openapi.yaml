@@ -3109,7 +3109,7 @@ paths:
       tags: ["History"]
       summary: "A step's events, newest first"
       operationId: getWorkspacesSlugMapsMapidStepsIdHistory
-      description: "Viewer or above, or any API token."
+      description: "Viewer or above, or any API token. The step's changes, placement moves, links, files and comments."
       parameters:
         - $ref: "#/components/parameters/slug"
         - $ref: "#/components/parameters/mapId"

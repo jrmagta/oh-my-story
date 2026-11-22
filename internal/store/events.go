@@ -135,8 +135,8 @@ func (s *Store) NodeHistory(ctx context.Context, workspaceID, mapID, nodeID uuid
 		before, limit, workspaceID, nodeID)
 }
 
-// StepHistory is one step's events, its placements' (moves), its links and
-// its files, newest first. Deleted steps keep their history.
+// StepHistory is one step's events, its placements' (moves), its links, its
+// files and its comments, newest first. Deleted steps keep their history.
 func (s *Store) StepHistory(ctx context.Context, workspaceID, mapID, stepID uuid.UUID, before int64, limit int) (History, error) {
 	var ok bool
 	err := s.pool.QueryRow(ctx,
@@ -149,7 +149,7 @@ func (s *Store) StepHistory(ctx context.Context, workspaceID, mapID, stepID uuid
 	return s.history(ctx,
 		`e.workspace_id = $1 AND ((e.entity_type = 'step' AND e.entity_id = $2 AND NOT e.echo)
 		   OR (e.entity_type = 'placement' AND e.entity_id IN (SELECT id FROM placements WHERE step_id = $2))
-		   OR (e.entity_type = 'attachment' AND NOT e.echo AND coalesce(e.after, e.before)->>'stepId' = $2::text)
+		   OR (e.entity_type IN ('attachment', 'comment') AND NOT e.echo AND coalesce(e.after, e.before)->>'stepId' = $2::text)
 		   OR (e.entity_type = 'dependency' AND e.map_id = $3
 		       AND $2::text IN (coalesce(e.after, e.before)->>'blockerId', coalesce(e.after, e.before)->>'blockedId')))`,
 		before, limit, workspaceID, stepID, mapID)

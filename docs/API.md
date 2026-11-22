@@ -256,7 +256,7 @@ A saved view is a named map filter: `{id, name, filter, shared, createdBy, creat
 | Method and path | Response |
 |---|---|
 | `GET /maps/{mapId}/history?before=&limit=` | the map's events, newest first |
-| `GET /maps/{mapId}/steps/{id}/history?before=&limit=` | the step's events, its placement moves, its links and its files, newest first; kept after the step is deleted |
+| `GET /maps/{mapId}/steps/{id}/history?before=&limit=` | the step's events, its placement moves, its links, its files and its comments, newest first; kept after the step is deleted |
 | `GET /maps/{mapId}/nodes/{id}/history?before=&limit=` | an objective's or activity's own events, its files and its comments, newest first. Its steps' changes are in their own history |
 
 Both need viewer and return `{entries: [event + actorName], next}`. `actorName` is `""` when the account no longer exists. `limit` is 1 to 200 (default 50); pass `next` as `before` for the following page; `next` is null on the last one.

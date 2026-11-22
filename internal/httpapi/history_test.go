@@ -37,6 +37,9 @@ func TestStepHistory(t *testing.T) {
 	editor, _ := h.join(owner, "ed@example.com", "editor")
 	step := str(owner.must(201, "POST", b.path+"/steps", map[string]any{"title": "Draft", "activityId": b.act1}).body, "step", "id")
 	other := owner.must(201, "POST", b.path+"/steps", map[string]any{"title": "Other", "activityId": b.act1})
+	// A comment on this step is in its history; one on another step is not.
+	owner.must(201, "POST", b.path+"/steps/"+step+"/comments", map[string]any{"bodyMd": "Needs copy"})
+	owner.must(201, "POST", b.path+"/steps/"+str(other.body, "step", "id")+"/comments", map[string]any{"bodyMd": "Not this one"})
 	editor.must(200, "PATCH", b.path+"/steps/"+step, map[string]any{"title": "Final", "statusId": b.doing})
 	owner.must(200, "POST", b.path+"/steps/"+step+"/move", map[string]any{"activityId": b.act2, "releaseId": b.rel, "version": 1})
 	owner.must(200, "PATCH", b.path+"/steps/"+str(other.body, "step", "id"), map[string]any{"title": "Not this one"})
@@ -44,7 +47,7 @@ func TestStepHistory(t *testing.T) {
 
 	hist := b.path + "/steps/" + step + "/history"
 	es, next := entries(owner.must(200, "GET", hist, nil))
-	if want := []string{"step:delete", "placement:move", "step:update", "placement:create", "step:create"}; !slices.Equal(kinds(es), want) || next != nil {
+	if want := []string{"step:delete", "placement:move", "step:update", "comment:create", "placement:create", "step:create"}; !slices.Equal(kinds(es), want) || next != nil {
 		t.Fatalf("history = %v next=%v, want %v", kinds(es), next, want)
 	}
 	if es[2].actor != "ed@example.com" || es[2].before["title"] != "Draft" || es[2].after["statusId"] != b.doing {
