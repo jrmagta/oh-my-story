@@ -923,7 +923,12 @@
   .swatch.custom:focus-within { outline: 3px solid var(--color-brand-amber); outline-offset: 1px; }
   /* A backbone card's content: the title has the full width; the ⋯ menu sits over the corner. */
   .node-head { position: relative; }
-  .node-title { display: block; overflow-wrap: anywhere; }
+  .node-title { display: block; overflow-wrap: anywhere; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+  .map-obj:has(.node-title[aria-current="true"]),
+  .map-act:has(.node-title[aria-current="true"]) {
+    outline: 3px solid var(--color-brand-amber);
+    outline-offset: 1px;
+  }
   /* An objective's title and persona pills: one line when they fit, the pills wrapping below when not. */
   .node-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
   .node-line > .node-title { min-width: 0; }
@@ -961,7 +966,7 @@
   .dep-lines marker path.open { fill: var(--color-brand-red, #BA3636); }
   .dep-lines marker path.done { fill: var(--color-muted, #8A8A93); }
   /* A step card opens on click as well as dragging, so it shows the hand like any button. */
-  .card-open.grab { cursor: pointer; }
+  .card-open.grab, .node-title.grab { cursor: pointer; }
   .grab:focus-visible { outline: 3px solid var(--color-brand-amber); outline-offset: 3px; }
   /* Floats at the right of a backbone card's first line; the title wraps around it, never under it. */
   .card-menu {
