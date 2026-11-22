@@ -51,13 +51,13 @@ test('backbone cards take a colour, keep it after a reload, and go back to defau
   const field = page.getByRole('textbox', { name: 'New activity in Buy' })
   await field.fill('Checkout')
   await field.press('Enter')
-  await expect(page.getByRole('button', { name: 'Move activity Checkout' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'activity Checkout', exact: true })).toBeVisible()
   await field.fill('Receipt')
   await field.press('Enter')
-  await expect(page.getByRole('button', { name: 'Move activity Receipt' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'activity Receipt', exact: true })).toBeVisible()
   await field.press('Escape')
   await expect(field).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /^Move activity / })).toHaveCount(4)
+  await expect(page.getByRole('button', { name: /^activity / })).toHaveCount(4)
 
   await page.reload()
   await expect(activity).toHaveCSS('background-color', 'rgb(59, 130, 196)')
@@ -108,7 +108,7 @@ test('backbone cards take a colour, keep it after a reload, and go back to defau
   await page.keyboard.press('Enter')
   await page.keyboard.press('Escape')
   await expect(page.locator('.map-act', { hasText: 'Wish list' })).toHaveCSS('background-color', 'rgb(252, 177, 49)')
-  await expect(page.getByRole('button', { name: /^Move activity / })).toHaveCount(6)
+  await expect(page.getByRole('button', { name: /^activity / })).toHaveCount(6)
 
   // The + on a card's left edge adds before it.
   await page.locator('.map-act', { hasText: 'Browse' }).hover()

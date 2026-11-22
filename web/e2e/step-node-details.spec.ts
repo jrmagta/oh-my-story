@@ -87,6 +87,22 @@ test('an activity has details: a description with an inline image and files, cou
   await page.getByRole('button', { name: 'Undo' }).click()
   await expect(page.getByRole('button', { name: '2 files on activity Pay' })).toBeVisible()
 
+  // Clicking a backbone card opens its details, like a step's; clicking it again closes them.
+  await page.getByRole('button', { name: 'objective Buy', exact: true }).click()
+  const objPanel = page.getByRole('complementary', { name: 'Objective Buy' })
+  await expect(objPanel).toBeVisible()
+  await expect(panel).toHaveCount(0)
+  await page.getByRole('button', { name: 'objective Buy', exact: true }).click()
+  await expect(objPanel).toHaveCount(0)
+  await expect(page).not.toHaveURL(/node=/)
+  // Anywhere on the card, not just the title; the card's own controls keep their jobs.
+  await page.locator('.map-act .node-head').first().click({ position: { x: 8, y: 40 } })
+  await expect(panel).toBeVisible()
+  await page.getByRole('button', { name: 'Actions for activity Pay' }).click()
+  await expect(page.getByRole('group', { name: 'Actions for activity Pay' })).toBeVisible()
+  await expect(panel).toBeVisible()
+  await page.keyboard.press('Escape')
+
   // A share link shows the details read-only, image and files included.
   const link = await post(`${api}/share-links`, {})
   const anon = await (await browser.newContext()).newPage()

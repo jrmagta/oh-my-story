@@ -111,14 +111,14 @@ test('renaming an activity, and deleting it with undo', async ({ page }) => {
   await menu(page, 'activity Verify email', 'Rename')
   await page.getByRole('textbox', { name: 'New name for activity Verify email' }).fill('Check inbox')
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('button', { name: 'Move activity Check inbox' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'activity Check inbox', exact: true })).toBeVisible()
 
   await menu(page, 'activity Check inbox', 'Delete')
   await expect(page.getByRole('status').filter({ hasText: 'Deleted activity “Check inbox”' })).toBeVisible()
   await expect(card(page, 'MAP-2 Send verification email')).toHaveCount(0)
   await page.getByRole('button', { name: 'Undo' }).click()
   await expect(card(page, 'MAP-2 Send verification email')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Move activity Check inbox' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'activity Check inbox', exact: true })).toBeVisible()
 
   // Releases rename from their menu too.
   await menu(page, 'release MVP', 'Rename')
@@ -142,8 +142,8 @@ async function cellKeys(page: Page, where: string): Promise<string[]> {
 
 /** Activity titles across the backbone, left to right. */
 async function activityOrder(page: Page): Promise<string[]> {
-  const names = await page.getByRole('button', { name: /^Move activity / }).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''))
-  return names.map((n) => n.replace('Move activity ', ''))
+  const names = await page.getByRole('button', { name: /^activity / }).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''))
+  return names.map((n) => n.replace('activity ', ''))
 }
 
 /** A pointer drag with intermediate moves, as a person makes it. */
@@ -171,7 +171,7 @@ async function centre(locator: ReturnType<Page["locator"]>) {
  * pressed again if nothing else lights up.
  */
 async function keyboardMove(page: Page, handle: string, key: string) {
-  const own = handle.replace(/^Move (activity|objective|release) /, '').replace(/^[A-Z0-9]+-\d+ /, '')
+  const own = handle.replace(/^(Move )?(activity|objective|release) /, '').replace(/^[A-Z0-9]+-\d+ /, '')
   const elsewhere = async () => {
     const t = await page.locator('.drop').evaluateAll((els) => els.map((e) => e.textContent ?? ''))
     return t.length === 1 && !t[0]?.includes(own)
@@ -235,7 +235,7 @@ test('reordering with the keyboard: a step in its cell, an activity, a release',
   await expect.poll(() => cellKeys(page, 'Create account / MVP')).toEqual(['MAP-2', 'MAP-1'])
 
   await expect.poll(() => activityOrder(page)).toEqual(['Create account', 'Check inbox'])
-  await keyboardMove(page, 'Move activity Check inbox', 'ArrowLeft')
+  await keyboardMove(page, 'activity Check inbox', 'ArrowLeft')
   await expect.poll(() => activityOrder(page)).toEqual(['Check inbox', 'Create account'])
 
   await page.getByRole('button', { name: '+ Add release' }).click()

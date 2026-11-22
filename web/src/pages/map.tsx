@@ -684,14 +684,17 @@ export function MapGrid() {
 }
 
 /**
- * A backbone card's content. The whole card drags (with the pointer, or Space
- * once focused); its ⋯ menu opens its details, renames, recolours, links
+ * A backbone card's content. A click (or Enter on its title) opens its
+ * details. The whole card drags (with the pointer, or Space once the title is
+ * focused); its ⋯ menu opens its details, renames, recolours, links
  * personas (objectives), collapses (activities) and deletes. A paperclip
  * counts its files and opens its details.
  */
 function NodeHead({ node, bold }: { node: MapNode; bold?: boolean }) {
-  const { ws, view, canEdit, totals, run, openNode } = useMap()
+  const { ws, view, canEdit, totals, run, openNode, selectedNode } = useMap()
   const label = `${node.level} ${node.title}`
+  const selected = selectedNode === node.id
+  const toggle = () => openNode(selected ? null : node.id)
   const total = totals.nodes.get(node.id)
   const sum = total && estimated(total, ws.estimateUnit)
   const [renaming, setRenaming] = useState(false)
@@ -705,6 +708,11 @@ function NodeHead({ node, bold }: { node: MapNode; bold?: boolean }) {
       {...drag.id}
       className={`node-head ${drop.over ? 'drop' : ''} ${drag.dragging ? 'dragging' : ''} ${canEdit ? 'grab-area' : ''}`}
       {...drag.pointer}
+      // A click anywhere on the card opens its details, like a step's, except on its own controls.
+      onClick={(e) => {
+        if (renaming || (e.target as Element).closest('button, a, input, textarea, select, [role="group"]')) return
+        toggle()
+      }}
     >
       {/* First, so it floats at the right of the title's first line and the title wraps around it. */}
       {!renaming && (
@@ -727,14 +735,18 @@ function NodeHead({ node, bold }: { node: MapNode; bold?: boolean }) {
       ) : (
         // An objective's personas follow its title on the same line, wrapping below when there is no room.
         <div className={node.level === 'objective' ? 'node-line' : undefined}>
-          <span
+          {/* Click or Enter opens the details; Space picks the card up to move it. */}
+          <button
+            type="button"
             ref={drag.keysRef}
             {...drag.keys}
-            aria-label={canEdit ? `Move ${label}` : undefined}
+            aria-label={label}
+            aria-current={selected}
             className={`node-title ${bold ? 'up text-[15px]' : ''} ${canEdit ? 'grab' : ''}`}
+            onClick={toggle}
           >
             {node.title}
-          </span>
+          </button>
           {node.level === 'objective' && <PersonaBadges node={node} />}
         </div>
       )}
