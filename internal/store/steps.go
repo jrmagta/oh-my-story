@@ -16,7 +16,7 @@ type Step struct {
 	StatusID      uuid.UUID   `json:"statusId"`
 	AssigneeID    *uuid.UUID  `json:"assigneeId"`
 	Estimate      *float64    `json:"estimate"`
-	Colour        *string     `json:"colour"` // nil: the activity's colour
+	Colour        *string     `json:"colour"`       // nil: the activity's colour
 	LabelIDs      []uuid.UUID `json:"labelIds"`     // sorted, never null
 	CommentCount  int         `json:"commentCount"` // live comments, replies included
 	Version       int         `json:"version"`
