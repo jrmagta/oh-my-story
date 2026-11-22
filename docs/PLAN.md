@@ -100,7 +100,8 @@ Objectives and activities are one ordered tree of nodes with a `level`. Steps ar
 | Custom status workflows | in |
 | Comment-only viewer role | in |
 | Saved, shareable filtered views | in |
-| Attachments, Figma embeds | later |
+| Attachments (steps, objectives, activities, comments; inline images) | in (M5) |
+| Figma embeds, link attachments | later |
 | Activity / audit history | in |
 
 ### Tier 3 — integrations
@@ -127,4 +128,5 @@ Objectives and activities are one ordered tree of nodes with a `level`. Steps ar
 | M2 | Planning | Estimates and roll-ups, personas, labels, comments and @mentions, search, filter and highlight, saved views, zoom/collapse/focus |
 | M3 | Sharing | Public share links, PDF/PNG export, roadmap view |
 | M4 | Connected | Dependencies, linked maps, REST API with tokens and OpenAPI, webhooks, Mattermost (on hold) |
-| Later | | Jira Data Center sync, attachments and Figma, other integrations |
+| M5 | Attachments | Files on steps, objectives, activities and comments, stored in Postgres (10 MB a file, any type); inline images in descriptions and comments; counts on cards (`docs/M5.md`) |
+| Later | | Jira Data Center sync, Figma and link attachments, other integrations |
