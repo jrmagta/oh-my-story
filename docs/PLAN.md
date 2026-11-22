@@ -45,7 +45,7 @@ Motifs:
 - **Ringed circle:** a colour disc with a black ring and an outer ring in the same colour. Used for step estimates (coloured by status), map status totals and avatars.
 - **Tricolour stripe** under the nav: green 16%, amber 49%, red 35%.
 - **Colour-blocked release bands** with large uppercase names.
-- Square corners everywhere except pills (personas, step keys). Buttons are uppercase, solid or 2px outline.
+- Soft corners: 8px on buttons and fields, 10–12px on cards, menus and toasts; pills (personas, step keys) fully round. Buttons are sentence case and bold: solid amber for the main action, otherwise a quiet outline (a 1px border and a faint tint of the text colour, a little stronger on hover). Fields and floating controls have a 1px soft border (`#C9C9CF` light, `#4A4A52` dark). Headings, labels and the nav stay uppercase. (Changed from square corners and uppercase 2px-outline buttons, which read as dated and too contrasty.)
 - Status is never colour alone: every status also has a text label.
 
 Type: bold uppercase grotesk headings. The site uses Akzidenz-Grotesk Next, which is licensed; use self-hosted Archivo (OFL) at 600/700/800, with `word-spacing: .14em` on uppercase text.

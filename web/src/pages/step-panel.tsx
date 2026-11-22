@@ -210,7 +210,7 @@ function EstimateInput({ value, unit, onSave }: { value: number | null; unit: st
     <span className="flex items-center justify-end gap-2 font-bold">
       <input
         type="number"
-        className="input input-sm w-24 text-right font-bold"
+        className="input input-sm estimate-input w-16 text-right font-bold"
         aria-label={`Estimate (${unit})`}
         min={0}
         max={9999.99}

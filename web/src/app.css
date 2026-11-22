@@ -34,12 +34,12 @@
   --color-warning-content: #000000;
   --color-error: #BA3636;
   --color-error-content: #FFFFFF;
-  --radius-selector: 0rem;
-  --radius-field: 0rem;
-  --radius-box: 0rem;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
-  --border: 2px;
+  --border: 1px;
   --depth: 0;
   --noise: 0;
 }
@@ -67,12 +67,12 @@
   --color-warning-content: #000000;
   --color-error: #BA3636;
   --color-error-content: #FFFFFF;
-  --radius-selector: 0rem;
-  --radius-field: 0rem;
-  --radius-box: 0rem;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
-  --border: 2px;
+  --border: 1px;
   --depth: 0;
   --noise: 0;
 }
@@ -89,7 +89,7 @@
   --oms-card-line: #3A3A40;
   --oms-done-text: #7DBA5C;
   --oms-blocked-text: #E06A6A;
-  --oms-field-line: #5A5A62;
+  --oms-field-line: #4A4A52;
 }
 [data-theme="blink-light"] {
   --oms-cell: #F2F2F2;
@@ -102,7 +102,7 @@
   --oms-card-line: #1B1B1D;
   --oms-done-text: #549334;
   --oms-blocked-text: #BA3636;
-  --oms-field-line: #1B1B1D;
+  --oms-field-line: #C9C9CF;
 }
 
 /* Corner rounding for map cards, cells and bands. */
@@ -721,8 +721,8 @@
     font-weight: 800;
   }
   .filter-chip button { font-size: 10px; }
-  .seg { display: inline-flex; border: 2px solid var(--color-base-content); border-radius: 6px; overflow: hidden; }
-  .seg button { padding: 2px 10px; font-size: 12px; font-weight: 800; text-transform: uppercase; }
+  .seg { display: inline-flex; border: 1px solid var(--oms-field-line); border-radius: 8px; overflow: hidden; padding: 2px; gap: 2px; }
+  .seg button { padding: 2px 10px; font-size: 12px; font-weight: 700; border-radius: 6px; }
   .seg button[aria-pressed="true"] { background: var(--color-base-content); color: var(--color-base-100); }
   .step-card.dimmed { opacity: 0.25; }
   .step-card.dimmed:hover, .step-card.dimmed:focus-within { opacity: 0.6; }
@@ -776,7 +776,8 @@
   .map-nav > * { pointer-events: auto; }
   .map-nav-bar {
     display: flex;
-    border: 2px solid var(--color-base-content);
+    border: 1px solid var(--oms-field-line);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
     border-radius: var(--oms-radius);
     background: var(--color-base-100);
     overflow: hidden;
@@ -785,14 +786,15 @@
     text-transform: uppercase;
   }
   .map-nav-bar button { padding: 4px 10px; min-width: 30px; }
-  .map-nav-bar button + button { border-left: 2px solid var(--color-base-content); }
+  .map-nav-bar button + button { border-left: 1px solid var(--oms-field-line); }
   .map-nav-bar button:hover:not(:disabled) { background: var(--oms-cell); }
   .map-nav-bar button:disabled { opacity: 0.4; }
   .map-nav-bar button[aria-pressed='true'] { background: var(--color-base-content); color: var(--color-base-100); }
   .map-nav-bar .pct { min-width: 54px; }
   .minimap {
     display: block;
-    border: 2px solid var(--color-base-content);
+    border: 1px solid var(--oms-field-line);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
     border-radius: var(--oms-radius);
     background: var(--color-base-100);
     cursor: pointer;
@@ -1015,16 +1017,14 @@
   .icon-btn {
     font-weight: 800;
     line-height: 1;
-    padding: 2px 5px;
-    border: 1.5px solid currentColor;
+    padding: 4px 7px;
+    border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+    border-radius: 6px;
     font-size: 11px;
     text-transform: uppercase;
   }
   .icon-btn:hover {
-    background: currentColor;
-  }
-  .icon-btn:hover > span {
-    filter: invert(1);
+    background: color-mix(in srgb, currentColor 15%, transparent);
   }
   .add-slot {
     @apply text-muted;
@@ -1452,13 +1452,15 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 14px;
-    font-weight: 700;
-    background: #000;
+    padding: 10px 10px 10px 16px;
+    font-weight: 600;
+    background: #1B1B1D;
     color: #F2F2F2;
-    border: 2px solid #F2F2F2;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
   }
-  .toast-item.error { background: var(--color-brand-red); color: #fff; border-color: #fff; }
+  .toast-item.error { background: var(--color-brand-red); color: #fff; }
 
   .label-up {
     @apply text-muted;
@@ -1473,34 +1475,31 @@
    adjustments live in the utilities layer and work through daisyUI's variables. */
 @layer utilities {
   .btn {
-    text-transform: uppercase;
-    font-weight: 800;
-    word-spacing: 0.14em;
-  }
-  /* 2px outline button that fills on hover. */
-  .btn-ol {
-    --btn-fg: var(--color-base-content);
-    --btn-bg: transparent;
-    --btn-border: var(--btn-fg);
+    font-weight: 700;
     --btn-shadow: none;
     --btn-noise: none;
   }
+  /* A quiet outline button: a faint border and tint of its text colour, a little stronger on hover. */
+  .btn-ol {
+    --btn-fg: var(--color-base-content);
+    --btn-bg: color-mix(in srgb, var(--btn-fg) 4%, transparent);
+    --btn-border: color-mix(in srgb, var(--btn-fg) 22%, transparent);
+    color: var(--btn-fg);
+  }
   .btn-ol:hover:not(:disabled) {
-    --btn-bg: var(--btn-fg);
-    color: var(--color-base-100);
+    --btn-bg: color-mix(in srgb, var(--btn-fg) 10%, transparent);
+    --btn-border: color-mix(in srgb, var(--btn-fg) 35%, transparent);
   }
   /* On the black nav, in either theme. */
   .btn-ol.on-dark {
     --btn-fg: #F2F2F2;
-  }
-  .btn-ol.on-dark:hover:not(:disabled) {
-    color: #000;
   }
   /* On a release band or a toast: the surface's own text colour (white on black and green, black on
      amber). In this layer because .btn-ol is; an override in the components layer loses to it. */
   .band-row .btn-ol,
   .toast-item .btn-ol {
     --btn-fg: currentColor;
+    --btn-border: color-mix(in srgb, currentColor 40%, transparent);
     color: inherit;
   }
   /* .btn-ol fills with its text colour on hover, which on a band or toast is the surface's own text
@@ -1515,4 +1514,8 @@
   .select {
     border-color: var(--oms-field-line);
   }
+  /* No spinner: it took half the width of a short number field. */
+  .estimate-input { appearance: textfield; }
+  .estimate-input::-webkit-inner-spin-button,
+  .estimate-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 }
