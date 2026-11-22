@@ -149,3 +149,79 @@ func (s *Store) setAttachmentDeleted(ctx context.Context, actor, workspaceID, ma
 		return echoes(ctx, tx, *a.StepID, gone(mapID, "attachment", id, action, attachmentEvent(a)))
 	})
 }
+
+// sharedMapOf resolves a live, unexpired, unrevoked share link to its map
+// without recording a use: one page view fetches many files.
+func sharedMapOf(ctx context.Context, q pgx.Tx, tokenHash []byte) (uuid.UUID, error) {
+	var mapID uuid.UUID
+	err := q.QueryRow(ctx,
+		`SELECT m.id FROM share_links l JOIN maps m ON m.id = l.map_id AND m.deleted_at IS NULL
+		 WHERE l.token_hash = $1 AND l.revoked_at IS NULL AND (l.expires_at IS NULL OR l.expires_at > now())`,
+		tokenHash).Scan(&mapID)
+	return mapID, notFound(err)
+}
+
+// onSharedMap is a live file of a live step placed on map $1, so a share link
+// reaches only the files of its own map.
+const onSharedMap = `a.deleted_at IS NULL AND EXISTS (
+	SELECT 1 FROM steps s JOIN placements p ON p.step_id = s.id AND p.map_id = $1
+	JOIN nodes n ON n.id = p.activity_id AND n.deleted_at IS NULL
+	WHERE s.id = a.step_id AND s.deleted_at IS NULL)`
+
+// forShare leaves out who uploaded a file; share links show no people.
+func forShare(a Attachment) Attachment {
+	a.UploadedBy, a.UploaderName = nil, ""
+	return a
+}
+
+// SharedStepAttachments lists the files of a step on a share link's map.
+func (s *Store) SharedStepAttachments(ctx context.Context, tokenHash []byte, stepID uuid.UUID) ([]Attachment, error) {
+	var out []Attachment
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		mapID, err := sharedMapOf(ctx, tx, tokenHash)
+		if err != nil {
+			return err
+		}
+		if _, _, err := mapStep(ctx, tx, mapID, stepID); err != nil {
+			return err
+		}
+		out, err = collect(ctx, tx, scanAttachment,
+			`SELECT `+attachmentCols+` `+attachmentFrom+` WHERE a.step_id = $2 AND `+onSharedMap+` ORDER BY a.created_at, a.id`, mapID, stepID)
+		for i := range out {
+			out[i] = forShare(out[i])
+		}
+		return err
+	})
+	return out, err
+}
+
+// SharedAttachmentFile returns a file, with its bytes, of a step on a share
+// link's map.
+func (s *Store) SharedAttachmentFile(ctx context.Context, tokenHash []byte, id uuid.UUID) (Attachment, []byte, error) {
+	var a Attachment
+	var data []byte
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		mapID, err := sharedMapOf(ctx, tx, tokenHash)
+		if err != nil {
+			return err
+		}
+		return notFound(tx.QueryRow(ctx,
+			`SELECT `+attachmentCols+`, d.data `+attachmentFrom+` JOIN attachment_data d ON d.attachment_id = a.id
+			 WHERE a.id = $2 AND `+onSharedMap, mapID, id).
+			Scan(&a.ID, &a.StepID, &a.Name, &a.ContentType, &a.Size, &a.UploadedBy, &a.UploaderName, &a.CreatedAt, &a.SHA256, &data))
+	})
+	return forShare(a), data, err
+}
+
+// SharedAttachmentETag is AttachmentETag for a share link.
+func (s *Store) SharedAttachmentETag(ctx context.Context, tokenHash []byte, id uuid.UUID) ([]byte, error) {
+	var sum []byte
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		mapID, err := sharedMapOf(ctx, tx, tokenHash)
+		if err != nil {
+			return err
+		}
+		return notFound(tx.QueryRow(ctx, `SELECT a.sha256 FROM attachments a WHERE a.id = $2 AND `+onSharedMap, mapID, id).Scan(&sum))
+	})
+	return sum, err
+}

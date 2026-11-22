@@ -527,6 +527,9 @@ export const api = {
   revokeShareLink: (slug: string, mapId: string, id: string) => request<void>('DELETE', `${mp(slug, mapId)}/share-links/${id}`),
   /** No session: the map behind a share link. 404 when it is revoked, expired or its map deleted. */
   sharedMap: (token: string) => request<SharedMap>('GET', `/api/shared/${encodeURIComponent(token)}`),
+  sharedAttachments: (token: string, stepId: string) =>
+    request<Attachment[]>('GET', `/api/shared/${encodeURIComponent(token)}/steps/${encodeURIComponent(stepId)}/attachments`),
+  sharedAttachmentURL: (token: string, id: string) => `/api/shared/${encodeURIComponent(token)}/attachments/${encodeURIComponent(id)}`,
   views: (slug: string, mapId: string) => request<SavedView[]>('GET', `${mp(slug, mapId)}/views`),
   /** shared: true needs editor. */
   createView: (slug: string, mapId: string, b: { name: string; filter: Filter; shared?: boolean }) =>

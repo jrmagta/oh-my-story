@@ -149,8 +149,12 @@ export function SharedMapPage() {
       setAdding: () => {},
       depLines,
       toggleDepLines,
+      files: {
+        list: (stepId) => api.sharedAttachments(token, stepId),
+        url: (id) => api.sharedAttachmentURL(token, id),
+      },
     }
-  }, [shared.data, filter, setFilter, prefs, setPrefs, mode, setMode, selectedStep, openStep, depLines, toggleDepLines])
+  }, [token, shared.data, filter, setFilter, prefs, setPrefs, mode, setMode, selectedStep, openStep, depLines, toggleDepLines])
 
   return (
     <>

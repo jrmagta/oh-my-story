@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import Markdown from 'react-markdown'
+import { Markdown } from '../map/Markdown'
 import { api } from '../api'
 import { ConfirmButton, InlineText } from '../ui'
 import { HistoryList } from '../map/HistoryList'
@@ -11,6 +11,7 @@ import { TagPicker } from '../map/TagPicker'
 import { DependencySection } from '../map/Dependencies'
 import { LinkedMaps } from '../map/LinkedMaps'
 import { AttachmentSection } from '../map/Attachments'
+import { MarkdownEditor } from '../map/MarkdownEditor'
 
 /** The open step, beside the map. Editors change it in place; everyone else reads. */
 export function StepPanel({ stepId }: { stepId: string }) {
@@ -156,9 +157,8 @@ export function StepPanel({ stepId }: { stepId: string }) {
               </dd>
             </div>
           </dl>
-          <Description key={step.id} text={step.descriptionMd} editable={canEdit} onSave={(descriptionMd) => patch({ descriptionMd })} />
-          {/* A share link cannot reach files yet (M5 phase 3). */}
-          {!shared && <AttachmentSection key={`files:${step.id}`} stepId={step.id} />}
+          <Description key={step.id} stepId={step.id} text={step.descriptionMd} editable={canEdit} onSave={(descriptionMd) => patch({ descriptionMd })} />
+          <AttachmentSection key={`files:${step.id}`} stepId={step.id} />
           <DependencySection key={`deps:${step.id}`} stepId={step.id} stepKey={step.key} />
           <LinkedMaps key={`maps:${step.id}`} step={step} />
           {canEdit && (
@@ -229,7 +229,7 @@ function EstimateInput({ value, unit, onSave }: { value: number | null; unit: st
   )
 }
 
-function Description({ text, editable, onSave }: { text: string; editable: boolean; onSave: (v: string) => Promise<boolean> }) {
+function Description({ stepId, text, editable, onSave }: { stepId: string; text: string; editable: boolean; onSave: (v: string) => Promise<boolean> }) {
   const [draft, setDraft] = useState<string | null>(null)
   const [preview, setPreview] = useState(false)
   if (draft === null) {
@@ -253,6 +253,10 @@ function Description({ text, editable, onSave }: { text: string; editable: boole
       </section>
     )
   }
+  const close = () => {
+    setDraft(null)
+    setPreview(false)
+  }
   return (
     <section className="border-line border-b px-5 py-4" aria-label="Description">
       <div className="mb-2 flex items-center gap-2">
@@ -261,44 +265,17 @@ function Description({ text, editable, onSave }: { text: string; editable: boole
           {preview ? 'Write' : 'Preview'}
         </button>
       </div>
-      {preview ? (
-        <div className="markdown min-h-40">
-          <Markdown>{draft}</Markdown>
-        </div>
-      ) : (
-        <textarea
-          autoFocus
-          className="textarea min-h-40 w-full font-medium"
-          aria-label="Description (Markdown)"
-          maxLength={50_000}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-        />
-      )}
-      <div className="mt-3 flex gap-2">
-        <button
-          type="button"
-          className="btn btn-sm btn-primary"
-          onClick={async () => {
-            if (await onSave(draft)) {
-              setDraft(null)
-              setPreview(false)
-            }
-          }}
-        >
-          Save
-        </button>
-        <button
-          type="button"
-          className="btn btn-sm btn-ol"
-          onClick={() => {
-            setDraft(null)
-            setPreview(false)
-          }}
-        >
-          Cancel
-        </button>
-      </div>
+      <MarkdownEditor
+        stepId={stepId}
+        label="Description (Markdown)"
+        value={draft}
+        setValue={(f) => setDraft((d) => (d === null ? d : f(d)))}
+        preview={preview}
+        onSave={async () => {
+          if (await onSave(draft)) close()
+        }}
+        onCancel={close}
+      />
     </section>
   )
 }

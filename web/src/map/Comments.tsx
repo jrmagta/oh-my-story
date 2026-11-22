@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import Markdown from 'react-markdown'
+import { Markdown } from './Markdown'
 import { api, atLeast, type Comment, type Member } from '../api'
 import { mapKey, useMap } from '../pages/map'
 import { useSession } from '../session'

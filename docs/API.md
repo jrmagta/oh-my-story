@@ -182,6 +182,8 @@ A file on a step is `{id, stepId, name, contentType, size, uploadedBy, uploaderN
 | `POST /maps/{mapId}/attachments/{id}/restore` | editor | → `204` |
 | `GET /api/workspaces/{slug}/attachments/{id}` | viewer | → the bytes. PNG, JPEG, GIF and WebP are sent `inline`, everything else (SVG and HTML included) as an `attachment` download; every response has `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; sandbox`. The ETag is the SHA-256; files never change, so they are cached privately for a year and `If-None-Match` gets `304` |
 
+Markdown (descriptions, comments) refers to a file as `attachment:<id>`: `![name](attachment:<id>)` shows an image inline and `[name](attachment:<id>)` links to a file. The app turns the id into the download URL, the workspace's or a share link's, so the text never holds a workspace slug or token. Other clients reading descriptions should do the same.
+
 From a script: `curl --data-binary @spec.pdf -H 'Content-Type: application/octet-stream' -H 'Authorization: Bearer oms_…' '…/maps/{mapId}/steps/{id}/attachments?name=spec.pdf'`. A process handles at most four uploads or downloads at once; more wait their turn.
 
 ### API tokens
@@ -223,6 +225,8 @@ A share link shows a map read-only to anyone who has it, without an account. Its
 | `POST /maps/{mapId}/share-links` | editor | `{expiresInDays?}` (7, 30, 90, or null for never) → `201` link with `url` |
 | `DELETE /maps/{mapId}/share-links/{id}` | editor | → `204`. Revokes it |
 | `GET /api/shared/{token}` | none | → `{workspaceName, estimateUnit, view}`, `view` being the map payload with every step's `assigneeId` null and `commentCount` 0. `404` when the link is unknown, revoked or expired, or its map deleted. Records when the link was last used; sends `X-Robots-Tag: noindex` |
+| `GET /api/shared/{token}/steps/{id}/attachments` | none | → `[attachment]` of a step on the link's map, with `uploadedBy` null and `uploaderName` empty. `404` for a step not on that map |
+| `GET /api/shared/{token}/attachments/{id}` | none | → the bytes of a file of a live step on the link's map, with the workspace download's headers; any other file is `404`. Does not count as a use of the link |
 
 ### Search
 

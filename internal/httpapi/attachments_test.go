@@ -195,3 +195,57 @@ func TestAttachmentsOnLinkedStepsAndTokens(t *testing.T) {
 		}
 	}
 }
+
+func TestSharedAttachments(t *testing.T) {
+	h := newHarness(t, harnessOpts{})
+	owner := h.bootstrap()
+	a := buildMap(owner)
+	b := buildMap(owner)
+	here := str(owner.must(201, "POST", a.path+"/steps", map[string]any{"title": "Sign up", "activityId": a.act1}).body, "step", "id")
+	there := str(owner.must(201, "POST", b.path+"/steps", map[string]any{"title": "Pay", "activityId": b.act1}).body, "step", "id")
+	img := str(owner.upload(201, a.path+"/steps/"+here, "login.png", pngBytes), "id")
+	other := str(owner.upload(201, b.path+"/steps/"+there, "invoice.png", pngBytes), "id")
+	link := owner.must(201, "POST", a.path+"/share-links", map[string]any{})
+	url := str(link.body, "url")
+	shared := "/api/shared/" + url[strings.LastIndex(url, "/s/")+3:]
+	anon := h.client()
+
+	// The link lists and sends the files of its own map's steps, without who uploaded them.
+	list := anon.must(200, "GET", shared+"/steps/"+here+"/attachments", nil)
+	if len(list.list) != 1 || str(list.list[0], "name") != "login.png" || list.list[0].(map[string]any)["uploadedBy"] != nil ||
+		strings.Contains(list.raw, "owner@example.com") {
+		t.Errorf("shared list = %s", list.raw)
+	}
+	r := anon.send("GET", shared+"/attachments/"+img, "", nil, nil)
+	if r.status != 200 || !bytes.Equal(r.body, pngBytes) || !strings.HasPrefix(r.header.Get("Content-Disposition"), "inline") {
+		t.Errorf("shared download: %d %v", r.status, r.header)
+	}
+	if r := anon.send("GET", shared+"/attachments/"+img, "", nil, map[string]string{"If-None-Match": r.header.Get("ETag")}); r.status != 304 {
+		t.Errorf("shared revalidate: %d", r.status)
+	}
+
+	// Another map's step and file are out of reach, as is a made-up token.
+	anon.must(404, "GET", shared+"/steps/"+there+"/attachments", nil)
+	if r := anon.send("GET", shared+"/attachments/"+other, "", nil, nil); r.status != 404 {
+		t.Errorf("other map's file: %d", r.status)
+	}
+	if r := anon.send("GET", "/api/shared/not-a-token/attachments/"+img, "", nil, nil); r.status != 404 {
+		t.Errorf("bad token: %d", r.status)
+	}
+
+	// Once the step is on this map too, its files are.
+	owner.must(201, "POST", a.path+"/placements", map[string]any{"stepId": there, "activityId": a.act2})
+	if r := anon.send("GET", shared+"/attachments/"+other, "", nil, nil); r.status != 200 {
+		t.Errorf("linked step's file: %d", r.status)
+	}
+
+	// A deleted step's files go with it, and a revoked link reaches nothing.
+	owner.must(204, "DELETE", a.path+"/steps/"+there, nil)
+	if r := anon.send("GET", shared+"/attachments/"+other, "", nil, nil); r.status != 404 {
+		t.Errorf("deleted step's file: %d", r.status)
+	}
+	owner.must(204, "DELETE", a.path+"/share-links/"+str(link.body, "id"), nil)
+	if r := anon.send("GET", shared+"/attachments/"+img, "", nil, nil); r.status != 404 {
+		t.Errorf("revoked link: %d", r.status)
+	}
+}
