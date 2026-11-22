@@ -38,12 +38,14 @@ type Server struct {
 	hub   *live.Hub
 	// routes lists the patterns registered, in order (see handle).
 	routes []string
+	// transfers holds a slot for each file upload or download in progress.
+	transfers chan struct{}
 }
 
 // New returns the server's handler. hub must be started. ui serves the web
 // app for every other GET; nil leaves those paths 404 (the API tests run without it).
 func New(cfg config.Config, pool *pgxpool.Pool, sender mail.Sender, oidc *OIDC, hub *live.Hub, ui http.Handler) http.Handler {
-	s := &Server{cfg: cfg, pool: pool, store: store.New(pool), mail: sender, oidc: oidc, hub: hub}
+	s := &Server{cfg: cfg, pool: pool, store: store.New(pool), mail: sender, oidc: oidc, hub: hub, transfers: make(chan struct{}, maxTransfers)}
 	mux := http.NewServeMux()
 	s.register(mux, ui)
 	return s.csrf(mux)
@@ -124,12 +126,14 @@ func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
 
 // ---- middleware ----
 
-// csrf rejects state-changing /api requests that a cross-site form could send.
+// csrf rejects state-changing /api requests that a cross-site form could
+// send. Forms send only urlencoded, multipart and text/plain bodies, so JSON
+// and octet-stream (file uploads) cannot come from one.
 func (s *Server) csrf(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") && r.Method != http.MethodGet && r.Method != http.MethodHead {
-			if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
-				writeError(w, errBadRequest("Content-Type must be application/json"))
+			if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") && !strings.HasPrefix(ct, "application/octet-stream") {
+				writeError(w, errBadRequest("Content-Type must be application/json (or application/octet-stream for a file)"))
 				return
 			}
 			// A bearer token is never sent by a browser on its own, so it needs no Origin check.

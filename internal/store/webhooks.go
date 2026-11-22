@@ -20,6 +20,7 @@ var WebhookEvents = []string{
 	"placement.move",
 	"dependency.create", "dependency.delete",
 	"comment.create", "comment.update", "comment.delete",
+	"attachment.create", "attachment.delete", "attachment.restore",
 	"label.create", "label.update", "label.delete",
 	"persona.create", "persona.update", "persona.delete",
 	"workflow.create", "workflow.update", "status.create", "status.update", "status.move", "status.delete",

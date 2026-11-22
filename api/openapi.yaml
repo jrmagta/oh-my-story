@@ -2423,6 +2423,142 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/steps/{id}/attachments:
+    get:
+      tags: ["Attachments"]
+      summary: "A step's files, oldest first"
+      operationId: getWorkspacesSlugMapsMapidStepsIdAttachments
+      description: "Viewer or above, or any API token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Attachment"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["Attachments"]
+      summary: "Attach a file to a step"
+      operationId: postWorkspacesSlugMapsMapidStepsIdAttachments
+      description: >-
+        Editor or above, or a write token. The body is the file's bytes, sent as
+        application/octet-stream, for example
+        `curl --data-binary @spec.pdf -H 'Content-Type: application/octet-stream' '…/attachments?name=spec.pdf'`.
+        The content type is worked out from the bytes. Files are limited to
+        OMS_ATTACHMENT_MAX_MB (10 MB unless the server sets otherwise).
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+        - name: name
+          in: query
+          required: true
+          description: "The file name to show and download as; any path before it is dropped."
+          schema:
+            type: "string"
+            maxLength: 255
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: "string"
+              format: "binary"
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attachment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          description: "The file is larger than the server's limit."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/workspaces/{slug}/maps/{mapId}/attachments/{id}:
+    delete:
+      tags: ["Attachments"]
+      summary: "Delete a file (restore undoes it)"
+      operationId: deleteWorkspacesSlugMapsMapidAttachmentsId
+      description: "Editor or above, or a write token. The file's step must be on this map."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/attachments/{id}/restore:
+    post:
+      tags: ["Attachments"]
+      summary: "Bring back a deleted file"
+      operationId: postWorkspacesSlugMapsMapidAttachmentsIdRestore
+      description: "Editor or above, or a write token."
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: "Done"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/attachments/{id}:
+    get:
+      tags: ["Attachments"]
+      summary: "Download a file"
+      operationId: getWorkspacesSlugAttachmentsId
+      description: >-
+        Viewer or above, or any API token. PNG, JPEG, GIF and WebP are sent
+        inline; everything else as a download. Files never change: the ETag is
+        the file's SHA-256 and If-None-Match gets 304.
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: "The file's bytes, with its sniffed content type"
+          content:
+            application/octet-stream:
+              schema:
+                type: "string"
+                format: "binary"
+        "304":
+          description: "Not modified"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/workspaces/{slug}/maps/{mapId}/share-links:
     get:
       tags: ["Share links"]
@@ -3048,9 +3184,11 @@ components:
             format: "uuid"
         commentCount:
           type: "integer"
+        attachmentCount:
+          type: "integer"
         version:
           type: "integer"
-      required: ["id", "key", "title", "descriptionMd", "statusId", "assigneeId", "estimate", "colour", "labelIds", "commentCount", "version"]
+      required: ["id", "key", "title", "descriptionMd", "statusId", "assigneeId", "estimate", "colour", "labelIds", "commentCount", "attachmentCount", "version"]
       additionalProperties: false
     Placement:
       type: "object"
@@ -3183,6 +3321,34 @@ components:
         view:
           $ref: "#/components/schemas/MapView"
       required: ["workspaceName", "estimateUnit", "view"]
+      additionalProperties: false
+    Attachment:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        stepId:
+          type: ["string", "null"]
+          format: "uuid"
+        name:
+          type: "string"
+        contentType:
+          type: "string"
+          description: "Worked out from the file's bytes"
+        size:
+          type: "integer"
+          description: "Bytes"
+        uploadedBy:
+          type: ["string", "null"]
+          format: "uuid"
+        uploaderName:
+          type: "string"
+          description: "Empty when that account no longer exists"
+        createdAt:
+          type: "string"
+          format: "date-time"
+      required: ["id", "stepId", "name", "contentType", "size", "uploadedBy", "uploaderName", "createdAt"]
       additionalProperties: false
     Comment:
       type: "object"

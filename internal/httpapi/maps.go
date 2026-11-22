@@ -84,6 +84,11 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 		{"PATCH " + m + "/comments/{id}", role.Comment, s.patchComment},
 		{"DELETE " + m + "/comments/{id}", role.Comment, s.deleteComment},
 
+		{"GET " + m + "/steps/{id}/attachments", role.View, s.listStepAttachments},
+		{"POST " + m + "/steps/{id}/attachments", role.Edit, s.uploadStepAttachment},
+		{"DELETE " + m + "/attachments/{id}", role.Edit, s.deleteAttachment},
+		{"POST " + m + "/attachments/{id}/restore", role.Edit, s.restoreAttachment},
+
 		{"GET " + m + "/share-links", role.Edit, s.listShareLinks},
 		{"POST " + m + "/share-links", role.Edit, s.createShareLink},
 		{"DELETE " + m + "/share-links/{id}", role.Edit, s.revokeShareLink},
@@ -96,6 +101,7 @@ func (s *Server) mapRoutes(mux *http.ServeMux) {
 	for _, rt := range routes {
 		s.handle(mux, rt.pattern, s.inWorkspace(rt.action, mapEndpoint(rt.h)))
 	}
+	s.handle(mux, "GET "+ws+"/attachments/{id}", s.inWorkspace(role.View, s.downloadAttachment))
 	s.handle(mux, "GET "+m+"/live", s.inWorkspace(role.View, s.liveMap))
 	s.handle(mux, "GET "+m+"/history", s.inWorkspace(role.View, mapEndpoint(s.mapHistory)))
 	s.handle(mux, "GET "+m+"/steps/{id}/history", s.inWorkspace(role.View, mapEndpoint(s.stepHistory)))

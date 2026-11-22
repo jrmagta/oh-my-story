@@ -5,8 +5,8 @@ JSON over HTTP. The web app and the tests are the callers. Auth and workspaces a
 ## Conventions
 
 - **Session:** cookie `oms_session`, `HttpOnly`, `SameSite=Lax`, `Secure` when `OMS_BASE_URL` is https. 30-day fixed lifetime. The server stores only the SHA-256 of the token. Signing in ends the session the browser held before and deletes the user's expired sessions.
-- **CSRF:** every non-GET `/api` request must send `Content-Type: application/json`. If an `Origin` header is present it must equal `OMS_BASE_URL`, which the server normalises at startup to the form browsers send (lowercase, no default port). Browsers cannot send either cross-site without a CORS preflight, which the server never grants.
-- **Errors:** `{"error": {"code": "<code>", "message": "<text>"}}`. Codes: `bad_request`, `unauthenticated`, `forbidden`, `not_found`, `conflict`, `gone`, `email_failed` (502).
+- **CSRF:** every non-GET `/api` request must send `Content-Type: application/json`, or `application/octet-stream` for a file upload. If an `Origin` header is present it must equal `OMS_BASE_URL`, which the server normalises at startup to the form browsers send (lowercase, no default port). Browsers cannot send either cross-site without a CORS preflight, which the server never grants.
+- **Errors:** `{"error": {"code": "<code>", "message": "<text>"}}`. Codes: `bad_request`, `unauthenticated`, `forbidden`, `not_found`, `conflict`, `gone`, `too_large` (413), `email_failed` (502).
 - **Workspaces** are addressed by slug.
 
 ## Roles
@@ -151,7 +151,7 @@ An objective's personas are its `personaIds`, set with `PATCH .../nodes/{id}`; a
 | `POST /maps/{mapId}/dependencies` | `{blockerId, blockedId}` → `201` dependency. Both are live steps of this workspace, at least one on this map. `bad_request` for a step blocking itself or a link that would make a loop; `conflict` when the link exists |
 | `DELETE /maps/{mapId}/dependencies/{id}` | → `204`. The link must touch a step on this map |
 
-Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, title, description, colour, personaIds, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; step `{id, key, title, descriptionMd, statusId, assigneeId, estimate, colour, labelIds, commentCount, version}` with `estimate` a number or null, `colour` null when the step takes its activity's colour, and `labelIds` sorted; placement `{id, stepId, activityId, releaseId, rank}`; dependency `{id, blockerId, blockedId}`; other step `{id, key, title, done, mapId, mapName}`.
+Shapes: map `{id, workflowId, name, description}`; node `{id, parentId, level, title, description, colour, personaIds, rank, version}`; release `{id, name, description, targetDate, rank}` with `targetDate` as `YYYY-MM-DD`; step `{id, key, title, descriptionMd, statusId, assigneeId, estimate, colour, labelIds, commentCount, attachmentCount, version}` with `estimate` a number or null, `colour` null when the step takes its activity's colour, and `labelIds` sorted; placement `{id, stepId, activityId, releaseId, rank}`; dependency `{id, blockerId, blockedId}`; other step `{id, key, title, done, mapId, mapName}`.
 
 A step on several maps is one step: one key, one status, one history. A change to it (edit, delete, restore, comments, being put on or taken off a map) is an event on every map it is on; the copies for maps other than the one written through are echoes, which a step's own history leaves out. Deleting an activity keeps steps that are also on another map: they are hidden on this map until the activity is restored. Deleting a step deletes it from every map.
 
@@ -169,6 +169,20 @@ A comment is `{id, stepId, parentId, authorId, authorName, bodyMd, mentionIds, r
 | `POST /maps/{mapId}/steps/{id}/comments` | commenter | `{bodyMd, parentId?, mentionIds?}` → `201` comment. `bodyMd` 1 to 10,000 characters; `parentId` a live first comment of the same step; `mentionIds` workspace members (up to 50). Each member newly mentioned, other than the author, gets one email with a link to the step |
 | `PATCH /maps/{mapId}/comments/{id}` | commenter | `{bodyMd?, mentionIds?, resolved?}` → comment. Body and mentions: the author only (`403` otherwise). `resolved`: a first comment only, by its author or an editor |
 | `DELETE /maps/{mapId}/comments/{id}` | commenter | → `204`. The author, or an admin |
+
+### Attachments
+
+A file on a step is `{id, stepId, name, contentType, size, uploadedBy, uploaderName, createdAt}`. The bytes are stored in Postgres and sent only by the download endpoint. `contentType` is worked out from the bytes, never taken from the uploader. Files are map events (entity `attachment`, carrying `stepId`, `name`, `contentType` and `size`), echoed to every map the step is on; steps carry `attachmentCount`. A file is reached only through its step, so it is hidden while the step is deleted and comes back with it.
+
+| Endpoint | Role | Body → response |
+|---|---|---|
+| `GET /maps/{mapId}/steps/{id}/attachments` | viewer | → `[attachment]`, oldest first |
+| `POST /maps/{mapId}/steps/{id}/attachments?name=…` | editor | the file's bytes, `Content-Type: application/octet-stream` → `201` attachment. `name` up to 255 characters; any path before it is dropped. `413` above `OMS_ATTACHMENT_MAX_MB` |
+| `DELETE /maps/{mapId}/attachments/{id}` | editor | → `204`. The file's step must be on this map |
+| `POST /maps/{mapId}/attachments/{id}/restore` | editor | → `204` |
+| `GET /api/workspaces/{slug}/attachments/{id}` | viewer | → the bytes. PNG, JPEG, GIF and WebP are sent `inline`, everything else (SVG and HTML included) as an `attachment` download; every response has `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; sandbox`. The ETag is the SHA-256; files never change, so they are cached privately for a year and `If-None-Match` gets `304` |
+
+From a script: `curl --data-binary @spec.pdf -H 'Content-Type: application/octet-stream' -H 'Authorization: Bearer oms_…' '…/maps/{mapId}/steps/{id}/attachments?name=spec.pdf'`. A process handles at most four uploads or downloads at once; more wait their turn.
 
 ### API tokens
 
@@ -276,6 +290,7 @@ The upgrade needs the session cookie and an `Origin` equal to `OMS_BASE_URL`'s h
 | `OMS_OIDC_NAME` | `SSO` | button label |
 | `OMS_OIDC_DIRECTORY` | empty | `keycloak`: admins add people from the realm in Members (see `docs/SSO.md`) |
 | `OMS_WEBHOOK_BLOCK_PRIVATE` | empty (off) | `true` stops webhooks posting to loopback and private addresses |
+| `OMS_ATTACHMENT_MAX_MB` | `10` | largest file an upload may carry, 1 to 1024 |
 
 ## Password reset
 
