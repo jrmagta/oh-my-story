@@ -108,6 +108,12 @@ export function describe(e: HistoryEntry, n: Names): string | null {
     }
     case 'comment:delete':
       return `deleted a comment on ${stepName(n, typeof b.stepId === 'string' ? b.stepId : '')}`
+    case 'attachment:create':
+      return `attached ${q(a.name)} to ${stepName(n, typeof a.stepId === 'string' ? a.stepId : '')}`
+    case 'attachment:delete':
+      return `removed ${q(b.name)} from ${stepName(n, typeof b.stepId === 'string' ? b.stepId : '')}`
+    case 'attachment:restore':
+      return `restored ${q(a.name)} on ${stepName(n, typeof a.stepId === 'string' ? a.stepId : '')}`
     case 'step:delete':
       return `deleted ${stepName(n, e.entityId, b)} ${b.title !== undefined ? q(b.title) : ''}`.trim()
     case 'step:restore':

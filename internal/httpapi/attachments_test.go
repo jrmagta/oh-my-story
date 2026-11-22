@@ -145,6 +145,10 @@ func TestAttachments(t *testing.T) {
 	if es[0].entity != "attachment" || es[0].action != "restore" || es[1].action != "delete" || es[1].before["name"] != "notes.png" {
 		t.Errorf("history: %+v", es)
 	}
+	// The step's own history lists its files too.
+	if es, _ := entries(owner.must(200, "GET", stepPath+"/history?limit=1", nil)); len(es) != 1 || es[0].entity != "attachment" {
+		t.Errorf("step history: %+v", es)
+	}
 
 	// A file goes and comes back with its step.
 	owner.must(204, "DELETE", stepPath, nil)

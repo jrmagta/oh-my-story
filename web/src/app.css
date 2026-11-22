@@ -491,6 +491,57 @@
   .share-made { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
   .share-links li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--oms-line); }
 
+  /* Attachments in the step panel; the section takes drops while it is outlined. */
+  .attachments.drop-over {
+    outline: 3px dashed var(--color-brand-amber);
+    outline-offset: -6px;
+    background: color-mix(in srgb, var(--color-brand-amber) 10%, transparent);
+  }
+  .att-list li { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+  .att-list + .att-list { margin-top: 4px; }
+  .att-thumb, .att-icon {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--oms-radius-sm);
+    border: 1px solid var(--oms-line);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background: var(--oms-cell);
+    color: var(--oms-muted);
+  }
+  .att-thumb { cursor: zoom-in; }
+  .att-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .att-name { display: block; font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+  a.att-name:hover { text-decoration: underline; }
+  .att-meta { display: block; font-size: 12px; font-weight: 600; color: var(--oms-muted); }
+  .att-error { color: var(--oms-blocked-text); }
+  .att-x {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--oms-muted);
+  }
+  .att-x:hover, .att-x:focus-visible { color: var(--color-base-content); background: var(--oms-cell); }
+  .att-progress { display: block; width: 100%; height: 6px; margin-top: 4px; accent-color: var(--color-brand-amber); }
+  .att-viewer {
+    margin: auto;
+    padding: 0;
+    max-width: 92vw;
+    max-height: 92vh;
+    border: 2px solid var(--color-base-content);
+    border-radius: var(--oms-radius);
+    background: var(--color-base-100);
+    color: var(--color-base-content);
+  }
+  .att-viewer::backdrop { background: rgba(0, 0, 0, 0.7); }
+  .att-viewer { min-width: min(420px, 92vw); }
+  .att-viewer img { display: block; max-width: 92vw; max-height: calc(92vh - 48px); margin: 16px auto; object-fit: contain; }
+  .att-viewer-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--oms-line); }
+
   /* Comments on a step. */
   .comment-count {
     display: inline-flex;

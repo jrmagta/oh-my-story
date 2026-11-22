@@ -90,6 +90,15 @@ export function applyEvent(view: MapView, ev: LiveEvent): MapView | null {
     }
     case 'comment:update':
       return view
+    case 'attachment:create':
+    case 'attachment:delete':
+    case 'attachment:restore': {
+      // Only the step's count lives in the map; open file lists reload (see apply).
+      const fields = ev.action === 'delete' ? (ev.before ?? {}) : after
+      const stepId = typeof fields.stepId === 'string' ? fields.stepId : null
+      const by = ev.action === 'delete' ? -1 : 1
+      return { ...view, steps: view.steps.map((s) => (s.id === stepId ? { ...s, attachmentCount: Math.max(0, s.attachmentCount + by) } : s)) }
+    }
     case 'step:delete':
       return { ...view, steps: view.steps.filter((s) => s.id !== ev.entityId) }
     case 'step:place': {
@@ -189,6 +198,7 @@ export function useLiveMap(slug: string, mapId: string, key: QueryKey): { users:
       // History and comment lists live under the map's key; refresh them for the new entries.
       void qc.invalidateQueries({ queryKey: [...key, 'history'] })
       if (evs.some((e) => e.entity === 'comment')) void qc.invalidateQueries({ queryKey: [...key, 'comments'] })
+      if (evs.some((e) => e.entity === 'attachment')) void qc.invalidateQueries({ queryKey: [...key, 'attachments'] })
     }
 
     // When a fetched snapshot is older than events already applied, re-apply them.
