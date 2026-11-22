@@ -27,11 +27,14 @@ A brief for an agent working in the target environment. It describes what the He
 | `OMS_OIDC_NAME` | no | Label on the sign-in button |
 | `OMS_OIDC_DIRECTORY` | no | `keycloak` turns on "Add from Keycloak" in Members |
 | `OMS_SMTP_ADDR`, `OMS_SMTP_USERNAME`, `OMS_SMTP_PASSWORD`, `OMS_MAIL_FROM` | no | No `OMS_SMTP_ADDR`: emails are logged, not sent. The password is a secret |
+| `OMS_ATTACHMENT_MAX_MB` | no | The largest file people can attach, 1 to 1024; default 10. The chart sets it from `attachments.maxMB` |
 | `OMS_WEBHOOK_BLOCK_PRIVATE` | no | `true` also stops webhooks posting to private addresses. **The chart does not expose it yet** |
 
 - `/healthz` pings Postgres. The chart uses it for readiness and a TCP check for liveness, so a database outage takes pods out of the Service without restarting them.
 - Replicas share nothing but Postgres. Live map updates and presence go through Postgres `LISTEN/NOTIFY`, so several replicas and the HPA work without sticky sessions. **This needs a direct or session-mode connection: a PgBouncer in transaction mode breaks `LISTEN`.**
 - Live updates are websockets at `/api/workspaces/{slug}/maps/{id}/live`. The server pings every 25s, so default ingress idle timeouts (60s) are fine. The ingress controller must allow websocket upgrades (nginx and Traefik do by default).
+- **Files live in Postgres.** Attachments (steps, objectives, activities, comments) are stored as `bytea` in the `attachment_data` table, so there is no object store or volume to provision, and Postgres backups cover them. See [Database size and backups](#database-size-and-backups).
+- **Uploads need a large enough request body at the ingress.** An upload is one request carrying the whole file. The chart annotates its Ingress with `nginx.ingress.kubernetes.io/proxy-body-size` at twice `attachments.maxMB` (20m by default; ingress-nginx's own default is 1m), so the app, not the ingress, refuses a file that is too large, with a message that says the limit. Traefik has no body limit unless a middleware sets one; with another controller, allow at least `attachments.maxMB` plus 1 MB.
 - **The first person to open a fresh install becomes the admin.** Open it yourself straight after the first deploy, or keep the Ingress unreachable until you have.
 - Keycloak client setup (redirect URI `<OMS_BASE_URL>/auth/oidc/callback`, the service account roles and the `kc-admin-api` scope) is in `docs/SSO.md`.
 
@@ -194,6 +197,16 @@ Add only what the environment needs:
 
 Keep `helm lint --strict` clean for every file in `ci/` and add a `ci/` values file for each new mode (for example `ci/argocd-values.yaml` with `caBundle` and `existingSecret` set).
 
+## Database size and backups
+
+Attachments make the database the place that grows. Plan for it:
+
+- **Size.** Each file takes its own size in `attachment_data` (stored uncompressed: most files are compressed already), plus a little metadata. Check usage with `SELECT pg_size_pretty(pg_total_relation_size('attachment_data'))`. A team attaching a few screenshots a day adds tens of MB a month.
+- **Limits.** `attachments.maxMB` (default 10) caps each file. There is no quota per workspace.
+- **Cleanup.** Each app pod sweeps every 15 minutes: comment drafts that were never posted are deleted after a day, and files deleted in the app (or on deleted comments) are removed for good after 30 days, which is how long Undo and restore can bring them back. Space freed this way is reused by Postgres; it is not returned to the disk until a `VACUUM FULL`.
+- **Backups and WAL.** Files are ordinary rows, so `pg_dump` and the database's own backups include them, and every upload is written to the WAL. Size the database's WAL archive and backup storage for the files as well as the rest of the data, and expect backups and restores to take longer as files accumulate.
+- **Memory.** A pod holds an upload or download in memory while it passes through, a few copies at most, and handles four at a time (more wait). Eight 10 MB transfers at once peaked at about 130 MB resident, within the chart's 256Mi limit. Raise `resources.limits.memory` if you raise `attachments.maxMB` much.
+
 ## Acceptance
 
 1. A fresh namespace syncs in one go: Secret, then migration, then Deployment, with no manual step.
@@ -202,3 +215,4 @@ Keep `helm lint --strict` clean for every file in `ci/` and add a `ci/` values f
 4. Open the same map in two browsers: a change in one shows in the other within a second or two, and each shows the other as present. This checks the websocket through the ingress and `LISTEN/NOTIFY` across replicas.
 5. Re-syncing with no changes leaves the app Synced, and a new image tag rolls out after its migration.
 6. With `oidc.directory: keycloak`: Members › Add from Keycloak finds people in the realm.
+7. Attach a 9 MB file to a step through the ingress: it uploads and downloads. An 11 MB file is refused with "files can be at most 10 MB", not an ingress error page.

@@ -8,6 +8,12 @@
 :8443 {
 	tls /pki/server.crt /pki/server.key
 	encode gzip
+	# Twice the app's file limit (OMS_ATTACHMENT_MAX_MB, 10 MB by default), so
+	# the app refuses a file that is too large with its own message; this only
+	# stops bodies no upload could need. Raise both together.
+	request_body {
+		max_size 20MB
+	}
 	reverse_proxy app:8080
 }
 

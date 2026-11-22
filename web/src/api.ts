@@ -368,7 +368,9 @@ function upload<T>(path: string, file: Blob, onProgress?: (done: number) => void
       const data = xhr.response as unknown
       if (xhr.status >= 200 && xhr.status < 300) return resolve(data as T)
       const e = (data as { error?: { code?: string; message?: string } } | null)?.error
-      reject(new ApiError(xhr.status, e?.code ?? 'internal', e?.message ?? `upload failed (${xhr.status})`))
+      // A proxy in front of the app may refuse a large body itself, without the app's JSON.
+      const fallback = xhr.status === 413 ? 'the file is larger than the server accepts' : `upload failed (${xhr.status})`
+      reject(new ApiError(xhr.status, e?.code ?? 'internal', e?.message ?? fallback))
     }
     xhr.onerror = () => reject(new ApiError(0, 'network', 'the upload could not reach the server'))
     xhr.send(file)

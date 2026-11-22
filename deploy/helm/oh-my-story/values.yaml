@@ -57,6 +57,11 @@ oidc:
   # query-users, and (Keycloak 26.8+) the kc-admin-api client scope.
   directory: ""
 
+attachments:
+  # The largest file people can attach, in MB (1 to 1024). Files are stored in
+  # Postgres, so this also bounds how fast the database and its backups grow.
+  maxMB: 10
+
 migration:
   backoffLimit: 6
   activeDeadlineSeconds: 600
@@ -68,6 +73,9 @@ service:
 ingress:
   enabled: false
   className: ""
+  # The chart adds nginx.ingress.kubernetes.io/proxy-body-size, twice
+  # attachments.maxMB, so ingress-nginx lets uploads through and the app itself
+  # refuses a file that is too large, with a clear message. Set it here to override.
   annotations: {}
   # Defaults to the host of baseURL.
   host: ""

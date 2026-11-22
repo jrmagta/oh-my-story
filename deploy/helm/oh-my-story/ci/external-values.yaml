@@ -11,6 +11,8 @@ oidc:
   clientID: oh-my-story
   clientSecret: oidc-secret
   name: Example SSO
+attachments:
+  maxMB: 25
 ingress:
   enabled: true
   className: nginx
