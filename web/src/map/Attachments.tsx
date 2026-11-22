@@ -30,7 +30,7 @@ interface Upload {
  * progress bar. Images show a thumbnail that opens full size.
  */
 export function AttachmentSection({ stepId }: { stepId: string }) {
-  const { ws, view, canEdit, run, shared, files: source } = useMap()
+  const { ws, view, canEdit, run, files: source } = useMap()
   const qc = useQueryClient()
   const files = useQuery({
     queryKey: [...mapKey(ws.slug, view.map.id), 'attachments', stepId],
@@ -38,7 +38,6 @@ export function AttachmentSection({ stepId }: { stepId: string }) {
   })
   const [uploads, setUploads] = useState<Upload[]>([])
   const [over, setOver] = useState(false)
-  const [viewing, setViewing] = useState<Attachment | null>(null)
   const input = useRef<HTMLInputElement>(null)
 
   const change = (id: string, f: (u: Upload) => Upload | null) =>
@@ -100,50 +99,19 @@ export function AttachmentSection({ stepId }: { stepId: string }) {
           </>
         )}
       </div>
-      {list.length > 0 && (
-        <ul className="att-list" aria-label="Files">
-          {list.map((a) => {
-            const url = source.url(a.id)
-            const image = imageTypes.has(a.contentType)
-            return (
-              <li key={a.id}>
-                {image ? (
-                  <button type="button" className="att-thumb" aria-label={`View ${a.name}`} onClick={() => setViewing(a)}>
-                    <img src={url} alt="" loading="lazy" />
-                  </button>
-                ) : (
-                  <span className="att-icon" aria-hidden>
-                    <FileIcon />
-                  </span>
-                )}
-                <span className="min-w-0 flex-1">
-                  <a className="att-name" href={url} download={a.name}>
-                    {a.name}
-                  </a>
-                  <span className="att-meta">
-                    {[fileSize(a.size), ...(shared ? [] : [a.uploaderName || 'Removed user']), ago(a.createdAt)].join(' · ')}
-                  </span>
-                </span>
-                {canEdit && (
-                  <button
-                    type="button"
-                    className="att-x"
-                    aria-label={`Delete ${a.name}`}
-                    onClick={() =>
-                      run(() => api.deleteAttachment(ws.slug, view.map.id, a.id), {
-                        done: `Deleted ${a.name}`,
-                        undo: () => api.restoreAttachment(ws.slug, view.map.id, a.id),
-                      })
-                    }
-                  >
-                    ✕
-                  </button>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      )}
+      <FileList
+        files={list}
+        removeLabel="Delete"
+        onRemove={
+          canEdit
+            ? (a) =>
+                run(() => api.deleteAttachment(ws.slug, view.map.id, a.id), {
+                  done: `Deleted ${a.name}`,
+                  undo: () => api.restoreAttachment(ws.slug, view.map.id, a.id),
+                })
+            : undefined
+        }
+      />
       {uploads.length > 0 && (
         <ul className="att-list" aria-label="Uploading">
           {uploads.map((u) => (
@@ -170,8 +138,63 @@ export function AttachmentSection({ stepId }: { stepId: string }) {
       {files.isSuccess && list.length === 0 && uploads.length === 0 && (
         <p className="text-muted font-medium">{canEdit ? 'Drop files here, or use Add files.' : 'No files.'}</p>
       )}
-      {viewing && <ImageViewer file={viewing} url={source.url(viewing.id)} onClose={() => setViewing(null)} />}
     </section>
+  )
+}
+
+/**
+ * Files as a list: images as thumbnails that open full size, the name as a
+ * download link, then size, uploader and age. onRemove adds a ✕ to each.
+ */
+export function FileList({
+  files,
+  label = 'Files',
+  removeLabel = 'Remove',
+  onRemove,
+}: {
+  files: Attachment[]
+  label?: string
+  removeLabel?: string
+  onRemove?: (a: Attachment) => void
+}) {
+  const { shared, files: source } = useMap()
+  const [viewing, setViewing] = useState<Attachment | null>(null)
+  if (files.length === 0) return null
+  return (
+    <>
+      <ul className="att-list" aria-label={label}>
+        {files.map((a) => {
+          const url = source.url(a.id)
+          return (
+            <li key={a.id}>
+              {imageTypes.has(a.contentType) ? (
+                <button type="button" className="att-thumb" aria-label={`View ${a.name}`} onClick={() => setViewing(a)}>
+                  <img src={url} alt="" loading="lazy" />
+                </button>
+              ) : (
+                <span className="att-icon" aria-hidden>
+                  <FileIcon />
+                </span>
+              )}
+              <span className="min-w-0 flex-1">
+                <a className="att-name" href={url} download={a.name}>
+                  {a.name}
+                </a>
+                <span className="att-meta">
+                  {[fileSize(a.size), ...(shared ? [] : [a.uploaderName || 'Removed user']), ago(a.createdAt)].join(' · ')}
+                </span>
+              </span>
+              {onRemove && (
+                <button type="button" className="att-x" aria-label={`${removeLabel} ${a.name}`} onClick={() => onRemove(a)}>
+                  ✕
+                </button>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {viewing && <ImageViewer file={viewing} url={source.url(viewing.id)} onClose={() => setViewing(null)} />}
+    </>
   )
 }
 

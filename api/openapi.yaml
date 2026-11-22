@@ -2393,6 +2393,13 @@ paths:
                   items:
                     type: "string"
                     format: "uuid"
+                attachmentIds:
+                  type: "array"
+                  maxItems: 20
+                  description: "Your drafts on this step (from draft-attachments), which become the comment's files"
+                  items:
+                    type: "string"
+                    format: "uuid"
               required: ["bodyMd"]
               additionalProperties: false
       responses:
@@ -2410,6 +2417,56 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/workspaces/{slug}/maps/{mapId}/steps/{id}/draft-attachments:
+    post:
+      tags: ["Comments"]
+      summary: "Add a file to a comment being written"
+      operationId: postWorkspacesSlugMapsMapidStepsIdDraftAttachments
+      description: >-
+        Commenter or above, or a write token. Uploads like a step's file
+        (application/octet-stream body, ?name=), but the file is a draft: only
+        you can download it, and it makes no event. Posting or editing a comment
+        with its id in attachmentIds makes it the comment's file. Drafts not
+        claimed within a day are deleted.
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/mapId"
+        - $ref: "#/components/parameters/id"
+        - name: name
+          in: query
+          required: true
+          description: "The file name to show and download as; any path before it is dropped."
+          schema:
+            type: "string"
+            maxLength: 255
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: "string"
+              format: "binary"
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attachment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          description: "The file is larger than the server's limit."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/workspaces/{slug}/maps/{mapId}/comments/{id}:
     patch:
       tags: ["Comments"]
@@ -2436,6 +2493,15 @@ paths:
                     format: "uuid"
                 resolved:
                   type: "boolean"
+                attachmentIds:
+                  type: "array"
+                  maxItems: 20
+                  description: >-
+                    Author only: every file the comment keeps. Its files left out
+                    are deleted; your drafts on the step listed here are added.
+                  items:
+                    type: "string"
+                    format: "uuid"
               additionalProperties: false
       responses:
         "200":
@@ -2586,9 +2652,10 @@ paths:
       summary: "Download a file"
       operationId: getWorkspacesSlugAttachmentsId
       description: >-
-        Viewer or above, or any API token. PNG, JPEG, GIF and WebP are sent
-        inline; everything else as a download. Files never change: the ETag is
-        the file's SHA-256 and If-None-Match gets 304.
+        Viewer or above, or any API token: a step's file or a live comment's,
+        or a draft of your own. PNG, JPEG, GIF and WebP are sent inline;
+        everything else as a download. Files never change: the ETag is the
+        file's SHA-256 and If-None-Match gets 304.
       parameters:
         - $ref: "#/components/parameters/slug"
         - $ref: "#/components/parameters/id"
@@ -3378,6 +3445,11 @@ components:
         stepId:
           type: ["string", "null"]
           format: "uuid"
+          description: "The step, for a step's file"
+        commentId:
+          type: ["string", "null"]
+          format: "uuid"
+          description: "The comment, for a comment's file; both are null for a draft"
         name:
           type: "string"
         contentType:
@@ -3395,7 +3467,7 @@ components:
         createdAt:
           type: "string"
           format: "date-time"
-      required: ["id", "stepId", "name", "contentType", "size", "uploadedBy", "uploaderName", "createdAt"]
+      required: ["id", "stepId", "commentId", "name", "contentType", "size", "uploadedBy", "uploaderName", "createdAt"]
       additionalProperties: false
     Comment:
       type: "object"
@@ -3430,7 +3502,12 @@ components:
         createdAt:
           type: "string"
           format: "date-time"
-      required: ["id", "stepId", "parentId", "authorId", "authorName", "bodyMd", "mentionIds", "resolved", "edited", "deleted", "createdAt"]
+        attachments:
+          type: "array"
+          description: "The comment's files, oldest first; empty once it is deleted"
+          items:
+            $ref: "#/components/schemas/Attachment"
+      required: ["id", "stepId", "parentId", "authorId", "authorName", "bodyMd", "mentionIds", "resolved", "edited", "deleted", "createdAt", "attachments"]
       additionalProperties: false
     ShareLink:
       type: "object"

@@ -1,10 +1,12 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Markdown } from './Markdown'
-import { api, atLeast, type Comment, type Member } from '../api'
+import { api, atLeast, type Attachment, type Comment, type Member } from '../api'
 import { mapKey, useMap } from '../pages/map'
 import { useSession } from '../session'
 import { ago } from './history'
+import { FileList } from './Attachments'
+import { FileErrors, useInlineFiles } from './MarkdownEditor'
 
 /**
  * A step's comments: threads (a first comment and its replies), oldest
@@ -23,8 +25,8 @@ export function Comments({ stepId }: { stepId: string }) {
   const all = comments.data ?? []
   const threads = all.filter((c) => !c.parentId)
   const repliesTo = (id: string) => all.filter((c) => c.parentId === id)
-  const post = (bodyMd: string, mentionIds: string[], parentId?: string) =>
-    run(() => api.createComment(ws.slug, view.map.id, stepId, { bodyMd, mentionIds, ...(parentId ? { parentId } : {}) }))
+  const post = (bodyMd: string, mentionIds: string[], attachmentIds: string[], parentId?: string) =>
+    run(() => api.createComment(ws.slug, view.map.id, stepId, { bodyMd, mentionIds, attachmentIds, ...(parentId ? { parentId } : {}) }))
 
   return (
     <section className="comments" aria-label="Comments">
@@ -44,12 +46,19 @@ export function Comments({ stepId }: { stepId: string }) {
               </ol>
             )}
             {canComment && !t.deleted && (
-              <Composer members={members.data ?? []} label={`Reply to ${t.authorName}`} action="Reply" compact onPost={(b, m) => post(b, m, t.id)} />
+              <Composer
+                stepId={stepId}
+                members={members.data ?? []}
+                label={`Reply to ${t.authorName}`}
+                action="Reply"
+                compact
+                onPost={(b, m, f) => post(b, m, f, t.id)}
+              />
             )}
           </li>
         ))}
       </ol>
-      {canComment && <Composer members={members.data ?? []} label="New comment" action="Comment" onPost={(b, m) => post(b, m)} />}
+      {canComment && <Composer stepId={stepId} members={members.data ?? []} label="New comment" action="Comment" onPost={(b, m, f) => post(b, m, f)} />}
     </section>
   )
 }
@@ -72,21 +81,27 @@ function CommentView({ c, me, members }: { c: Comment; me: string; members: Memb
       </header>
       {editing ? (
         <Composer
+          stepId={c.stepId}
           members={members}
           label="Edit comment"
           action="Save"
           initial={c.bodyMd}
+          initialFiles={c.attachments}
           onCancel={() => setEditing(false)}
-          onPost={async (bodyMd, mentionIds) => {
-            const ok = await run(() => api.patchComment(ws.slug, view.map.id, c.id, { bodyMd, mentionIds }))
+          onPost={async (bodyMd, mentionIds, attachmentIds) => {
+            const ok = await run(() => api.patchComment(ws.slug, view.map.id, c.id, { bodyMd, mentionIds, attachmentIds }))
             if (ok) setEditing(false)
             return ok
           }}
         />
       ) : (
-        <div className="markdown">
-          <Markdown>{c.bodyMd}</Markdown>
-        </div>
+        <>
+          <div className="markdown">
+            <Markdown>{c.bodyMd}</Markdown>
+          </div>
+          {/* Files shown in the text are not listed again. */}
+          <FileList files={c.attachments.filter((a) => !c.bodyMd.includes(`attachment:${a.id}`))} label={`Files of the comment by ${c.authorName}`} />
+        </>
       )}
       {!editing && (
         <footer>
@@ -123,19 +138,36 @@ function mentionAt(text: string, caret: number): { start: number; query: string 
  * text are sent as mentionIds.
  */
 function Composer(props: {
+  stepId: string
   members: Member[]
   label: string
   action: string
   initial?: string
+  initialFiles?: Attachment[]
   compact?: boolean
-  onPost: (bodyMd: string, mentionIds: string[]) => Promise<boolean>
+  onPost: (bodyMd: string, mentionIds: string[], attachmentIds: string[]) => Promise<boolean>
   onCancel?: () => void
 }) {
+  const { ws, view } = useMap()
   const [text, setText] = useState(props.initial ?? '')
+  // Files go up as drafts at once, so a pasted image has an id to show; posting claims them.
+  const [files, setFiles] = useState<Attachment[]>(props.initialFiles ?? [])
+  const picker = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(!props.compact || !!props.initial)
   const [at, setAt] = useState<{ start: number; query: string } | null>(null)
   const [pick, setPick] = useState(0)
   const area = useRef<HTMLTextAreaElement>(null)
+  const inline = useInlineFiles({
+    area,
+    setValue: setText,
+    upload: (file) => api.uploadDraftAttachment(ws.slug, view.map.id, props.stepId, file),
+    onUploaded: (a) => setFiles((fs) => [...fs, a]),
+  })
+  // Taking a file off also takes it out of the text.
+  const remove = (a: Attachment) => {
+    setFiles((fs) => fs.filter((f) => f.id !== a.id))
+    setText((t) => t.replace(new RegExp(`!?\\[[^\\]]*\\]\\(attachment:${a.id}\\)\\n?`, 'g'), ''))
+  }
   const matches = at
     ? props.members
         .filter((m) => `${m.displayName} ${m.email}`.toLowerCase().includes(at.query.toLowerCase()))
@@ -162,8 +194,9 @@ function Composer(props: {
     const body = text.trim()
     if (!body) return
     const mentionIds = props.members.filter((m) => body.includes(`@${m.displayName}`)).map((m) => m.userId)
-    if (await props.onPost(body, mentionIds)) {
+    if (await props.onPost(body, mentionIds, files.map((f) => f.id))) {
       setText('')
+      setFiles([])
       if (props.compact) setOpen(false)
     }
   }
@@ -214,6 +247,7 @@ function Composer(props: {
             void submit()
           }
         }}
+        {...inline.textarea}
       />
       {at && matches.length > 0 && (
         <ul className="mention-list" role="listbox" aria-label="Mention someone">
@@ -224,16 +258,33 @@ function Composer(props: {
           ))}
         </ul>
       )}
+      <FileErrors errors={inline.errors} />
+      <FileList files={files} label={`Files for ${props.label}`} onRemove={remove} />
       <div className="flex gap-2">
-        <button type="button" className="btn btn-sm btn-primary" disabled={!text.trim()} onClick={() => void submit()}>
-          {props.action}
+        <button type="button" className="btn btn-sm btn-primary" disabled={!text.trim() || inline.pending > 0} onClick={() => void submit()}>
+          {inline.pending > 0 ? 'Uploading…' : props.action}
         </button>
+        <button type="button" className="btn btn-sm btn-ol" onClick={() => picker.current?.click()}>
+          Attach
+        </button>
+        <input
+          ref={picker}
+          type="file"
+          multiple
+          hidden
+          aria-label={`Files to attach to ${props.label}`}
+          onChange={(e) => {
+            if (e.target.files) inline.attach(e.target.files)
+            e.target.value = ''
+          }}
+        />
         {(props.onCancel || props.compact) && (
           <button
             type="button"
             className="btn btn-sm btn-ol"
             onClick={() => {
               setText(props.initial ?? '')
+              setFiles(props.initialFiles ?? [])
               props.onCancel?.()
               if (props.compact) setOpen(false)
             }}

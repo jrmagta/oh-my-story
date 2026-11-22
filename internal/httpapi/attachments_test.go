@@ -55,7 +55,13 @@ func decode(t *testing.T, b []byte) map[string]any {
 
 func (c *client) upload(want int, stepPath, name string, data []byte) map[string]any {
 	c.h.t.Helper()
-	r := c.send("POST", stepPath+"/attachments?name="+url.QueryEscape(name), "application/octet-stream", data, nil)
+	return c.uploadTo(want, stepPath+"/attachments", name, data)
+}
+
+// uploadTo posts a file to an upload endpoint, such as a step's draft-attachments.
+func (c *client) uploadTo(want int, path, name string, data []byte) map[string]any {
+	c.h.t.Helper()
+	r := c.send("POST", path+"?name="+url.QueryEscape(name), "application/octet-stream", data, nil)
 	if r.status != want {
 		c.h.t.Fatalf("upload %s: status %d, want %d: %s", name, r.status, want, r.body)
 	}
@@ -247,5 +253,67 @@ func TestSharedAttachments(t *testing.T) {
 	owner.must(204, "DELETE", a.path+"/share-links/"+str(link.body, "id"), nil)
 	if r := anon.send("GET", shared+"/attachments/"+img, "", nil, nil); r.status != 404 {
 		t.Errorf("revoked link: %d", r.status)
+	}
+}
+
+func TestCommentAttachments(t *testing.T) {
+	h := newHarness(t, harnessOpts{})
+	owner := h.bootstrap()
+	b := buildMap(owner)
+	commenter, _ := h.join(owner, "co@example.com", "commenter")
+	viewer, _ := h.join(owner, "vi@example.com", "viewer")
+	step := str(owner.must(201, "POST", b.path+"/steps", map[string]any{"title": "Sign up", "activityId": b.act1}).body, "step", "id")
+	stepPath := b.path + "/steps/" + step
+	drafts := stepPath + "/draft-attachments"
+	get := func(c *client, id string) int { return c.send("GET", acme+"/attachments/"+id, "", nil, nil).status }
+
+	// Commenters add drafts, which only they can see; viewers cannot add them.
+	viewer.uploadTo(403, drafts, "shot.png", pngBytes)
+	shot := commenter.uploadTo(201, drafts, "shot.png", pngBytes)
+	if shot["stepId"] != nil || shot["commentId"] != nil {
+		t.Errorf("draft = %v", shot)
+	}
+	if get(commenter, str(shot, "id")) != 200 || get(owner, str(shot, "id")) != 404 {
+		t.Error("a draft must be visible to its uploader only")
+	}
+	if r := owner.must(200, "GET", stepPath+"/attachments", nil); len(r.list) != 0 {
+		t.Errorf("drafts listed as step files: %s", r.raw)
+	}
+
+	// Nobody else can post someone's draft; its uploader can, once.
+	owner.must(400, "POST", stepPath+"/comments", map[string]any{"bodyMd": "mine now", "attachmentIds": []string{str(shot, "id")}})
+	c := commenter.must(201, "POST", stepPath+"/comments", map[string]any{"bodyMd": "![shot](attachment:" + str(shot, "id") + ")", "attachmentIds": []string{str(shot, "id")}})
+	files := c.body["attachments"].([]any)
+	if len(files) != 1 || str(files[0], "commentId") != str(c.body, "id") || str(files[0], "name") != "shot.png" {
+		t.Errorf("posted comment = %s", c.raw)
+	}
+	commenter.must(400, "POST", stepPath+"/comments", map[string]any{"bodyMd": "again", "attachmentIds": []string{str(shot, "id")}})
+	if get(owner, str(shot, "id")) != 200 || get(viewer, str(shot, "id")) != 200 {
+		t.Error("a posted comment's file must be visible to the workspace")
+	}
+	list := owner.must(200, "GET", stepPath+"/comments", nil)
+	if len(list.list) != 1 || len(list.list[0].(map[string]any)["attachments"].([]any)) != 1 {
+		t.Errorf("comments = %s", list.raw)
+	}
+	if v := owner.must(200, "GET", b.path, nil); !strings.Contains(v.raw, `"attachmentCount":0`) {
+		t.Error("a comment's files are not the step's")
+	}
+
+	// Editing sets the files the comment keeps: drop the shot, add a log. Only the author can.
+	cPath := b.path + "/comments/" + str(c.body, "id")
+	log := commenter.uploadTo(201, drafts, "build.log", []byte("ok\n"))
+	owner.must(403, "PATCH", cPath, map[string]any{"attachmentIds": []string{}})
+	e := commenter.must(200, "PATCH", cPath, map[string]any{"attachmentIds": []string{str(log, "id")}})
+	if files := e.body["attachments"].([]any); len(files) != 1 || str(files[0], "name") != "build.log" {
+		t.Errorf("edited comment = %s", e.raw)
+	}
+	if get(owner, str(shot, "id")) != 404 || get(owner, str(log, "id")) != 200 {
+		t.Error("the dropped file must go and the added one show")
+	}
+
+	// Deleting the comment hides its files.
+	commenter.must(204, "DELETE", cPath, nil)
+	if get(owner, str(log, "id")) != 404 {
+		t.Error("a deleted comment's file must be hidden")
 	}
 }

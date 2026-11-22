@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,7 +14,8 @@ import (
 // Attachment is a file's metadata. The bytes are read only by AttachmentFile.
 type Attachment struct {
 	ID           uuid.UUID  `json:"id"`
-	StepID       *uuid.UUID `json:"stepId"`
+	StepID       *uuid.UUID `json:"stepId"`    // a step's file
+	CommentID    *uuid.UUID `json:"commentId"` // a comment's file; both are null for a draft
 	Name         string     `json:"name"`
 	ContentType  string     `json:"contentType"`
 	Size         int64      `json:"size"`
@@ -22,13 +25,16 @@ type Attachment struct {
 	SHA256       []byte     `json:"-"`
 }
 
-const attachmentCols = `a.id, a.step_id, a.name, a.content_type, a.size_bytes, a.uploaded_by, coalesce(u.display_name, ''), a.created_at, a.sha256`
+const attachmentCols = `a.id, a.step_id, a.comment_id, a.name, a.content_type, a.size_bytes, a.uploaded_by, coalesce(u.display_name, ''), a.created_at, a.sha256`
 
 const attachmentFrom = `FROM attachments a LEFT JOIN users u ON u.id = a.uploaded_by`
 
-func scanAttachment(row pgx.Row) (Attachment, error) {
+func scanAttachment(row pgx.Row) (Attachment, error) { return scanAttachmentAnd(row) }
+
+// scanAttachmentAnd scans attachmentCols and then more columns into more.
+func scanAttachmentAnd(row pgx.Row, more ...any) (Attachment, error) {
 	var a Attachment
-	err := row.Scan(&a.ID, &a.StepID, &a.Name, &a.ContentType, &a.Size, &a.UploadedBy, &a.UploaderName, &a.CreatedAt, &a.SHA256)
+	err := row.Scan(append([]any{&a.ID, &a.StepID, &a.CommentID, &a.Name, &a.ContentType, &a.Size, &a.UploadedBy, &a.UploaderName, &a.CreatedAt, &a.SHA256}, more...)...)
 	return a, notFound(err)
 }
 
@@ -51,24 +57,48 @@ func (s *Store) AddStepAttachment(ctx context.Context, actor, workspaceID, mapID
 		if _, _, err := mapStep(ctx, tx, mapID, stepID); err != nil {
 			return nil, err
 		}
-		id := newID()
-		sum := sha256.Sum256(f.Data)
-		if _, err := tx.Exec(ctx,
-			`INSERT INTO attachments (id, workspace_id, step_id, name, content_type, size_bytes, sha256, uploaded_by)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-			id, workspaceID, stepID, f.Name, f.ContentType, len(f.Data), sum[:], actor); err != nil {
-			return nil, err
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO attachment_data (attachment_id, data) VALUES ($1, $2)`, id, f.Data); err != nil {
-			return nil, err
-		}
 		var err error
-		if a, err = scanAttachment(tx.QueryRow(ctx, `SELECT `+attachmentCols+` `+attachmentFrom+` WHERE a.id = $1`, id)); err != nil {
+		if a, err = insertAttachment(ctx, tx, actor, workspaceID, "step_id", stepID, f); err != nil {
 			return nil, err
 		}
-		return echoes(ctx, tx, stepID, change{mapID: mapID, entity: "attachment", id: id, action: "create", after: attachmentEvent(a)})
+		return echoes(ctx, tx, stepID, change{mapID: mapID, entity: "attachment", id: a.ID, action: "create", after: attachmentEvent(a)})
 	})
 	return a, err
+}
+
+// AddDraftAttachment stores a file for a comment being written on a step
+// shown on the map. Only its uploader sees it until a comment claims it, and
+// it makes no event: nobody else can tell it exists.
+func (s *Store) AddDraftAttachment(ctx context.Context, actor, workspaceID, mapID, stepID uuid.UUID, f FileUpload) (Attachment, error) {
+	var a Attachment
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := s.CheckMap(ctx, workspaceID, mapID); err != nil {
+			return err
+		}
+		if _, _, err := mapStep(ctx, tx, mapID, stepID); err != nil {
+			return err
+		}
+		var err error
+		a, err = insertAttachment(ctx, tx, actor, workspaceID, "draft_step_id", stepID, f)
+		return err
+	})
+	return a, err
+}
+
+// insertAttachment stores a file and its bytes, owned through ownerCol.
+func insertAttachment(ctx context.Context, tx pgx.Tx, actor, workspaceID uuid.UUID, ownerCol string, owner uuid.UUID, f FileUpload) (Attachment, error) {
+	id := newID()
+	sum := sha256.Sum256(f.Data)
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO attachments (id, workspace_id, `+ownerCol+`, name, content_type, size_bytes, sha256, uploaded_by)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		id, workspaceID, owner, f.Name, f.ContentType, len(f.Data), sum[:], actor); err != nil {
+		return Attachment{}, err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO attachment_data (attachment_id, data) VALUES ($1, $2)`, id, f.Data); err != nil {
+		return Attachment{}, err
+	}
+	return scanAttachment(tx.QueryRow(ctx, `SELECT `+attachmentCols+` `+attachmentFrom+` WHERE a.id = $1`, id))
 }
 
 // StepAttachments lists a step's live files, oldest first.
@@ -89,30 +119,31 @@ func (s *Store) StepAttachments(ctx context.Context, workspaceID, mapID, stepID 
 	return out, err
 }
 
-// liveAttachment is a file whose owner is live: a step on a live map. Files
-// of deleted steps are hidden with them.
-const liveAttachment = `a.deleted_at IS NULL AND a.workspace_id = $1 AND EXISTS (
+// liveAttachment is a file of workspace $1 that user $3 can see: a draft of
+// their own, or a file whose owner is live (a step on a live map, or a live
+// comment on one). Files of deleted steps and comments are hidden with them.
+const liveAttachment = `a.deleted_at IS NULL AND a.workspace_id = $1 AND (
+	(a.draft_step_id IS NOT NULL AND a.uploaded_by = $3) OR EXISTS (
 	SELECT 1 FROM steps s JOIN placements p ON p.step_id = s.id
 	JOIN maps m ON m.id = p.map_id AND m.deleted_at IS NULL
 	JOIN nodes n ON n.id = p.activity_id AND n.deleted_at IS NULL
-	WHERE s.id = a.step_id AND s.deleted_at IS NULL)`
+	WHERE s.deleted_at IS NULL AND s.id = coalesce(a.step_id,
+		(SELECT c.step_id FROM comments c WHERE c.id = a.comment_id AND c.deleted_at IS NULL))))`
 
-// AttachmentFile returns a live file of the workspace with its bytes.
-func (s *Store) AttachmentFile(ctx context.Context, workspaceID, id uuid.UUID) (Attachment, []byte, error) {
-	var a Attachment
+// AttachmentFile returns a file of the workspace, with its bytes, that viewer can see.
+func (s *Store) AttachmentFile(ctx context.Context, workspaceID, viewer, id uuid.UUID) (Attachment, []byte, error) {
 	var data []byte
-	err := s.pool.QueryRow(ctx,
+	a, err := scanAttachmentAnd(s.pool.QueryRow(ctx,
 		`SELECT `+attachmentCols+`, d.data `+attachmentFrom+` JOIN attachment_data d ON d.attachment_id = a.id
-		 WHERE a.id = $2 AND `+liveAttachment, workspaceID, id).
-		Scan(&a.ID, &a.StepID, &a.Name, &a.ContentType, &a.Size, &a.UploadedBy, &a.UploaderName, &a.CreatedAt, &a.SHA256, &data)
-	return a, data, notFound(err)
+		 WHERE a.id = $2 AND `+liveAttachment, workspaceID, id, viewer), &data)
+	return a, data, err
 }
 
-// AttachmentETag returns a live file's sha256 without reading its bytes, so a
-// cached copy can be confirmed cheaply.
-func (s *Store) AttachmentETag(ctx context.Context, workspaceID, id uuid.UUID) ([]byte, error) {
+// AttachmentETag returns the sha256 of a file viewer can see without reading
+// its bytes, so a cached copy can be confirmed cheaply.
+func (s *Store) AttachmentETag(ctx context.Context, workspaceID, viewer, id uuid.UUID) ([]byte, error) {
 	var sum []byte
-	err := s.pool.QueryRow(ctx, `SELECT a.sha256 FROM attachments a WHERE a.id = $2 AND `+liveAttachment, workspaceID, id).Scan(&sum)
+	err := s.pool.QueryRow(ctx, `SELECT a.sha256 FROM attachments a WHERE a.id = $2 AND `+liveAttachment, workspaceID, id, viewer).Scan(&sum)
 	return sum, notFound(err)
 }
 
@@ -205,10 +236,10 @@ func (s *Store) SharedAttachmentFile(ctx context.Context, tokenHash []byte, id u
 		if err != nil {
 			return err
 		}
-		return notFound(tx.QueryRow(ctx,
+		a, err = scanAttachmentAnd(tx.QueryRow(ctx,
 			`SELECT `+attachmentCols+`, d.data `+attachmentFrom+` JOIN attachment_data d ON d.attachment_id = a.id
-			 WHERE a.id = $2 AND `+onSharedMap, mapID, id).
-			Scan(&a.ID, &a.StepID, &a.Name, &a.ContentType, &a.Size, &a.UploadedBy, &a.UploaderName, &a.CreatedAt, &a.SHA256, &data))
+			 WHERE a.id = $2 AND `+onSharedMap, mapID, id), &data)
+		return err
 	})
 	return forShare(a), data, err
 }
@@ -224,4 +255,93 @@ func (s *Store) SharedAttachmentETag(ctx context.Context, tokenHash []byte, id u
 		return notFound(tx.QueryRow(ctx, `SELECT a.sha256 FROM attachments a WHERE a.id = $2 AND `+onSharedMap, mapID, id).Scan(&sum))
 	})
 	return sum, err
+}
+
+// claimDrafts makes actor's drafts on stepID, listed in ids, files of
+// commentID. Each id must be such a draft.
+func claimDrafts(ctx context.Context, tx pgx.Tx, actor, stepID, commentID uuid.UUID, ids []uuid.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE attachments SET comment_id = $1, draft_step_id = NULL
+		 WHERE id = ANY($2) AND draft_step_id = $3 AND uploaded_by = $4 AND deleted_at IS NULL`,
+		commentID, ids, stepID, actor)
+	if err != nil {
+		return err
+	}
+	if int(tag.RowsAffected()) != len(ids) {
+		return fmt.Errorf("%w: attachmentIds must be files you added for a comment on this step", ErrInvalid)
+	}
+	return nil
+}
+
+// commentFiles loads the live files of the given comments, oldest first.
+func commentFiles(ctx context.Context, q querier, cs []Comment) error {
+	ids := make([]uuid.UUID, 0, len(cs))
+	at := map[uuid.UUID]*Comment{}
+	for i := range cs {
+		cs[i].Attachments = []Attachment{}
+		if !cs[i].Deleted {
+			ids = append(ids, cs[i].ID)
+			at[cs[i].ID] = &cs[i]
+		}
+	}
+	files, err := collect(ctx, q, scanAttachment,
+		`SELECT `+attachmentCols+` `+attachmentFrom+` WHERE a.comment_id = ANY($1) AND a.deleted_at IS NULL ORDER BY a.created_at, a.id`, ids)
+	for _, f := range files {
+		c := at[*f.CommentID]
+		c.Attachments = append(c.Attachments, f)
+	}
+	return err
+}
+
+// Sweep limits: drafts nobody posted, and deleted files past undo.
+const (
+	DraftLifetime  = 24 * time.Hour
+	DeletedPurge   = 30 * 24 * time.Hour
+	sweepBatchSize = 200
+)
+
+// SweepAttachments removes, for good, drafts older than DraftLifetime and
+// files deleted (or whose comment was deleted) more than DeletedPurge before
+// now. Several sweepers can run at once: each batch locks its rows with SKIP
+// LOCKED, so every file is removed by exactly one. It returns how many it removed.
+func (s *Store) SweepAttachments(ctx context.Context, now time.Time) (int, error) {
+	total := 0
+	for {
+		tag, err := s.pool.Exec(ctx,
+			`DELETE FROM attachments WHERE id IN (
+			   SELECT a.id FROM attachments a
+			   WHERE (a.draft_step_id IS NOT NULL AND a.created_at < $1)
+			      OR a.deleted_at < $2
+			      OR a.comment_id IN (SELECT c.id FROM comments c WHERE c.deleted_at < $2)
+			   LIMIT $3 FOR UPDATE SKIP LOCKED)`,
+			now.Add(-DraftLifetime), now.Add(-DeletedPurge), sweepBatchSize)
+		if err != nil {
+			return total, err
+		}
+		total += int(tag.RowsAffected())
+		if tag.RowsAffected() < sweepBatchSize {
+			return total, nil
+		}
+	}
+}
+
+// RunSweeper calls SweepAttachments every interval until ctx ends.
+func (s *Store) RunSweeper(ctx context.Context, interval time.Duration) {
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		if n, err := s.SweepAttachments(ctx, time.Now()); err != nil && ctx.Err() == nil {
+			slog.Error("sweep attachments", "err", err)
+		} else if n > 0 {
+			slog.Info("swept attachments", "removed", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }

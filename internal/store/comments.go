@@ -24,6 +24,8 @@ type Comment struct {
 	Edited     bool        `json:"edited"`
 	Deleted    bool        `json:"deleted"`
 	CreatedAt  time.Time   `json:"createdAt"`
+	// Attachments are the comment's files, oldest first; none once deleted.
+	Attachments []Attachment `json:"attachments"`
 }
 
 const commentCols = `c.id, c.step_id, c.parent_id, c.author_id, coalesce(u.display_name, ''),
@@ -57,10 +59,25 @@ func (s *Store) Comments(ctx context.Context, workspaceID, mapID, stepID uuid.UU
 	if err != nil {
 		return nil, notFound(err)
 	}
-	return collect(ctx, s.pool, scanComment, `SELECT `+commentCols+` `+commentFrom+`
+	cs, err := collect(ctx, s.pool, scanComment, `SELECT `+commentCols+` `+commentFrom+`
 		 AND c.step_id = $3
 		 AND (c.deleted_at IS NULL OR EXISTS (SELECT 1 FROM comments r WHERE r.parent_id = c.id AND r.deleted_at IS NULL))
 		 ORDER BY c.created_at, c.id`, workspaceID, mapID, stepID)
+	if err != nil {
+		return nil, err
+	}
+	return cs, commentFiles(ctx, s.pool, cs)
+}
+
+// loadComment reads one comment, with its files, as the map shows it.
+func loadComment(ctx context.Context, tx pgx.Tx, workspaceID, mapID, id uuid.UUID) (Comment, error) {
+	c, err := scanComment(tx.QueryRow(ctx, `SELECT `+commentCols+` `+commentFrom+` AND c.id = $3`, workspaceID, mapID, id))
+	if err != nil {
+		return c, err
+	}
+	cs := []Comment{c}
+	err = commentFiles(ctx, tx, cs)
+	return cs[0], err
 }
 
 // CommentWrite is a saved comment and who to tell about it: the people newly
@@ -116,8 +133,9 @@ func without(ids []uuid.UUID, drop uuid.UUID) []uuid.UUID {
 }
 
 // CreateComment adds a comment, or a reply when parentID is set. A reply's
-// parent must be a live first comment of the same step.
-func (s *Store) CreateComment(ctx context.Context, actor, workspaceID, mapID, stepID uuid.UUID, body string, parentID *uuid.UUID, mentionIDs []uuid.UUID) (CommentWrite, error) {
+// parent must be a live first comment of the same step. attachmentIDs are
+// the author's drafts on the step, which become the comment's files.
+func (s *Store) CreateComment(ctx context.Context, actor, workspaceID, mapID, stepID uuid.UUID, body string, parentID *uuid.UUID, mentionIDs, attachmentIDs []uuid.UUID) (CommentWrite, error) {
 	var w CommentWrite
 	id := newID()
 	err := s.write(ctx, actor, workspaceID, mapID, func(tx pgx.Tx) ([]change, error) {
@@ -140,7 +158,10 @@ func (s *Store) CreateComment(ctx context.Context, actor, workspaceID, mapID, st
 		if err != nil {
 			return nil, err
 		}
-		if w.Comment, err = scanComment(tx.QueryRow(ctx, `SELECT `+commentCols+` `+commentFrom+` AND c.id = $3`, workspaceID, mapID, id)); err != nil {
+		if err := claimDrafts(ctx, tx, actor, stepID, id, attachmentIDs); err != nil {
+			return nil, err
+		}
+		if w.Comment, err = loadComment(ctx, tx, workspaceID, mapID, id); err != nil {
 			return nil, err
 		}
 		if err := commentNotice(ctx, tx, &w, without(added, actor)); err != nil {
@@ -155,6 +176,9 @@ type CommentPatch struct {
 	BodyMD     *string      // author only
 	MentionIDs *[]uuid.UUID // author only; adds to the comment's mentions
 	Resolved   *bool        // a first comment only; its author, or anyone allowed to resolve any
+	// AttachmentIDs, author only, is every file the comment keeps: its files
+	// left out are deleted, and the author's drafts on the step are claimed.
+	AttachmentIDs *[]uuid.UUID
 }
 
 // UpdateComment edits or resolves a comment. canResolveAny is true for
@@ -167,8 +191,13 @@ func (s *Store) UpdateComment(ctx context.Context, actor, workspaceID, mapID, co
 		if err != nil {
 			return nil, err
 		}
+		cs := []Comment{before}
+		if err := commentFiles(ctx, tx, cs); err != nil {
+			return nil, err
+		}
+		before = cs[0]
 		mine := before.AuthorID != nil && *before.AuthorID == actor
-		if (p.BodyMD != nil || p.MentionIDs != nil) && !mine {
+		if (p.BodyMD != nil || p.MentionIDs != nil || p.AttachmentIDs != nil) && !mine {
 			return nil, ErrForbidden
 		}
 		if p.Resolved != nil {
@@ -194,7 +223,12 @@ func (s *Store) UpdateComment(ctx context.Context, actor, workspaceID, mapID, co
 			 WHERE id = $1`, commentID, p.BodyMD, p.Resolved, actor); err != nil {
 			return nil, err
 		}
-		if w.Comment, err = scanComment(tx.QueryRow(ctx, `SELECT `+commentCols+` `+commentFrom+` AND c.id = $3`, workspaceID, mapID, commentID)); err != nil {
+		if p.AttachmentIDs != nil {
+			if err := keepFiles(ctx, tx, actor, before, *p.AttachmentIDs); err != nil {
+				return nil, err
+			}
+		}
+		if w.Comment, err = loadComment(ctx, tx, workspaceID, mapID, commentID); err != nil {
 			return nil, err
 		}
 		if err := commentNotice(ctx, tx, &w, without(added, actor)); err != nil {
@@ -226,4 +260,32 @@ func (s *Store) DeleteComment(ctx context.Context, actor, workspaceID, mapID, co
 		}
 		return echoes(ctx, tx, c.StepID, gone(mapID, "comment", commentID, "delete", map[string]any{"stepId": c.StepID, "parentId": c.ParentID}))
 	})
+}
+
+// keepFiles makes c's files exactly ids: the ones left out are deleted, and
+// the rest that are not c's yet must be actor's drafts on c's step.
+func keepFiles(ctx context.Context, tx pgx.Tx, actor uuid.UUID, c Comment, ids []uuid.UUID) error {
+	keep := map[uuid.UUID]bool{}
+	for _, id := range ids {
+		keep[id] = true
+	}
+	var gone, fresh []uuid.UUID
+	have := map[uuid.UUID]bool{}
+	for _, a := range c.Attachments {
+		have[a.ID] = true
+		if !keep[a.ID] {
+			gone = append(gone, a.ID)
+		}
+	}
+	for _, id := range ids {
+		if !have[id] {
+			fresh = append(fresh, id)
+		}
+	}
+	if len(gone) > 0 {
+		if _, err := tx.Exec(ctx, `UPDATE attachments SET deleted_at = now() WHERE id = ANY($1)`, gone); err != nil {
+			return err
+		}
+	}
+	return claimDrafts(ctx, tx, actor, c.StepID, c.ID, fresh)
 }
